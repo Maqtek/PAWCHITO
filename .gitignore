@@ -1,0 +1,15 @@
+### Python ###
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+### Secrets ###
+.env
+.env.*
+!.env.example
+
+### IDE / OS ###
+.idea/
+.vscode/
