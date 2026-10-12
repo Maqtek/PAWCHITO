@@ -41,7 +41,7 @@ export function MyPet() {
     const nextPet: Pet = { ...defaultPet, id: String(Date.now()), name, breed, age };
     setPet(nextPet);
     try { localStorage.setItem(petStorageKey, JSON.stringify(nextPet)); }
-    catch { }
+    catch { /* приватный режим */ }
     setIsDialogOpen(false);
   }
 

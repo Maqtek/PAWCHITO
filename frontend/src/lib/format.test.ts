@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest'
+import { formatAge, formatDayDate, formatTime, greeting, initials, pluralize } from './format'
+
+describe('pluralize', () => {
+  const forms = ['год', 'года', 'лет'] as const
+  it.each([
+    [1, 'год'], [2, 'года'], [4, 'года'], [5, 'лет'], [11, 'лет'],
+    [12, 'лет'], [21, 'год'], [22, 'года'], [25, 'лет'], [111, 'лет'],
+  ])('%i → %s', (count, word) => {
+    expect(pluralize(count, forms)).toBe(word)
+  })
+})
+
+describe('даты и время по Москве', () => {
+  it('день недели и дата', () => {
+    // 21:30 UTC 16 июня — в Москве уже 00:30 17 июня, среда
+    expect(formatDayDate(new Date('2026-06-16T21:30:00Z'))).toBe('среда, 17 июня')
+  })
+
+  it('время в 24-часовом формате', () => {
+    expect(formatTime('2026-10-15T07:00:00Z')).toBe('10:00')
+    expect(formatTime('2026-10-15T17:05:00Z')).toBe('20:05')
+  })
+
+  it.each([
+    ['2026-10-12T03:00:00Z', 'Доброе утро'],
+    ['2026-10-12T10:00:00Z', 'Добрый день'],
+    ['2026-10-12T16:00:00Z', 'Добрый вечер'],
+    ['2026-10-11T23:00:00Z', 'Доброй ночи'],
+  ])('приветствие для %s', (iso, text) => {
+    expect(greeting(new Date(iso))).toBe(text)
+  })
+})
+
+describe('formatAge', () => {
+  const today = new Date('2026-10-12T12:00:00Z')
+  it.each([
+    ['2022-05-01', '4 года'],
+    ['2025-10-12', '1 год'],
+    ['2026-03-01', '7 месяцев'],
+    ['2026-10-01', 'меньше месяца'],
+  ])('%s → %s', (birthDate, text) => {
+    expect(formatAge(birthDate, today)).toBe(text)
+  })
+})
+
+describe('initials', () => {
+  it.each([
+    ['Анна Смирнова', 'АС'],
+    ['ВетДоктор', 'ВЕ'],
+    ['  ', '?'],
+  ])('%s → %s', (name, text) => {
+    expect(initials(name)).toBe(text)
+  })
+})
