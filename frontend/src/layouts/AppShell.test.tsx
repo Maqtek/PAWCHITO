@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
@@ -89,6 +89,17 @@ describe('AppShell', () => {
 
     expect(screen.queryByRole('link', { name: 'Добавить питомца' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Сменить питомца/ })).not.toBeInTheDocument()
+  })
+
+  it('фоновое обновление питомцев упало — переключатель остаётся на кэше', async () => {
+    const { queryClient } = renderShell()
+    expect(await screen.findByRole('button', { name: 'Питомец: Майло. Сменить питомца' })).toBeInTheDocument()
+
+    server.use(http.get('*/api/pets', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    await act(() => queryClient.refetchQueries({ queryKey: queryKeys.pets }))
+
+    expect(queryClient.getQueryState(queryKeys.pets)?.status).toBe('error')
+    expect(screen.getByRole('button', { name: 'Питомец: Майло. Сменить питомца' })).toBeInTheDocument()
   })
 
   it('выход без сети всё равно ведёт на экран входа и забывает выбор питомца', async () => {

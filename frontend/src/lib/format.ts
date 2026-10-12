@@ -62,15 +62,17 @@ export function greeting(date: Date): string {
   return 'Доброй ночи'
 }
 
-/** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». */
+const NBSP = '\u00A0'
+
+/** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». Число не отрывается от слова. */
 export function formatAge(birthDate: string, today: Date): string {
   const [birthYear, birthMonth, birthDay] = birthDate.split('-').map(Number)
   const now = moscowParts(today)
   const months = (now.year - birthYear) * 12 + (now.month - birthMonth) - (now.day < birthDay ? 1 : 0)
   if (months < 1) return 'меньше месяца'
-  if (months < 12) return `${months} ${pluralize(months, ['месяц', 'месяца', 'месяцев'])}`
+  if (months < 12) return `${months}${NBSP}${pluralize(months, ['месяц', 'месяца', 'месяцев'])}`
   const years = Math.floor(months / 12)
-  return `${years} ${pluralize(years, ['год', 'года', 'лет'])}`
+  return `${years}${NBSP}${pluralize(years, ['год', 'года', 'лет'])}`
 }
 
 /** Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВЕ». */

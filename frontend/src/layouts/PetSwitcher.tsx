@@ -11,7 +11,9 @@ export function PetSwitcher() {
     return <span aria-hidden className="block h-10 w-28 animate-pulse rounded-xl bg-surface-muted" />
   }
 
-  if (isError) return null
+  // Ошибка без кэша — молчим: на главной своё сообщение с «Повторить».
+  // Ошибка фонового обновления при уже загруженных питомцах переключатель не прячет.
+  if (isError && !pet) return null
 
   if (!pet) {
     return (

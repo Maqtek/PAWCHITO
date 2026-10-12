@@ -40,7 +40,15 @@ export function PetCard({ pet, today, actions }: PetCardProps) {
             <p className={cn('mt-2 flex flex-wrap items-center gap-x-2 text-sm font-bold', toneInkClass[careStatusTone[pet.care_status]])}>
               <span aria-hidden className="size-2 rounded-full bg-current" />
               {careStatusLabel[pet.care_status]}
-              {statusSuffix && <span className="font-semibold text-ink-muted">· {statusSuffix}</span>}
+              {/* На узком экране клиника и дата уходят на свою строку — без висящей «·» в начале. */}
+              {statusSuffix && (
+                <span className="basis-full font-semibold text-ink-muted sm:basis-auto">
+                  <span aria-hidden="true" className="hidden sm:inline">
+                    ·{' '}
+                  </span>
+                  {statusSuffix}
+                </span>
+              )}
             </p>
           )}
         </div>
