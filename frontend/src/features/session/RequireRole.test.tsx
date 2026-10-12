@@ -1,6 +1,8 @@
 import { screen } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { server } from '../../mocks/node'
 import { setMockRole } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { RequireRole } from './RequireRole'
@@ -38,5 +40,13 @@ describe('RequireRole', () => {
     setMockRole('guest')
     renderGuarded()
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
+  })
+
+  it('при ошибке сервера показывает повтор, а не вход', async () => {
+    server.use(http.get('*/api/users/me', () => HttpResponse.json({ detail: 'Ошибка сервера' }, { status: 500 })))
+    renderGuarded()
+    expect(await screen.findByRole('heading', { name: 'Не удалось загрузить данные' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Повторить' })).toBeInTheDocument()
+    expect(screen.queryByText('Экран входа')).not.toBeInTheDocument()
   })
 })
