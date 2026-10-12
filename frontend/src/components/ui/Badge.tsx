@@ -38,14 +38,14 @@ export function CountBadge({ count, label, className }: CountBadgeProps) {
   if (count <= 0) return null
   return (
     <span
-      aria-label={label}
       aria-hidden={label ? undefined : true}
       className={cn(
         'grid h-5 min-w-5 place-items-center rounded-full bg-coral px-1.5 text-[11px] leading-none font-extrabold text-white',
         className,
       )}
     >
-      {count > 99 ? '99+' : count}
+      {label && <span className="sr-only">{label}</span>}
+      <span aria-hidden={label ? true : undefined}>{count > 99 ? '99+' : count}</span>
     </span>
   )
 }

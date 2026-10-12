@@ -21,11 +21,20 @@ describe('UI-кит: базовые элементы', () => {
     expect(screen.getByText('На лечении')).toHaveClass('bg-blush')
   })
 
-  it('CountBadge скрыт при нуле и сокращает большие числа', () => {
-    const { container } = render(<CountBadge count={0} label="Непрочитанных: 0" />)
-    expect(container).toBeEmptyDOMElement()
-    render(<CountBadge count={120} label="Непрочитанных: 120" />)
-    expect(screen.getByLabelText('Непрочитанных: 120')).toHaveTextContent('99+')
+  it('CountBadge: пусто при нуле, подпись для скринридера, число скрыто от него', () => {
+    const empty = render(<CountBadge count={0} label="Непрочитанных: 0" />)
+    expect(empty.container).toBeEmptyDOMElement()
+    empty.unmount()
+
+    const labelled = render(<CountBadge count={120} label="Непрочитанных: 120" />)
+    expect(screen.getByText('Непрочитанных: 120')).toBeInTheDocument()
+    expect(screen.getByText('99+')).toHaveAttribute('aria-hidden', 'true')
+    expect(labelled.container.querySelector('[aria-label]')).toBeNull()
+    labelled.unmount()
+
+    const decorative = render(<CountBadge count={7} />)
+    expect(decorative.container.firstElementChild).toHaveAttribute('aria-hidden', 'true')
+    expect(decorative.container.firstElementChild).toHaveTextContent('7')
   })
 
   it('ProgressBar сообщает значение', () => {
