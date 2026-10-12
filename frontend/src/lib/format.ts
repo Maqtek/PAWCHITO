@@ -75,10 +75,14 @@ export function formatAge(birthDate: string, today: Date): string {
   return `${years}${NBSP}${pluralize(years, ['год', 'года', 'лет'])}`
 }
 
-/** Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВЕ». */
+/**
+ * Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВД» (заглавная внутри слова начинает часть),
+ * «Администратор» → «АД» (одно слово — первые две буквы).
+ */
 export function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return '?'
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
+  const parts = words.length > 1 ? words : words[0].split(/(?=\p{Lu})/u).filter(Boolean)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
 }

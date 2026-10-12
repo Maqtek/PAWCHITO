@@ -32,7 +32,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="mt-8">
       <h2 className="mb-3 text-lg font-extrabold">{title}</h2>
-      <Card className="flex flex-wrap items-start gap-4 p-6">{children}</Card>
+      <Card className="flex flex-wrap items-center gap-4 p-6">{children}</Card>
     </section>
   )
 }
