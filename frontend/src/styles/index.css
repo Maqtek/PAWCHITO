@@ -7,8 +7,9 @@
   --color-surface: #ffffff;
   --color-surface-muted: #fafaf7;
   --color-line: #dfe3dd;
+  --color-line-strong: #858e89;
   --color-ink: #1f2524;
-  --color-ink-muted: #6b7572;
+  --color-ink-muted: #5f6966;
   --color-ink-soft: #97a09c;
 
   --color-primary: #345e56;
@@ -48,6 +49,6 @@
   }
 
   :focus-visible {
-    @apply outline-2 outline-offset-2 outline-primary/50;
+    @apply outline-2 outline-offset-2 outline-primary;
   }
 }

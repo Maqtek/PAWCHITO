@@ -19,7 +19,7 @@ export function StagePlaceholder({ stage, icon, title, description, className }:
       description={
         <>
           {description}
-          <span className="mt-1 block font-bold text-ink-soft">Появится на этапе {stage} роадмапа.</span>
+          <span className="mt-1 block font-bold text-ink-muted">Появится на этапе {stage} роадмапа.</span>
         </>
       }
     />

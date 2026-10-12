@@ -8,7 +8,7 @@ import {
 import { cn } from '../../lib/cn'
 
 const controlClass =
-  'w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink transition-colors placeholder:text-ink-soft hover:border-primary-line focus-visible:border-primary aria-[invalid=true]:border-coral-ink'
+  'w-full rounded-xl border border-line-strong bg-surface px-3.5 py-2.5 text-sm text-ink transition-colors placeholder:text-ink-muted hover:border-primary-line focus-visible:border-primary aria-[invalid=true]:border-coral-ink'
 
 interface FieldOwnProps {
   label: string

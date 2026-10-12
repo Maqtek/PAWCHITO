@@ -7,7 +7,7 @@ export const toneSoftClass: Record<Tone, string> = {
   blush: 'bg-blush text-blush-ink',
   sky: 'bg-sky text-sky-ink',
   lilac: 'bg-lilac text-lilac-ink',
-  coral: 'bg-coral text-white',
+  coral: 'bg-coral-ink text-white',
   neutral: 'border border-line bg-surface-muted text-ink-muted',
 }
 

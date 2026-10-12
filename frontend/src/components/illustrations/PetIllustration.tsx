@@ -21,9 +21,9 @@ function DogFace() {
 function CatFace() {
   return (
     <g stroke={INK} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18.5 27 20 12.5l10 8.5z" fill="#b9c9d1" />
-      <path d="M45.5 27 44 12.5l-10 8.5z" fill="#b9c9d1" />
-      <ellipse cx="32" cy="34" rx="15" ry="13" fill="#d3dee3" />
+      <path d="M18.5 27 20 12.5l10 8.5z" fill="#8fa6b3" />
+      <path d="M45.5 27 44 12.5l-10 8.5z" fill="#8fa6b3" />
+      <ellipse cx="32" cy="34" rx="15" ry="13" fill="#a9bcc6" />
       <ellipse cx="26.5" cy="32" rx="1.6" ry="2.3" fill={INK} />
       <ellipse cx="37.5" cy="32" rx="1.6" ry="2.3" fill={INK} />
       <path d="M30.6 37h2.8L32 38.8z" fill="#dd836e" />

@@ -17,6 +17,13 @@ describe('поля', () => {
     expect(screen.getByRole('textbox', { name: 'Заметка' })).not.toHaveAttribute('aria-invalid')
   })
 
+  it('граница и плейсхолдер контрастные (line-strong, ink-muted)', () => {
+    render(<TextField label="Кличка" placeholder="Например, Майло" />)
+    const input = screen.getByRole('textbox', { name: 'Кличка' })
+    expect(input).toHaveClass('border-line-strong', 'placeholder:text-ink-muted')
+    expect(input).not.toHaveClass('border-line', 'placeholder:text-ink-soft')
+  })
+
   it('выпадающий список с пустым пунктом-подсказкой', () => {
     render(
       <SelectField

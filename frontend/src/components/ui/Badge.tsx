@@ -40,7 +40,7 @@ export function CountBadge({ count, label, className }: CountBadgeProps) {
     <span
       aria-hidden={label ? undefined : true}
       className={cn(
-        'grid h-5 min-w-5 place-items-center rounded-full bg-coral px-1.5 text-[11px] leading-none font-extrabold text-white',
+        'relative grid h-5 min-w-5 place-items-center rounded-full bg-coral-ink px-1.5 text-[11px] leading-none font-extrabold text-white',
         className,
       )}
     >

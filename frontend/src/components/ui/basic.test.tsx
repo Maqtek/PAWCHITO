@@ -37,6 +37,18 @@ describe('UI-кит: базовые элементы', () => {
     expect(decorative.container.firstElementChild).toHaveTextContent('7')
   })
 
+  it('CountBadge: белый текст на coral-ink (контраст AA), sr-only подпись внутри позиционированного блока', () => {
+    const { container } = render(<CountBadge count={3} label="Непрочитанных: 3" />)
+    expect(container.firstElementChild).toHaveClass('relative', 'bg-coral-ink', 'text-white')
+    expect(container.firstElementChild).not.toHaveClass('bg-coral')
+  })
+
+  it('CountBadge: позиционирование снаружи перекрывает relative', () => {
+    const { container } = render(<CountBadge count={3} className="absolute -top-0.5" />)
+    expect(container.firstElementChild).toHaveClass('absolute')
+    expect(container.firstElementChild).not.toHaveClass('relative')
+  })
+
   it('ProgressBar сообщает значение', () => {
     render(<ProgressBar value={6} max={12} label="Прогресс курса" />)
     const bar = screen.getByRole('progressbar', { name: 'Прогресс курса' })
@@ -51,7 +63,7 @@ describe('UI-кит: базовые элементы', () => {
 
   it('Avatar показывает инициалы', () => {
     render(<Avatar name="Анна Смирнова" />)
-    expect(screen.getByText('АС')).toBeInTheDocument()
+    expect(screen.getByText('АС')).toHaveClass('bg-coral-ink', 'text-white')
   })
 
   it('EmptyState: заголовок, описание, действие', () => {
