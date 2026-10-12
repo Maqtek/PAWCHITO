@@ -11,7 +11,7 @@ export function TopBar({ user, homePath }: { user: User; homePath: string }) {
       <Link to={homePath} aria-label="PAWCHITO — на главную" className="md:hidden">
         <Logo compact />
       </Link>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex min-w-0 items-center gap-2">
         {user.role === 'owner' && <PetSwitcher />}
         {user.role !== 'admin' && <NotificationBell />}
         <div className="md:hidden">

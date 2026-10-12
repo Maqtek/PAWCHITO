@@ -1,6 +1,9 @@
-import { screen, within } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { queryKeys } from '../api/queries'
+import { server } from '../mocks/node'
 import { setMockRole } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppShell } from './AppShell'
@@ -55,6 +58,26 @@ describe('AppShell', () => {
   })
 
   it('выход ведёт на экран входа', async () => {
+    const { user } = renderShell()
+    const [menu] = await screen.findAllByRole('button', { name: 'Меню пользователя' })
+    await user.click(menu)
+    await user.click(screen.getByRole('button', { name: 'Выйти' }))
+
+    expect(await screen.findByText('Экран входа')).toBeInTheDocument()
+  })
+
+  it('ошибка загрузки питомцев: ни переключателя, ни «Добавить питомца»', async () => {
+    server.use(http.get('*/api/pets', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    const { queryClient } = renderShell()
+    await screen.findByRole('navigation', { name: 'Разделы' })
+    await waitFor(() => expect(queryClient.getQueryState(queryKeys.pets)?.status).toBe('error'))
+
+    expect(screen.queryByRole('link', { name: 'Добавить питомца' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Сменить питомца/ })).not.toBeInTheDocument()
+  })
+
+  it('выход без сети всё равно ведёт на экран входа', async () => {
+    server.use(http.post('*/api/auth/logout', () => HttpResponse.error()))
     const { user } = renderShell()
     const [menu] = await screen.findAllByRole('button', { name: 'Меню пользователя' })
     await user.click(menu)

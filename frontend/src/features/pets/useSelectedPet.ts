@@ -32,9 +32,15 @@ function selectPet(id: number) {
   listeners.forEach((listener) => listener())
 }
 
-export function useSelectedPet(): { pets: Pet[]; pet: Pet | null; select: (id: number) => void; isPending: boolean } {
-  const { data: pets = [], isPending } = useQuery(petsQuery)
+export function useSelectedPet(): {
+  pets: Pet[]
+  pet: Pet | null
+  select: (id: number) => void
+  isPending: boolean
+  isError: boolean
+} {
+  const { data: pets = [], isPending, isError } = useQuery(petsQuery)
   const selectedId = useSyncExternalStore(subscribe, readSelectedId, () => null)
   const pet = pets.find((item) => item.id === selectedId) ?? pets[0] ?? null
-  return { pets, pet, select: selectPet, isPending }
+  return { pets, pet, select: selectPet, isPending, isError }
 }

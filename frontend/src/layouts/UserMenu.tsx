@@ -12,10 +12,15 @@ export function UserMenu({ user, compact = false }: { user: User; compact?: bool
   const queryClient = useQueryClient()
 
   async function logout() {
-    await api.POST('/auth/logout')
-    setAccessToken(null)
-    queryClient.clear()
-    navigate('/login', { replace: true })
+    try {
+      await api.POST('/auth/logout')
+    } catch {
+      // сеть недоступна — выходим локально
+    } finally {
+      setAccessToken(null)
+      queryClient.clear()
+      navigate('/login', { replace: true })
+    }
   }
 
   const button = compact ? (

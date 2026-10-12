@@ -9,7 +9,7 @@ import { UserMenu } from './UserMenu'
 
 export function Sidebar({ user, items }: { user: User; items: NavItem[] }) {
   return (
-    <aside className="sticky top-0 hidden h-dvh flex-col border-r border-line bg-surface px-4 py-6 md:flex">
+    <aside className="sticky top-0 hidden h-dvh flex-col overflow-y-auto border-r border-line bg-surface px-4 py-6 md:flex">
       <Link to={items[0].to} aria-label="PAWCHITO — на главную" className="px-2">
         <Logo />
       </Link>
