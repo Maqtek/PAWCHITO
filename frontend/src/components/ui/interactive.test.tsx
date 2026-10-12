@@ -124,4 +124,49 @@ describe('Dropdown', () => {
     await user.click(screen.getByRole('button', { name: 'Пункт' }))
     expect(screen.queryByRole('button', { name: 'Пункт' })).not.toBeInTheDocument()
   })
+
+  describe('возврат фокуса', () => {
+    function renderDropdown() {
+      render(
+        <div>
+          <Dropdown label="Меню" button="Открыть">
+            {(close) => (
+              <button type="button" onClick={close}>
+                Пункт
+              </button>
+            )}
+          </Dropdown>
+          <p>Снаружи</p>
+        </div>,
+      )
+      return screen.getByRole('button', { name: 'Меню' })
+    }
+
+    it('возвращается на кнопку после Esc и после выбора пункта', async () => {
+      const user = userEvent.setup()
+      const trigger = renderDropdown()
+
+      await user.click(trigger)
+      screen.getByRole('button', { name: 'Пункт' }).focus()
+      await user.keyboard('{Escape}')
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      expect(trigger).toHaveFocus()
+
+      await user.click(trigger)
+      await user.click(screen.getByRole('button', { name: 'Пункт' }))
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      expect(trigger).toHaveFocus()
+    })
+
+    it('не забирает фокус при клике снаружи', async () => {
+      const user = userEvent.setup()
+      const trigger = renderDropdown()
+
+      await user.click(trigger)
+      screen.getByRole('button', { name: 'Пункт' }).focus()
+      fireEvent.pointerDown(screen.getByText('Снаружи'))
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      expect(trigger).not.toHaveFocus()
+    })
+  })
 })
