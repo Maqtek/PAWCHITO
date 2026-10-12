@@ -291,7 +291,7 @@ US-08 «Смена питомца» — переключатель на фрон
 
 | Метод | Путь | Роль | Тело запроса | Ответ |
 |---|---|---|---|---|
-| GET | `/reminders?pet_id=10&date_from=2026-10-12&date_to=2026-10-20&status=pending` | owner | — | `200` `[Reminder]` |
+| GET | `/reminders?pet_id=10&date_from=2026-10-12&date_to=2026-10-20&status=pending&prescription_id=8` | owner | — | `200` `[Reminder]`. Фильтры необязательны; `prescription_id` — дела одного курса (раздел «Курс лечения») |
 | POST | `/reminders` | owner | `{"pet_id": 10, "title": "Почистить зубы", "due_at": "2026-10-20T08:00:00+03:00", "category": "routine", "repeat_interval_days": 7}` | `201` Reminder (`source: custom`). `category` по умолчанию — `routine`; `repeat_interval_days` — `null` или от 1 до 365 |
 | POST | `/reminders/{id}/done` | owner | — | `200` `{"reminder": Reminder, "next": Reminder}`; `next` — следующее дело серии, у разового дела — `null`<br>`409` статус не `pending` |
 | POST | `/reminders/{id}/skip` | owner | — | `200` `{"reminder": Reminder, "next": Reminder}` — пропуск не обрывает серию<br>`409` статус не `pending` |

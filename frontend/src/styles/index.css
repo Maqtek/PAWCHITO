@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Nunito Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #f7f7f2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #fafaf7;
+  --color-line: #dfe3dd;
+  --color-line-strong: #858e89;
+  --color-ink: #1f2524;
+  --color-ink-muted: #5f6966;
+  --color-ink-soft: #97a09c;
+
+  --color-primary: #345e56;
+  --color-primary-hover: #2a4d46;
+  --color-primary-soft: #ebf4ef;
+  --color-primary-line: #cfddd7;
+
+  --color-coral: #dd836e;
+  --color-coral-ink: #b4533e;
+  --color-coral-soft: #fff3ef;
+
+  --color-sand: #f2ecdc;
+  --color-sand-ink: #736444;
+
+  --color-mint: #dcebe5;
+  --color-mint-ink: #2f6b55;
+  --color-butter: #f6eac7;
+  --color-butter-ink: #87590f;
+  --color-blush: #f7d7cf;
+  --color-blush-ink: #9e3f2a;
+  --color-sky: #dfecef;
+  --color-sky-ink: #2d6680;
+  --color-lilac: #eae3f2;
+  --color-lilac-ink: #66499a;
+
+  --radius-card: 1.125rem;
+  --shadow-card: 0 1px 2px rgb(31 37 36 / 0.05);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary;
+  }
+}
