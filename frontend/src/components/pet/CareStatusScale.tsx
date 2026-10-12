@@ -13,7 +13,7 @@ export function CareStatusScale({ status }: { status: CareStatus | null }) {
         const active = value === status
         return (
           <li key={value} aria-current={active ? 'true' : undefined}>
-            <Badge tone={careStatusTone[value]} dot={active} active={active} className={active ? undefined : 'opacity-55'}>
+            <Badge tone={careStatusTone[value]} dot={active} active={active}>
               {careStatusLabel[value]}
             </Badge>
           </li>

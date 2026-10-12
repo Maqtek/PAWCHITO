@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Pet } from '../../api/schema'
 import { cn } from '../../lib/cn'
-import { formatAge } from '../../lib/format'
+import { formatAge, formatShortDate } from '../../lib/format'
 import { careStatusLabel, careStatusTone, speciesLabel } from '../../lib/labels'
 import { PetIllustration } from '../illustrations/PetIllustration'
 import { Card, toneInkClass } from '../ui'
@@ -16,6 +16,9 @@ export interface PetCardProps {
 
 export function PetCard({ pet, today, actions }: PetCardProps) {
   const meta = [pet.breed, pet.birth_date && formatAge(pet.birth_date, today)].filter(Boolean).join(' · ')
+  const statusSuffix = [pet.care_status_clinic?.name, pet.care_status_set_at && formatShortDate(pet.care_status_set_at)]
+    .filter(Boolean)
+    .join(', ')
 
   return (
     <Card className="overflow-hidden">
@@ -37,7 +40,7 @@ export function PetCard({ pet, today, actions }: PetCardProps) {
             <p className={cn('mt-2 flex flex-wrap items-center gap-x-2 text-sm font-bold', toneInkClass[careStatusTone[pet.care_status]])}>
               <span aria-hidden className="size-2 rounded-full bg-current" />
               {careStatusLabel[pet.care_status]}
-              {pet.care_status_clinic && <span className="font-semibold text-ink-muted">· {pet.care_status_clinic.name}</span>}
+              {statusSuffix && <span className="font-semibold text-ink-muted">· {statusSuffix}</span>}
             </p>
           )}
         </div>

@@ -35,6 +35,15 @@ export function formatDayDate(date: Date): string {
   }).format(date)
 }
 
+/** «10 октября» по московскому времени. */
+export function formatShortDate(value: string | Date): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TIME_ZONE,
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date(value))
+}
+
 /** «20:00» по московскому времени. */
 export function formatTime(value: string | Date): string {
   return new Intl.DateTimeFormat(LOCALE, {

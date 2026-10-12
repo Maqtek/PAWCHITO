@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAge, formatDayDate, formatTime, greeting, initials, pluralize } from './format'
+import { formatAge, formatDayDate, formatShortDate, formatTime, greeting, initials, pluralize } from './format'
 
 describe('pluralize', () => {
   const forms = ['год', 'года', 'лет'] as const
@@ -34,6 +34,21 @@ describe('даты и время по Москве', () => {
     ['2026-10-11T21:00:00Z', 'Доброй ночи'],
   ])('приветствие для %s', (iso, text) => {
     expect(greeting(new Date(iso))).toBe(text)
+  })
+})
+
+describe('formatShortDate', () => {
+  it('день и месяц словами', () => {
+    expect(formatShortDate('2026-10-10T10:40:00+03:00')).toBe('10 октября')
+  })
+
+  it('дата считается по Москве, а не по UTC', () => {
+    // 21:30 UTC 31 октября — в Москве уже 1 ноября
+    expect(formatShortDate('2026-10-31T21:30:00Z')).toBe('1 ноября')
+  })
+
+  it('принимает Date', () => {
+    expect(formatShortDate(new Date('2026-10-10T07:40:00Z'))).toBe('10 октября')
   })
 })
 

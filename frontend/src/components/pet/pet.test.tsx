@@ -53,7 +53,9 @@ describe('PetCard', () => {
     expect(screen.getByRole('heading', { name: 'Майло' })).toBeInTheDocument()
     expect(screen.getByText('Собака')).toBeInTheDocument()
     expect(screen.getByText('Золотистый ретривер · 4 года')).toBeInTheDocument()
-    expect(screen.getByText(/ВетДоктор/)).toBeInTheDocument()
+    expect(screen.getByText('· ВетДоктор, 10 октября')).toBeInTheDocument()
+    // статус в строке под кличкой и в шкале
+    expect(screen.getAllByText('На лечении')).toHaveLength(2)
   })
 
   it('фото от клиники вместо иллюстрации', () => {
