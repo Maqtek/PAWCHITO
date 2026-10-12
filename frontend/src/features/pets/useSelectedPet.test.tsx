@@ -1,7 +1,7 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { renderWithProviders } from '../../test/render'
-import { useSelectedPet } from './useSelectedPet'
+import { forgetSelectedPet, useSelectedPet } from './useSelectedPet'
 
 function Probe({ label }: { label: string }) {
   const { pet, pets, select } = useSelectedPet()
@@ -33,6 +33,17 @@ describe('useSelectedPet', () => {
 
     expect(screen.getByText('B: Барсик')).toBeInTheDocument()
     expect(localStorage.getItem('pawchito:selected-pet-id')).toBe('11')
+  })
+
+  it('forgetSelectedPet стирает выбор и возвращает подписчиков к первому питомцу', async () => {
+    const { user } = renderWithProviders(<Probe label="A" />)
+    await user.click(await screen.findByRole('button', { name: 'A выбрать Барсик' }))
+    expect(screen.getByText('A: Барсик')).toBeInTheDocument()
+
+    act(() => forgetSelectedPet())
+
+    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    expect(screen.getByText('A: Майло')).toBeInTheDocument()
   })
 
   it('неизвестный сохранённый id — берётся первый питомец', async () => {

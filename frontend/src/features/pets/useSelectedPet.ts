@@ -32,6 +32,16 @@ function selectPet(id: number) {
   listeners.forEach((listener) => listener())
 }
 
+/** Забыть выбор при выходе: следующий вход начнётся с первого питомца. */
+export function forgetSelectedPet(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // хранилище недоступно — забывать нечего
+  }
+  listeners.forEach((listener) => listener())
+}
+
 export function useSelectedPet(): {
   pets: Pet[]
   pet: Pet | null
