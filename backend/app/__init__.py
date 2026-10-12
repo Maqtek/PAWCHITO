@@ -1,0 +1,1 @@
+"""PAWCHITO backend: FastAPI-приложение, слои routers → services → repositories → models."""
