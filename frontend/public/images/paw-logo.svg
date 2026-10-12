@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="25 5 68 75" role="img" aria-label="Логотип Pawchito — лапа">
+  <g fill="#345e56">
+    <ellipse cx="37.5" cy="26.5" rx="7.5" ry="7" transform="rotate(-24 37.5 26.5)" />
+    <ellipse cx="51" cy="17" rx="7.1" ry="8.2" transform="rotate(-9 51 17)" />
+    <ellipse cx="67" cy="18" rx="7.1" ry="8.2" transform="rotate(9 67 18)" />
+    <ellipse cx="82" cy="29" rx="7.5" ry="7.5" transform="rotate(24 82 29)" />
+    <path d="M 59 27 C 43 27, 31 37, 31 52 C 31 66, 42 76, 59 76 C 76 76, 86 65, 86 52 C 86 38, 75 27, 59 27 Z"/>
+  </g>
+</svg>
