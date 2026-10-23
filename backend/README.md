@@ -18,3 +18,14 @@ DATABASE_URL=postgresql+psycopg2://ПОЛЬЗОВАТЕЛЬ:ПАРОЛЬ@db:5432
 ```
 
 `db` — имя сервиса PostgreSQL в `docker-compose.yml` (локально без Docker — `localhost`).
+
+## Логи
+
+| Файл | Что в нём |
+|---|---|
+| `app/core/logging.py` | JSON-записи в Redis Stream `logs` через фоновый поток; без Redis — stdout |
+| `app/core/middleware.py` | `request_id` на каждый запрос, заголовок `X-Request-ID`, лог итога запроса |
+
+`REDIS_URL` в `.env` (по умолчанию `redis://localhost:6379/0`). Смотреть логи:
+
+    docker compose exec redis redis-cli XREVRANGE logs + - COUNT 50

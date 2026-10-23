@@ -14,5 +14,13 @@ class Settings(BaseSettings):
     # в Docker ХОСТ — имя сервиса базы из docker-compose.yml, локально — localhost
     database_url: str = "postgresql+psycopg2://postgres:postgres@localhost:5432/pawchito"
 
+    # redis://ХОСТ:6379/0; в Docker ХОСТ — имя сервиса Redis
+    redis_url: str = "redis://localhost:6379/0"
+    log_level: str = "INFO"
+    log_stream: str = "logs"
+    log_retention_days: int = 14
+
+    timezone: str = "Europe/Moscow"
+
 
 settings = Settings()
