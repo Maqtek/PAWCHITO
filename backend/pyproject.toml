@@ -14,3 +14,5 @@ known-first-party = ["app"]
 
 [tool.mypy]
 ignore_missing_imports = true
+# Settings() без аргументов: значения берутся из окружения.
+plugins = ["pydantic.mypy"]
