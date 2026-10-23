@@ -4,6 +4,7 @@
 Локально читаются из ../.env (корень) или .env (папка backend).
 """
 
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +22,15 @@ class Settings(BaseSettings):
     log_retention_days: int = 14
 
     timezone: str = "Europe/Moscow"
+
+    # Секрет подписи JWT. Значения по умолчанию нет: без него приложение не стартует.
+    jwt_secret: SecretStr = Field(min_length=32)
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 30
+
+    # True — cookie только по HTTPS. http://localhost браузеры считают безопасным
+    cookie_secure: bool = True
 
 
 settings = Settings()
