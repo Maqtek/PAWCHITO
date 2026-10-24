@@ -21,6 +21,12 @@ services:
 
   redis:
     image: redis:8-alpine
+    # AOF — логи переживают перезапуск; 256 МБ под VPS на 2 ГБ.
+    # noeviction: при нехватке памяти запись отклоняется, и бэкенд пишет логи в stdout.
+    # Старые записи обрезает сам бэкенд (XADD MINID, 14 дней).
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -65,3 +71,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:
