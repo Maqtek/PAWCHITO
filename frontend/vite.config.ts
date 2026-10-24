@@ -7,7 +7,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     // Когда моки выключены (VITE_API_MOCKS=false), запросы идут на бэкенд.
-    proxy: { '/api': 'http://localhost:8000' },
+    // В Docker бэкенд — соседний контейнер: API_PROXY_TARGET=http://backend:8000.
+    proxy: { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:8000' },
   },
   test: {
     environment: 'jsdom',
