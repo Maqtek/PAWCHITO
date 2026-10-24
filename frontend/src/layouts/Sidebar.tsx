@@ -35,7 +35,7 @@ export function Sidebar({ user, items }: { user: User; items: NavItem[] }) {
         </ul>
       </nav>
       <div className="mt-auto flex flex-col gap-4">
-        {user.role === 'owner' && <CareTip />}
+        {user.role === 'owner' && <CareTip className="[@media(max-height:560px)]:hidden" />}
         <div className="border-t border-line pt-3">
           <UserMenu user={user} />
         </div>

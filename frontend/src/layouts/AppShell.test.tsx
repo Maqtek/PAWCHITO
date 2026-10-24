@@ -1,10 +1,11 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { getAccessToken } from '../api/auth-token'
 import { queryKeys } from '../api/queries'
 import { server } from '../mocks/node'
-import { setMockRole } from '../mocks/session'
+import { getMockRole, setMockRole } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppShell } from './AppShell'
 
@@ -57,13 +58,27 @@ describe('AppShell', () => {
     expect(localStorage.getItem('pawchito:selected-pet-id')).toBe('11')
   })
 
-  it('выход ведёт на экран входа', async () => {
+  it('имя кнопки меню пользователя начинается с видимого текста (WCAG 2.5.3)', async () => {
+    renderShell()
+    // В сайдбаре видны имя и роль, в шапке телефона — только аватар с инициалами.
+    const desktop = await screen.findByRole('button', { name: 'Анна Смирнова, Владелец — меню пользователя' })
+    expect(desktop).toHaveTextContent('Анна Смирнова')
+    expect(desktop).toHaveTextContent('Владелец')
+    expect(screen.getByRole('button', { name: 'Меню пользователя: Анна Смирнова' })).toHaveTextContent('АС')
+  })
+
+  it('выход: экран входа, токен сброшен, моки в гостя, выбор питомца забыт', async () => {
+    localStorage.setItem('pawchito:selected-pet-id', '11')
     const { user } = renderShell()
-    const [menu] = await screen.findAllByRole('button', { name: 'Меню пользователя' })
+    const [menu] = await screen.findAllByRole('button', { name: /меню пользователя/i })
+    expect(getAccessToken()).not.toBeNull()
     await user.click(menu)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
+    expect(getAccessToken()).toBeNull()
+    expect(getMockRole()).toBe('guest')
+    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
   })
 
   it('ошибка загрузки питомцев: ни переключателя, ни «Добавить питомца»', async () => {
@@ -76,13 +91,27 @@ describe('AppShell', () => {
     expect(screen.queryByRole('button', { name: /Сменить питомца/ })).not.toBeInTheDocument()
   })
 
-  it('выход без сети всё равно ведёт на экран входа', async () => {
+  it('фоновое обновление питомцев упало — переключатель остаётся на кэше', async () => {
+    const { queryClient } = renderShell()
+    expect(await screen.findByRole('button', { name: 'Питомец: Майло. Сменить питомца' })).toBeInTheDocument()
+
+    server.use(http.get('*/api/pets', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    await act(() => queryClient.refetchQueries({ queryKey: queryKeys.pets }))
+
+    expect(queryClient.getQueryState(queryKeys.pets)?.status).toBe('error')
+    expect(screen.getByRole('button', { name: 'Питомец: Майло. Сменить питомца' })).toBeInTheDocument()
+  })
+
+  it('выход без сети всё равно ведёт на экран входа и забывает выбор питомца', async () => {
     server.use(http.post('*/api/auth/logout', () => HttpResponse.error()))
+    localStorage.setItem('pawchito:selected-pet-id', '11')
     const { user } = renderShell()
-    const [menu] = await screen.findAllByRole('button', { name: 'Меню пользователя' })
+    const [menu] = await screen.findAllByRole('button', { name: /меню пользователя/i })
     await user.click(menu)
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
+    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    // Токен тут не проверяем: refresh-cookie без сети не отозвана, и семантика офлайн-выхода — задача этапа 2.
   })
 })

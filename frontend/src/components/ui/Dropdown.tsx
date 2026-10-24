@@ -66,7 +66,7 @@ export function Dropdown({ label, button, children, align = 'end', placement = '
         <div
           id={panelId}
           className={cn(
-            'absolute z-30 min-w-56 rounded-2xl border border-line bg-surface p-1.5 shadow-lg',
+            'absolute z-30 max-h-[70dvh] min-w-56 overflow-y-auto rounded-2xl border border-line bg-surface p-1.5 shadow-lg',
             align === 'end' ? 'right-0' : 'left-0',
             placement === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2',
           )}

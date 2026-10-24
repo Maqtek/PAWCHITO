@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import { EmptyState } from '../components/ui'
+import { cn } from '../lib/cn'
 
 export interface StagePlaceholderProps {
   stage: number
@@ -19,7 +20,7 @@ export function StagePlaceholder({ stage, icon, title, description, className }:
       description={
         <>
           {description}
-          <span className="mt-1 block font-bold text-ink-muted">Появится на этапе {stage} роадмапа.</span>
+          <span className={cn('block font-bold text-ink-muted', description && 'mt-1')}>Появится на этапе {stage} роадмапа.</span>
         </>
       }
     />

@@ -62,21 +62,27 @@ export function greeting(date: Date): string {
   return 'Доброй ночи'
 }
 
-/** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». */
+const NBSP = '\u00A0'
+
+/** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». Число не отрывается от слова. */
 export function formatAge(birthDate: string, today: Date): string {
   const [birthYear, birthMonth, birthDay] = birthDate.split('-').map(Number)
   const now = moscowParts(today)
   const months = (now.year - birthYear) * 12 + (now.month - birthMonth) - (now.day < birthDay ? 1 : 0)
   if (months < 1) return 'меньше месяца'
-  if (months < 12) return `${months} ${pluralize(months, ['месяц', 'месяца', 'месяцев'])}`
+  if (months < 12) return `${months}${NBSP}${pluralize(months, ['месяц', 'месяца', 'месяцев'])}`
   const years = Math.floor(months / 12)
-  return `${years} ${pluralize(years, ['год', 'года', 'лет'])}`
+  return `${years}${NBSP}${pluralize(years, ['год', 'года', 'лет'])}`
 }
 
-/** Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВЕ». */
+/**
+ * Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВД» (заглавная внутри слова начинает часть),
+ * «Администратор» → «АД» (одно слово — первые две буквы).
+ */
 export function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
   if (words.length === 0) return '?'
-  if (words.length === 1) return words[0].slice(0, 2).toUpperCase()
-  return (words[0][0] + words[1][0]).toUpperCase()
+  const parts = words.length > 1 ? words : words[0].split(/(?=\p{Lu})/u).filter(Boolean)
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return (parts[0][0] + parts[1][0]).toUpperCase()
 }

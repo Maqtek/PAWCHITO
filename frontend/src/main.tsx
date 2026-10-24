@@ -9,8 +9,9 @@ async function enableMocks() {
   // Прямая проверка DEV вырезает чанк моков из продакшен-сборки.
   if (!import.meta.env.DEV) return;
   if (!mocksEnabled) return;
-  const { worker } = await import('./mocks/browser');
-  await worker.start({ onUnhandledFrame: 'warn' });
+  const { worker, onUnhandledFrame } = await import('./mocks/browser');
+  // Предупреждение только о запросах к /api/ без мока, а не о навигации и ассетах.
+  await worker.start({ onUnhandledFrame });
 }
 
 enableMocks()

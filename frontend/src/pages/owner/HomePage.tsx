@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Inbox, PawPrint, Plus } from 'lucide-react'
+import { CloudOff, Inbox, PawPrint, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { meQuery } from '../../api/queries'
 import { PetCard } from '../../components/pet/PetCard'
-import { buttonClass, EmptyState, Eyebrow, Spinner } from '../../components/ui'
+import { Button, buttonClass, EmptyState, Eyebrow, Spinner } from '../../components/ui'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { formatDayDate, greeting } from '../../lib/format'
@@ -12,7 +12,7 @@ import { StagePlaceholder } from '../StagePlaceholder'
 
 export function HomePage() {
   const { data: user } = useQuery(meQuery)
-  const { pet, isPending } = useSelectedPet()
+  const { pet, isPending, isError, refetch } = useSelectedPet()
   // Время фиксируется при открытии страницы: рендер должен быть чистым.
   const [now] = useState(() => new Date())
 
@@ -21,6 +21,7 @@ export function HomePage() {
       <PageHeader
         eyebrow={formatDayDate(now)}
         title={user ? `${greeting(now)}, ${user.full_name}` : greeting(now)}
+        documentTitle="Главная"
         actions={
           <Link to="/pets" className={buttonClass()}>
             <Plus aria-hidden className="size-4" />
@@ -32,6 +33,13 @@ export function HomePage() {
         <Spinner label="Загружаем питомцев" />
       ) : pet ? (
         <PetCard pet={pet} today={now} />
+      ) : isError ? (
+        <EmptyState
+          icon={CloudOff}
+          title="Не удалось загрузить питомцев"
+          description="Проверьте соединение и попробуйте ещё раз."
+          action={<Button onClick={() => void refetch()}>Повторить</Button>}
+        />
       ) : (
         <EmptyState
           icon={PawPrint}

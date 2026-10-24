@@ -52,10 +52,19 @@ describe('PetCard', () => {
     render(<PetCard pet={milo} today={new Date('2026-10-12T12:00:00Z')} />)
     expect(screen.getByRole('heading', { name: 'Майло' })).toBeInTheDocument()
     expect(screen.getByText('Собака')).toBeInTheDocument()
-    expect(screen.getByText('Золотистый ретривер · 4 года')).toBeInTheDocument()
-    expect(screen.getByText('· ВетДоктор, 10 октября')).toBeInTheDocument()
+    // getByText схлопывает пробелы, поэтому неразрывный проверяем по textContent.
+    expect(screen.getByText(/Золотистый ретривер/).textContent).toBe('Золотистый ретривер · 4\u00A0года')
     // статус в строке под кличкой и в шкале
     expect(screen.getAllByText('На лечении')).toHaveLength(2)
+  })
+
+  it('клиника и дата на узком экране переносятся целиком, без висящей «·»', () => {
+    render(<PetCard pet={milo} today={new Date('2026-10-12T12:00:00Z')} />)
+    const suffix = screen.getByText('ВетДоктор, 10 октября')
+    expect(suffix).toHaveClass('basis-full', 'sm:basis-auto')
+    const separator = suffix.querySelector('[aria-hidden="true"]')
+    expect(separator).toHaveClass('hidden', 'sm:inline')
+    expect(separator).toHaveTextContent('·')
   })
 
   it('фото от клиники вместо иллюстрации', () => {
