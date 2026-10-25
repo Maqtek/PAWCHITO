@@ -35,6 +35,7 @@ function tooManyAttempts(retryAfter: number | null): string {
 
 /** Клиентские проверки форм авторизации (#29, #30). */
 export const validationMessages = {
+  required: 'Заполните поле',
   email: 'Введите email в формате name@example.com',
   passwordLength: 'Пароль — не короче 8 символов',
   passwordMismatch: 'Пароли не совпадают',
@@ -42,12 +43,13 @@ export const validationMessages = {
 } as const
 
 /** Почему пользователь оказался на экране входа. */
-export type SessionReason = 'expired' | 'signed-out-elsewhere' | 'logout-pending'
+export type SessionReason = 'expired' | 'signed-out-elsewhere' | 'logout-pending' | 'password-recovered'
 
 const sessionReasons: Record<SessionReason, string> = {
   expired: 'Сессия истекла — войдите снова',
   'signed-out-elsewhere': 'Вы вышли в другой вкладке',
   'logout-pending': 'Вы вышли на этом устройстве. На сервере сессия завершится, когда появится связь',
+  'password-recovered': 'Пароль изменён — войдите с новым паролем',
 }
 
 /** Текст причины из location.state экрана входа или null. */

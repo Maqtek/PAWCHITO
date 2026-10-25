@@ -45,6 +45,7 @@ describe('sessionReasonMessage', () => {
     ['expired', 'Сессия истекла — войдите снова'],
     ['signed-out-elsewhere', 'Вы вышли в другой вкладке'],
     ['logout-pending', 'Вы вышли на этом устройстве. На сервере сессия завершится, когда появится связь'],
+    ['password-recovered', 'Пароль изменён — войдите с новым паролем'],
   ])('%s', (reason, text) => {
     expect(sessionReasonMessage(reason)).toBe(text)
   })
@@ -57,6 +58,7 @@ describe('sessionReasonMessage', () => {
 
 it('тексты клиентских проверок форм', () => {
   expect(validationMessages).toEqual({
+    required: 'Заполните поле',
     email: 'Введите email в формате name@example.com',
     passwordLength: 'Пароль — не короче 8 символов',
     passwordMismatch: 'Пароли не совпадают',
