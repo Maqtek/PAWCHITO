@@ -88,6 +88,7 @@ export const authHandlers = [
         must_change_password: false,
         is_active: true,
         recovery_code: newRecoveryCode(),
+        clinic_id: null,
       }
       state.nextUserId += 1
       state.accounts.push(account)

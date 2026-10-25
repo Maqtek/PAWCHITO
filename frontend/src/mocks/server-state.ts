@@ -1,4 +1,4 @@
-import type { Role, User } from '../api/schema'
+import type { AdminClinic, Role, User } from '../api/schema'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -15,11 +15,28 @@ export interface MockAccount {
   must_change_password: boolean
   is_active: boolean
   recovery_code: string | null
+  /** Клиника аккаунта; у владельцев и админов — null. */
+  clinic_id: number | null
+}
+
+export interface MockClinic {
+  id: number
+  name: string
+  address: string
+  phone: string
+  opens_at: string
+  closes_at: string
+  work_days: number[]
+  archived_at: string | null
+  /** Записей в моках нет до этапа 7: число будущих записей хранится в клинике. */
+  futureAppointments: number
 }
 
 export interface MockServerState {
   accounts: MockAccount[]
   nextUserId: number
+  clinics: MockClinic[]
+  nextClinicId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -32,6 +49,7 @@ const SERVER_KEY = 'pawchito:mock-server'
 const COOKIE_KEY = 'pawchito:mock-cookie'
 const ACCESS_TTL_SECONDS = 900
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+const PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
 function seedAccount(
   id: number,
@@ -49,6 +67,31 @@ function seedAccount(
     must_change_password: false,
     is_active: true,
     recovery_code: null,
+    clinic_id: null,
+    ...extra,
+  }
+}
+
+function seedClinic(
+  id: number,
+  name: string,
+  address: string,
+  phone: string,
+  opensAt: string,
+  closesAt: string,
+  workDays: number[],
+  extra: Partial<MockClinic> = {},
+): MockClinic {
+  return {
+    id,
+    name,
+    address,
+    phone,
+    opens_at: opensAt,
+    closes_at: closesAt,
+    work_days: workDays,
+    archived_at: null,
+    futureAppointments: 0,
     ...extra,
   }
 }
@@ -57,12 +100,22 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
   return {
     accounts: [
       seedAccount(1, 'owner@example.com', 'owner', 'Анна Смирнова', { recovery_code: 'K7QM-2XPA-9RTD-4WNB' }),
-      seedAccount(6, 'clinic@example.com', 'clinic', 'ВетДоктор'),
-      seedAccount(7, 'clinic-new@example.com', 'clinic', 'Клиника «Новая»', { must_change_password: true }),
+      seedAccount(6, 'clinic@example.com', 'clinic', 'ВетДоктор', { clinic_id: 2 }),
+      seedAccount(7, 'clinic-new@example.com', 'clinic', 'Клиника «Новая»', { clinic_id: 3, must_change_password: true }),
+      seedAccount(8, 'aibolit@example.com', 'clinic', 'Айболит', { clinic_id: 5, is_active: false }),
       seedAccount(9, 'admin@example.com', 'admin', 'Администратор'),
       seedAccount(12, 'blocked@example.com', 'owner', 'Иван Петров', { is_active: false }),
     ],
     nextUserId: 100,
+    clinics: [
+      seedClinic(2, 'ВетДоктор', 'ул. Ленина, 10', '+79990000000', '09:00', '20:00', [1, 2, 3, 4, 5, 6], { futureAppointments: 7 }),
+      seedClinic(3, 'Клиника «Новая»', 'пр. Мира, 5', '+79991112233', '10:00', '19:00', [1, 2, 3, 4, 5]),
+      seedClinic(4, 'Зоовет', 'ул. Садовая, 21', '+79993334455', '08:00', '22:00', [1, 2, 3, 4, 5, 6, 7]),
+      seedClinic(5, 'Айболит', 'ул. Чехова, 3', '+79995556677', '09:00', '18:00', [1, 2, 3, 4, 5], {
+        archived_at: '2026-10-01T12:00:00+03:00',
+      }),
+    ],
+    nextClinicId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,
@@ -75,8 +128,12 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
 export function readServer(): MockServerState {
   try {
     const saved = localStorage.getItem(SERVER_KEY)
-    // Новые поля состояния берутся из seed — сохранённое старое состояние не ломает моки.
-    if (saved) return { ...seedState(), ...(JSON.parse(saved) as Partial<MockServerState>) }
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<MockServerState>
+      // Состояние до этапа 3: без клиник у аккаунтов клиник нет clinic_id — начинаем с seed.
+      // Новые поля состояния берутся из seed — сохранённое старое состояние не ломает моки.
+      if (Array.isArray(parsed.clinics)) return { ...seedState(), ...parsed }
+    }
   } catch {
     // повреждённое состояние — начинаем с seed
   }
@@ -124,6 +181,17 @@ export function findAccount(state: MockServerState, email: string): MockAccount 
   return state.accounts.find((account) => account.email.toLowerCase() === wanted)
 }
 
+/** Ответ AdminClinic: аккаунт — по clinic_id, число будущих записей — из клиники. */
+export function toAdminClinic(state: MockServerState, clinic: MockClinic): AdminClinic {
+  const { futureAppointments, ...fields } = clinic
+  const account = state.accounts.find((item) => item.clinic_id === clinic.id)
+  return {
+    ...fields,
+    account: account ? { id: account.id, email: account.email, is_active: account.is_active } : null,
+    future_appointments_count: futureAppointments,
+  }
+}
+
 export function toUser({ id, email, role, full_name, must_change_password }: MockAccount): User {
   return { id, email, role, full_name, must_change_password }
 }
@@ -164,4 +232,11 @@ export function newRecoveryCode(): string {
   const group = () =>
     Array.from({ length: 4 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('')
   return [group(), group(), group(), group()].join('-')
+}
+
+/** Временный пароль клиники xxxx-xxxx-xxxx: без похожих символов (0/O, 1/l/I), чтобы его можно было продиктовать. */
+export function newTemporaryPassword(): string {
+  const group = () =>
+    Array.from({ length: 4 }, () => PASSWORD_ALPHABET[Math.floor(Math.random() * PASSWORD_ALPHABET.length)]).join('')
+  return [group(), group(), group()].join('-')
 }
