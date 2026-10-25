@@ -43,7 +43,7 @@ docker compose up --build
 | PostgreSQL | localhost:5432 |
 | Redis | localhost:6379 |
 
-Фронтенд в Docker по умолчанию работает на моках MSW; чтобы запросы шли на бэкенд — `VITE_API_MOCKS=false` в `.env`.
+По умолчанию реальный API, для включения моков — VITE_MOCKS=true.
 
 Миграции применяются при старте бэкенда.
 

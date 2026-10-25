@@ -59,15 +59,13 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-
-  frontend:
-    build: ./frontend
-    environment:
-      # прокси Vite отправляет /api в контейнер бэкенда
-      API_PROXY_TARGET: http://backend:8000
-      VITE_API_MOCKS: ${VITE_API_MOCKS:-true}
-    ports:
-      - "5173:5173"
+frontend:
+  build: ./frontend
+  environment:
+    API_PROXY_TARGET: http://backend:8000
+    VITE_MOCKS: ${VITE_MOCKS:-false}
+  ports:
+    - "5173:5173"
 
 volumes:
   pgdata:
