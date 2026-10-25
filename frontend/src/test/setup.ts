@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach } from 'vitest'
-import { setAccessToken } from '../api/auth-token'
+import { resetSessionForTests } from '../api/session'
 import { server } from '../mocks/node'
 
 // Слушаем сразу: модули тестов импортируются раньше, чем срабатывают хуки.
@@ -22,7 +22,7 @@ HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
 afterEach(() => {
   cleanup()
   server.resetHandlers()
-  setAccessToken(null)
+  resetSessionForTests()
   localStorage.clear()
 })
 

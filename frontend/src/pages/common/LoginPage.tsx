@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { setAccessToken } from '../../api/auth-token'
 import type { Role } from '../../api/schema'
+import { refreshAccessToken, signIn } from '../../api/session'
 import { Button, Card, Eyebrow } from '../../components/ui'
 import { Logo } from '../../layouts/Logo'
 import { roleLabel } from '../../lib/labels'
@@ -15,9 +15,11 @@ export function LoginPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
-  function loginAs(role: Role) {
+  async function loginAs(role: Role) {
+    // Временно до мок-сервера: роль в моках, токен — обменом cookie.
     setMockRole(role)
-    setAccessToken(null)
+    const result = await refreshAccessToken()
+    if (result.status === 'ok') signIn(result.token)
     queryClient.clear()
     navigate('/', { replace: true })
   }
@@ -34,7 +36,7 @@ export function LoginPage() {
             <Eyebrow>Моки: войти как</Eyebrow>
             <div className="mt-3 grid gap-2">
               {MOCK_ROLES.map((role) => (
-                <Button key={role} variant="secondary" fullWidth onClick={() => loginAs(role)}>
+                <Button key={role} variant="secondary" fullWidth onClick={() => void loginAs(role)}>
                   {roleLabel[role]}
                 </Button>
               ))}

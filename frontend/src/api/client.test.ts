@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { server } from '../mocks/node'
 import { getAccessToken, setAccessToken } from './auth-token'
 import { api } from './client'
+import { NetworkError } from './errors'
 import type { User } from './schema'
+import { onSessionChange, type SessionEvent } from './session'
 
 const user: User = {
   id: 1,
@@ -93,5 +95,70 @@ describe('api', () => {
 
     expect(response.status).toBe(401)
     expect(refreshCalls).toBe(1)
+  })
+
+  it('при загрузке сначала обновляет токен: первый запрос уходит уже с ним (БП §1)', async () => {
+    const authorizations: (string | null)[] = []
+    server.use(
+      http.post('*/api/auth/refresh', () => tokenResponse('fresh')),
+      http.get('*/api/users/me', ({ request }) => {
+        authorizations.push(request.headers.get('Authorization'))
+        return HttpResponse.json(user)
+      }),
+    )
+
+    await api.GET('/users/me')
+
+    expect(authorizations).toEqual(['Bearer fresh'])
+  })
+
+  it('сервер обновления недоступен — сетевая ошибка, а не выход', async () => {
+    server.use(http.post('*/api/auth/refresh', () => HttpResponse.error()), meOnlyWith('never'))
+    setAccessToken('stale')
+
+    await expect(api.GET('/users/me')).rejects.toBeInstanceOf(NetworkError)
+    expect(getAccessToken()).toBe('stale')
+  })
+
+  it('обмен недоступен при загрузке, API отвечает 401 без токена — сетевая ошибка, а не выход', async () => {
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: 'Сбой' }, { status: 503 })),
+      meOnlyWith('never'),
+    )
+
+    await expect(api.GET('/users/me')).rejects.toBeInstanceOf(NetworkError)
+  })
+
+  it('сессия закончилась на сервере — событие expired', async () => {
+    const events: SessionEvent[] = []
+    onSessionChange((event) => events.push(event))
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: 'Сессия истекла' }, { status: 401 })),
+      meOnlyWith('never'),
+    )
+    setAccessToken('stale')
+
+    await api.GET('/users/me')
+
+    expect(events).toEqual([{ type: 'expired' }])
+  })
+
+  it('гость: 401 без второго обновления и без события', async () => {
+    let refreshCalls = 0
+    const events: SessionEvent[] = []
+    onSessionChange((event) => events.push(event))
+    server.use(
+      http.post('*/api/auth/refresh', () => {
+        refreshCalls += 1
+        return HttpResponse.json({ detail: 'Нет сессии' }, { status: 401 })
+      }),
+      meOnlyWith('never'),
+    )
+
+    const { response } = await api.GET('/users/me')
+
+    expect(response.status).toBe(401)
+    expect(refreshCalls).toBe(1)
+    expect(events).toEqual([])
   })
 })
