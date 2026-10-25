@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { adminClinicQuery } from '../../api/queries'
 import { Badge, Button, EmptyState, linkClass, Spinner } from '../../components/ui'
+import { ClinicAccountSection } from '../../features/admin/ClinicAccountSection'
 import { ClinicDetailsSection } from '../../features/admin/ClinicDetailsSection'
 import { PageHeader } from '../../layouts/PageHeader'
 
@@ -81,6 +82,7 @@ export function AdminClinicPage() {
     content = (
       <div className="flex max-w-2xl flex-col gap-6">
         <ClinicDetailsSection clinic={clinic} onStatus={setStatus} />
+        <ClinicAccountSection clinic={clinic} onStatus={setStatus} />
       </div>
     )
   }

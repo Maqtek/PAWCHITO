@@ -1,9 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
+import { readServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 
@@ -126,5 +127,61 @@ describe('AdminClinicPage: данные', () => {
 
     await user.click(screen.getByRole('button', { name: 'Повторить' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'ВетДоктор' })).toBeInTheDocument()
+  })
+})
+
+describe('AdminClinicPage: аккаунт клиники', () => {
+  it('создание: email → временный пароль; окно не закрыть до «Готово»; статус и email в карточке', async () => {
+    const { user } = renderClinic(4)
+    expect(await screen.findByText('Клиника не может войти, пока нет аккаунта.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
+    const dialog = screen.getByRole('dialog', { name: 'Аккаунт клиники' })
+    await user.type(within(dialog).getByLabelText('Email клиники'), 'zoovet@example.com')
+    await user.click(within(dialog).getByRole('button', { name: 'Создать аккаунт' }))
+
+    expect(await within(dialog).findByRole('heading', { level: 3, name: 'Временный пароль клиники' })).toBeInTheDocument()
+    const password = readServer().accounts.find((item) => item.email === 'zoovet@example.com')?.password ?? ''
+    expect(within(dialog).getByText(password)).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+    fireEvent(dialog, new Event('cancel', { cancelable: true }))
+    expect(dialog).toHaveAttribute('open')
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Пароль передан клинике' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Готово' }))
+    expect(await screen.findByText('Аккаунт создан. Временный пароль передан клинике.')).toBeInTheDocument()
+    expect(await screen.findByText('zoovet@example.com')).toBeInTheDocument()
+    expect(screen.getByText('Активен')).toBeInTheDocument()
+  })
+
+  it('409 — у поля email, фокус на нём', async () => {
+    const { user } = renderClinic(4)
+    await user.click(await screen.findByRole('button', { name: 'Создать аккаунт' }))
+    const dialog = screen.getByRole('dialog', { name: 'Аккаунт клиники' })
+    await user.type(within(dialog).getByLabelText('Email клиники'), 'owner@example.com')
+    await user.click(within(dialog).getByRole('button', { name: 'Создать аккаунт' }))
+    expect(await within(dialog).findByText('У клиники уже есть аккаунт или email занят.')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Email клиники')).toHaveFocus()
+  })
+
+  it('сброс пароля: подтверждение → временный пароль → статус; на сервере новый пароль и флаг смены', async () => {
+    const { user } = renderClinic(2)
+    await user.click(await screen.findByRole('button', { name: 'Сбросить пароль' }))
+    const dialog = screen.getByRole('dialog', { name: 'Сброс пароля' })
+    expect(within(dialog).getByText('Клиника выйдет на всех устройствах и при входе задаст новый пароль.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Сбросить пароль' }))
+    expect(await within(dialog).findByRole('heading', { level: 3, name: 'Временный пароль клиники' })).toBeInTheDocument()
+    const account = readServer().accounts.find((item) => item.id === 6)
+    expect(account?.must_change_password).toBe(true)
+    expect(within(dialog).getByText(account?.password ?? '')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Пароль передан клинике' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Готово' }))
+    expect(await screen.findByText('Пароль сброшен. Временный пароль передан клинике.')).toBeInTheDocument()
+  })
+
+  it('у скрытой клиники нет кнопок аккаунта, статус «Заблокирован — клиника скрыта»', async () => {
+    renderClinic(5)
+    expect(await screen.findByText('Заблокирован — клиника скрыта')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сбросить пароль' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Создать аккаунт' })).not.toBeInTheDocument()
   })
 })
