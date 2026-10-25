@@ -59,13 +59,14 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-frontend:
-  build: ./frontend
-  environment:
-    API_PROXY_TARGET: http://backend:8000
-    VITE_MOCKS: ${VITE_MOCKS:-false}
-  ports:
-    - "5173:5173"
+
+  frontend:
+    build: ./frontend
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+      VITE_MOCKS: ${VITE_MOCKS:-false}
+    ports:
+      - "5173:5173"
 
 volumes:
   pgdata:
