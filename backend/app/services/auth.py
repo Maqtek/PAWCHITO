@@ -32,12 +32,20 @@ class InvalidCredentialsError(Exception):
     pass
 
 
+class InvalidCurrentPasswordError(Exception):
+    pass
+
+
 class UserBlockedError(Exception):
     pass
 
 
 class InvalidRefreshTokenError(Exception):
     """Токена нет, он истёк или отозван, либо пользователь заблокирован — нужен новый вход."""
+
+
+class InvalidRecoveryCodeError(Exception):
+    """Неверная пара email и код — без уточнения, что именно не так."""
 
 
 def _now() -> datetime:
@@ -93,10 +101,10 @@ class AuthService:
         if token is None:
             raise InvalidRefreshTokenError
         if token.revoked_at is not None:
-            # Отозванный токен пришёл ещё раз: копия токена есть у кого-то ещё.
+            # Токен уже обменяли, а он пришёл ещё раз: копия есть у кого-то ещё.
             # Кто из двоих владелец, не понять — завершаем все сессии пользователя.
-            # Роутер не должен превращать это в исключение: отзыв обязан закоммититься.
-            self.refresh_tokens.revoke_all_for_user(token.user_id, now)
+            # Роутер не должен превращать это в исключение: удаление обязано закоммититься.
+            self.refresh_tokens.delete_all_for_user(token.user_id)
             raise InvalidRefreshTokenError
         if not token.is_valid(now) or not token.user.is_active:
             raise InvalidRefreshTokenError
@@ -104,12 +112,59 @@ class AuthService:
         return self._issue_tokens(token.user)
 
     def logout(self, refresh_token: str | None) -> None:
-        """Отзывает текущий refresh-токен. Нет cookie или токен уже отозван — ничего не делаем."""
+        """Удаляет текущий refresh-токен. Нет cookie или токена — ничего не делаем."""
         if not refresh_token:
             return
         token = self.refresh_tokens.get_by_hash(hash_refresh_token(refresh_token))
-        if token is not None and token.revoked_at is None:
-            self.refresh_tokens.revoke(token, _now())
+        if token is not None:
+            # Удаляем, а не отзываем: если ответ на выход потеряется и браузер
+            # потом обменяет эту cookie, это не кража — просто 401
+            self.refresh_tokens.delete(token)
+
+    def change_password(self, user: User, current_password: str, new_password: str) -> IssuedTokens:
+        """Новый пароль; остальные сессии завершаются, текущая получает новые токены.
+
+        Сбрасывает и must_change_password: так клиника меняет временный пароль.
+        """
+        self._check_current_password(user, current_password)
+        self.users.update(
+            user, password_hash=hash_password(new_password), must_change_password=False
+        )
+        self.refresh_tokens.delete_all_for_user(user.id)
+        return self._issue_tokens(user)
+
+    def recover(self, email: str, recovery_code: str, new_password: str) -> str:
+        """Новый пароль по коду восстановления. Возвращает новый код: старый одноразовый.
+
+        Все сессии завершаются, токены не выдаём — дальше обычный вход с новым паролем.
+        """
+        user = self.users.get_by_email(email)
+        # Код есть только у владельца; для чужого email и для клиники тратим то же время
+        # на Argon2, чтобы по скорости ответа не узнать, какие email зарегистрированы
+        if user is None or user.recovery_code_hash is None:
+            verify_password(recovery_code, DUMMY_PASSWORD_HASH)
+            raise InvalidRecoveryCodeError
+        if not verify_password(recovery_code, user.recovery_code_hash):
+            raise InvalidRecoveryCodeError
+        new_code = generate_recovery_code()
+        self.users.update(
+            user,
+            password_hash=hash_password(new_password),
+            recovery_code_hash=hash_password(new_code),
+        )
+        self.refresh_tokens.delete_all_for_user(user.id)
+        return new_code
+
+    def regenerate_recovery_code(self, user: User, current_password: str) -> str:
+        """Новый код в профиле; старый перестаёт действовать (БП §1). Сессии не трогаем."""
+        self._check_current_password(user, current_password)
+        new_code = generate_recovery_code()
+        self.users.update(user, recovery_code_hash=hash_password(new_code))
+        return new_code
+
+    def _check_current_password(self, user: User, password: str) -> None:
+        if not verify_password(password, user.password_hash):
+            raise InvalidCurrentPasswordError
 
     def _issue_tokens(self, user: User) -> IssuedTokens:
         refresh_token = generate_refresh_token()

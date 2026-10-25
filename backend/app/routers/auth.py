@@ -5,12 +5,22 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.cookies import clear_refresh_cookie, set_refresh_cookie
-from app.routers.deps import AuthServiceDep, RefreshCookie
-from app.schemas.auth import LoginIn, RegisterIn, RegisterOut, TokenOut
+from app.routers.deps import AuthServiceDep, RefreshCookie, UserAllowPasswordChange
+from app.schemas.auth import (
+    ChangePasswordIn,
+    LoginIn,
+    RecoverIn,
+    RecoveryCodeOut,
+    RegisterIn,
+    RegisterOut,
+    TokenOut,
+)
 from app.schemas.user import UserOut
 from app.services.auth import (
     EmailTakenError,
     InvalidCredentialsError,
+    InvalidCurrentPasswordError,
+    InvalidRecoveryCodeError,
     InvalidRefreshTokenError,
     IssuedTokens,
     UserBlockedError,
@@ -59,7 +69,7 @@ def refresh(
         tokens = service.refresh(refresh_token)
     except InvalidRefreshTokenError:
         # Ответ возвращаем, а не бросаем HTTPException: исключение откатило бы транзакцию
-        # в get_db, и отзыв всех сессий при повторном использовании токена не сохранился бы.
+        # в get_db, и завершение всех сессий при повторном использовании токена потерялось бы.
         error = JSONResponse({"detail": "Сессия истекла, войдите снова"}, status_code=401)
         clear_refresh_cookie(error)
         return error
@@ -72,3 +82,28 @@ def logout(
 ) -> None:
     service.logout(refresh_token)
     clear_refresh_cookie(response)
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    data: ChangePasswordIn,
+    response: Response,
+    user: UserAllowPasswordChange,
+    service: AuthServiceDep,
+) -> TokenOut:
+    try:
+        tokens = service.change_password(user, data.current_password, data.new_password)
+    except InvalidCurrentPasswordError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неверный текущий пароль") from None
+    return _token_out(response, tokens)
+
+
+@router.post("/recover", status_code=status.HTTP_200_OK)
+def recover(data: RecoverIn, response: Response, service: AuthServiceDep) -> RecoveryCodeOut:
+    try:
+        recovery_code = service.recover(data.email, data.recovery_code, data.new_password)
+    except InvalidRecoveryCodeError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Неверный email или код") from None
+    # Все сессии завершены — старая cookie в этом браузере, если была, уже не нужна
+    clear_refresh_cookie(response)
+    return RecoveryCodeOut(recovery_code=recovery_code)

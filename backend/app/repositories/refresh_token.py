@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select
 
 from app.models.refresh_token import RefreshToken
 from app.repositories.base import BaseRepository
@@ -24,20 +24,20 @@ class RefreshTokenRepository(BaseRepository[RefreshToken]):
         return self.session.scalars(stmt).one_or_none()
 
     def revoke(self, token: RefreshToken, now: datetime) -> None:
-        """Отозвать один токен: выход, обмен на новый (ротация)."""
+        """Пометить токен заменённым при обмене (ротация).
+
+        Только для ротации: повторное предъявление токена с revoked_at сервис считает
+        кражей (AuthService.refresh). Законно завершённые сессии — delete_all_for_user.
+        """
         token.revoked_at = now
         self.session.flush()
 
-    def revoke_all_for_user(self, user_id: int, now: datetime) -> None:
-        """Отозвать все действующие токены пользователя — завершить все сессии.
+    def delete_all_for_user(self, user_id: int) -> None:
+        """Завершить все сессии пользователя: удалить его refresh-токены.
 
-        Смена пароля, сброс по коду, блокировка, повторное использование
-        отозванного токена.
+        Смена пароля, восстановление по коду, кража токена, блокировка.
+        Удаляем, а не ставим revoked_at: иначе другое устройство, обменивая свой
+        законно отозванный токен, попало бы под «повторное использование» и
+        завершило бы и новую сессию.
         """
-        stmt = (
-            update(RefreshToken)
-            .where(RefreshToken.user_id == user_id, RefreshToken.revoked_at.is_(None))
-            .values(revoked_at=now)
-            .execution_options(synchronize_session="fetch")
-        )
-        self.session.execute(stmt)
+        self.session.execute(delete(RefreshToken).where(RefreshToken.user_id == user_id))
