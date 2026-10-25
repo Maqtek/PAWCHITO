@@ -39,7 +39,8 @@ export function RequireRole({ allow, passwordChange = false, children }: Require
     )
   }
   // Временный пароль: пока не сменён, доступен только экран смены, а он — только с временным паролем.
-  if (user.must_change_password !== passwordChange) {
+  // Строго === true: без поля в ответе undefined !== false увёл бы всех по кругу через /change-password.
+  if ((user.must_change_password === true) !== passwordChange) {
     return <Navigate to={passwordChange ? homePathFor(user.role) : '/change-password'} replace />
   }
   if (!allow.includes(user.role)) return <Navigate to={homePathFor(user.role)} replace />

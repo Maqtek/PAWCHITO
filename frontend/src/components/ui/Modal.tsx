@@ -20,7 +20,11 @@ export function Modal({ open, onClose, title, children, footer, dismissible = tr
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
+    if (open && !dialog.open) {
+      dialog.showModal()
+      // showModal ставит фокус на первую кнопку — крестик; начинать с поля удобнее.
+      dialog.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea')?.focus()
+    }
     if (!open && dialog.open) dialog.close()
   }, [open])
 

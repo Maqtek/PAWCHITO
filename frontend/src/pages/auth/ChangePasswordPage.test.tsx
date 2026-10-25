@@ -1,10 +1,10 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
-import { readServer, SEED_PASSWORD } from '../../mocks/server-state'
+import { readServer, SEED_PASSWORD, updateServer } from '../../mocks/server-state'
 import { loginMockAs, logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 
@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('ChangePasswordPage', () => {
   it('клиника с временным паролем: смена пароля, потом её записи', async () => {
-    const { user, queryClient } = renderWithProviders(<AppRoutes />)
+    const { user } = renderWithProviders(<AppRoutes />)
     expect(await screen.findByRole('heading', { level: 1, name: 'Смена пароля' })).toBeInTheDocument()
     expect(screen.getByText('Администратор выдал временный пароль. Придумайте новый, чтобы продолжить.')).toBeInTheDocument()
 
@@ -30,8 +30,6 @@ describe('ChangePasswordPage', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
     const account = readServer().accounts.find((item) => item.email === 'clinic-new@example.com')
     expect(account).toMatchObject({ password: 'newsecret1', must_change_password: false })
-    // Страница записей уже запросила данные: без ожидания ответ долетит до следующего теста и сорвёт его проверку входа.
-    await waitFor(() => expect(queryClient.isFetching()).toBe(0))
   })
 
   it('неверный временный пароль — ошибка у поля, фокус на нём', async () => {
@@ -39,6 +37,19 @@ describe('ChangePasswordPage', () => {
     await submit(user, { current: 'wrong-pass', next: 'newsecret1' })
     expect(await screen.findByText('Неверный текущий пароль.')).toBeInTheDocument()
     expect(screen.getByLabelText('Временный пароль')).toHaveFocus()
+  })
+
+  it('пауза после 5 неудач — «Слишком много попыток» над кнопкой, форма на месте', async () => {
+    // Как после пяти неверных паролей: мок сам отвечает 429 с Retry-After.
+    updateServer((state) => {
+      state.attempts['clinic-new@example.com'] = { failures: 0, lockedUntil: Date.now() + 15 * 60_000 }
+    })
+    const { user } = renderWithProviders(<AppRoutes />, { route: '/change-password' })
+    await submit(user, { current: SEED_PASSWORD, next: 'newsecret1' })
+    // Между числом и словом — неразрывный пробел, как в errorMessage; toHaveTextContent заменил бы его обычным.
+    expect((await screen.findByRole('alert')).textContent).toBe('Слишком много попыток. Попробуйте через 15\u00A0минут.')
+    expect(screen.getByRole('heading', { level: 1, name: 'Смена пароля' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Временный пароль')).toHaveValue(SEED_PASSWORD)
   })
 
   it('повтор не совпал — ошибка без запроса', async () => {

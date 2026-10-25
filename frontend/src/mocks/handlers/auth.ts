@@ -39,7 +39,10 @@ const LOCK_MS = 15 * 60_000
 
 const attemptsKey = (email: string) => email.trim().toLowerCase()
 
-/** Секунды до конца паузы после пяти неудач (вход и восстановление считаются вместе) или null. */
+/**
+ * Секунды до конца паузы после пяти неудач или null. Счётчик один на аккаунт: неверный пароль при входе,
+ * неверный код восстановления и неверный текущий пароль при смене пароля и новом коде считаются вместе.
+ */
 function lockedFor(state: MockServerState, email: string): number | null {
   const lockedUntil = state.attempts[attemptsKey(email)]?.lockedUntil ?? null
   if (lockedUntil === null || lockedUntil <= Date.now()) return null
@@ -192,9 +195,14 @@ export const authHandlers = [
       })
       if (invalid) return invalid
       const body = raw as ChangePasswordRequest
+      // Пауза после тела: 422 попыткой не считается, а 429 — даже с верным паролем.
+      const retryAfter = lockedFor(state, account.email)
+      if (retryAfter !== null) return tooManyRequests(retryAfter)
       if (account.password !== body.current_password) {
+        registerFailure(state, account.email)
         return HttpResponse.json({ detail: 'Неверный текущий пароль' }, { status: 400 })
       }
+      clearFailures(state, account.email)
       account.password = body.new_password
       account.must_change_password = false
       revokeUserTokens(state, account.id)
@@ -229,9 +237,13 @@ export const authHandlers = [
       })
       if (invalid) return invalid
       const body = raw as RecoveryCodeRequest
+      const retryAfter = lockedFor(state, account.email)
+      if (retryAfter !== null) return tooManyRequests(retryAfter)
       if (account.password !== body.current_password) {
+        registerFailure(state, account.email)
         return HttpResponse.json({ detail: 'Неверный текущий пароль' }, { status: 400 })
       }
+      clearFailures(state, account.email)
       account.recovery_code = newRecoveryCode()
       return HttpResponse.json({ recovery_code: account.recovery_code })
     })

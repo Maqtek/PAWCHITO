@@ -61,6 +61,49 @@ describe('Modal', () => {
     expect(onClose).toHaveBeenCalledTimes(2)
   })
 
+  it('при открытии фокус — на первом поле, а не на «Закрыть»', () => {
+    const { rerender } = render(
+      <Modal open={false} onClose={() => {}} title="Новое дело">
+        <TextField label="Название" />
+        <TextField label="Заметка" />
+      </Modal>,
+    )
+    rerender(
+      <Modal open onClose={() => {}} title="Новое дело">
+        <TextField label="Название" />
+        <TextField label="Заметка" />
+      </Modal>,
+    )
+    expect(screen.getByRole('textbox', { name: 'Название' })).toHaveFocus()
+  })
+
+  it('окно без полей открывается, фокус не трогаем', () => {
+    render(
+      <Modal open onClose={() => {}} title="Новое дело">
+        <p>Тело окна</p>
+      </Modal>,
+    )
+    expect(screen.getByRole('dialog', { name: 'Новое дело' })).toHaveAttribute('open')
+    expect(document.body).toHaveFocus()
+  })
+
+  it('dismissible={false}: открываем обратно после браузера — фокус остаётся на месте', () => {
+    render(
+      <Modal open onClose={() => {}} title="Новый код" dismissible={false}>
+        <TextField label="Пароль" />
+        <button type="button">Получить</button>
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Новый код' }) as HTMLDialogElement
+    screen.getByRole('button', { name: 'Получить' }).focus()
+
+    dialog.close()
+    fireEvent(dialog, new Event('close'))
+
+    expect(dialog).toHaveAttribute('open')
+    expect(screen.getByRole('button', { name: 'Получить' })).toHaveFocus()
+  })
+
   it('закрытое окно не открыто', () => {
     const { container } = render(
       <Modal open={false} onClose={() => {}} title="Новое дело">

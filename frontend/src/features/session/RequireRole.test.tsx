@@ -3,6 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
+import { readServer, toUser } from '../../mocks/server-state'
 import { loginMockAs, logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { RequireRole } from './RequireRole'
@@ -55,6 +56,17 @@ describe('RequireRole', () => {
     loginMockAs('clinic-new@example.com')
     renderGuarded()
     expect(await screen.findByText('Смена пароля')).toBeInTheDocument()
+  })
+
+  it('нет поля must_change_password — пускает, без петли через смену пароля', async () => {
+    server.use(
+      http.get('*/api/users/me', () => {
+        const owner = readServer().accounts.find((item) => item.email === 'owner@example.com')!
+        return HttpResponse.json({ ...toUser(owner), must_change_password: undefined })
+      }),
+    )
+    renderGuarded()
+    expect(await screen.findByText('Кабинет владельца')).toBeInTheDocument()
   })
 
   // Токен живёт в памяти модуля до afterEach — поэтому один аккаунт на тест.

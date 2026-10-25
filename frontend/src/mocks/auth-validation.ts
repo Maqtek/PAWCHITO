@@ -63,9 +63,13 @@ export function fullNameError(value: unknown): string | null {
   return hasControlChars(name) ? 'Имя содержит недопустимые символы' : null
 }
 
-/** Код сверяется без учёта регистра и пробелов по краям. */
+/**
+ * Как у бэкенда: регистр и разделители (пробелы, дефисы) не важны — остаются буквы и цифры.
+ * Ровно 16 символов приводятся к XXXX-XXXX-XXXX-XXXX, иначе строка остаётся очищенной и не пройдёт формат (422).
+ */
 export function normalizeRecoveryCode(value: string): string {
-  return value.trim().toUpperCase()
+  const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  return cleaned.length === 16 ? cleaned.replace(/(.{4})(?=.)/g, '$1-') : cleaned
 }
 
 export function recoveryCodeError(value: unknown): string | null {

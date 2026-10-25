@@ -6,6 +6,7 @@ import { validationMessages } from '../../api/error-messages'
 import { authLimits } from '../../api/limits'
 import { meQuery, unwrap } from '../../api/queries'
 import type { User } from '../../api/schema'
+import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, IconButton, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 
@@ -70,7 +71,10 @@ function NameForm({ name, onDone }: { name: string; onDone: (message?: string) =
         onDone()
         return
       }
-      const user = await unwrap(api.PATCH('/users/me', { body: { full_name: trimmed } }))
+      // Правка до ответа не закрывается — без таймаута на зависшей сети она ждала бы вечно.
+      const user = await unwrap(
+        api.PATCH('/users/me', { body: { full_name: trimmed }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+      )
       // Ответ — свежий пользователь: имя сразу и здесь, и в меню, без перезапроса.
       queryClient.setQueryData(meQuery.queryKey, user)
       onDone('Имя сохранено')

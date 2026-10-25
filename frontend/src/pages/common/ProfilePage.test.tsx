@@ -4,12 +4,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { apiBaseUrl } from '../../api/base-url'
 import { meQuery } from '../../api/queries'
 import { AppRoutes } from '../../app/routes'
+import { tooManyRequests } from '../../mocks/http-utils'
 import { server } from '../../mocks/node'
 import { readServer, SEED_PASSWORD } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 
 const owner = () => readServer().accounts.find((item) => item.email === 'owner@example.com')
+
+// Между числом и словом — неразрывный пробел, как в errorMessage; toHaveTextContent заменил бы его обычным.
+const TOO_MANY_ATTEMPTS = 'Слишком много попыток. Попробуйте через 15\u00A0минут.'
 
 /** Ворота: запрос держится, пока тест не вызовет release. */
 function createGate() {
@@ -80,6 +84,21 @@ describe('ProfilePage', () => {
     expect(within(dialog).getByLabelText('Текущий пароль')).toHaveFocus()
   })
 
+  it('смена пароля: 429 — «Слишком много попыток», модалка открыта', async () => {
+    server.use(http.post('*/api/auth/change-password', () => tooManyRequests(900)))
+    const { user } = renderProfile()
+    await user.click(await screen.findByRole('button', { name: 'Сменить пароль' }))
+    const dialog = screen.getByRole('dialog', { name: 'Смена пароля' })
+    await user.type(within(dialog).getByLabelText('Текущий пароль'), SEED_PASSWORD)
+    await user.type(within(dialog).getByLabelText('Новый пароль'), 'newsecret1')
+    await user.type(within(dialog).getByLabelText('Повтор пароля'), 'newsecret1')
+    await user.click(within(dialog).getByRole('button', { name: 'Сменить пароль' }))
+
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(TOO_MANY_ATTEMPTS)
+    expect(dialog).toHaveAttribute('open')
+    expect(within(dialog).getByLabelText('Повтор пароля')).toBeInTheDocument()
+  })
+
   it('смена пароля: после «Отмена» форма открывается пустой', async () => {
     const { user } = renderProfile()
     await user.click(await screen.findByRole('button', { name: 'Сменить пароль' }))
@@ -122,12 +141,16 @@ describe('ProfilePage', () => {
     await user.click(await screen.findByRole('button', { name: 'Новый код восстановления' }))
     const dialog = screen.getByRole('dialog', { name: 'Новый код восстановления' })
     expect(within(dialog).getByText('Старый код перестанет действовать. Подтвердите действие паролем.')).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Текущий пароль')).toHaveFocus()
     await user.type(within(dialog).getByLabelText('Текущий пароль'), SEED_PASSWORD)
     await user.click(within(dialog).getByRole('button', { name: 'Получить новый код' }))
 
-    expect(
-      await within(dialog).findByRole('heading', { level: 3, name: 'Сохраните код восстановления' }),
-    ).toBeInTheDocument()
+    // Экран кода монтируется позже открытия окна и сам ставит фокус на заголовок.
+    const heading = await within(dialog).findByRole('heading', { level: 3, name: 'Сохраните код восстановления' })
+    expect(heading).toHaveFocus()
+    // Отступ сверху нужен под заголовком карточки входа, в окне он лишний.
+    expect(heading.closest('section')).toHaveClass('mt-0')
+    expect(heading.closest('section')).not.toHaveClass('mt-6')
     const code = owner()?.recovery_code ?? ''
     expect(code).not.toBe('K7QM-2XPA-9RTD-4WNB')
     expect(within(dialog).getByText(code)).toBeInTheDocument()
@@ -154,6 +177,20 @@ describe('ProfilePage', () => {
     // После ошибки окно снова можно закрыть.
     expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
+  })
+
+  it('новый код: 429 — «Слишком много попыток», окно открыто, код прежний', async () => {
+    server.use(http.post('*/api/users/me/recovery-code', () => tooManyRequests(900)))
+    const { user } = renderProfile()
+    await user.click(await screen.findByRole('button', { name: 'Новый код восстановления' }))
+    const dialog = screen.getByRole('dialog', { name: 'Новый код восстановления' })
+    await user.type(within(dialog).getByLabelText('Текущий пароль'), SEED_PASSWORD)
+    await user.click(within(dialog).getByRole('button', { name: 'Получить новый код' }))
+
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(TOO_MANY_ATTEMPTS)
+    expect(dialog).toHaveAttribute('open')
+    expect(within(dialog).getByLabelText('Текущий пароль')).toBeInTheDocument()
+    expect(owner()?.recovery_code).toBe('K7QM-2XPA-9RTD-4WNB')
   })
 
   it('новый код: пока запрос идёт, окно не закрыть; ответ показывает код', async () => {
@@ -185,6 +222,33 @@ describe('ProfilePage', () => {
       await within(dialog).findByRole('heading', { level: 3, name: 'Сохраните код восстановления' }),
     ).toBeInTheDocument()
     expect(within(dialog).getByText('AAAA-BBBB-CCCC-DDDD')).toBeInTheDocument()
+  })
+
+  it('новый код: запрос завис — по таймауту «Нет связи», окно снова закрывается', async () => {
+    const gate = createGate()
+    server.use(
+      http.post('*/api/users/me/recovery-code', async () => {
+        await gate.opened
+        return HttpResponse.json({ recovery_code: 'AAAA-BBBB-CCCC-DDDD' })
+      }),
+    )
+    const { user } = renderProfile()
+    await user.click(await screen.findByRole('button', { name: 'Новый код восстановления' }))
+    const dialog = screen.getByRole('dialog', { name: 'Новый код восстановления' })
+    await user.type(within(dialog).getByLabelText('Текущий пароль'), SEED_PASSWORD)
+    // Подменяем только перед отправкой: обмен токена при загрузке берёт свой таймаут.
+    const controller = new AbortController()
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    await user.click(within(dialog).getByRole('button', { name: 'Получить новый код' }))
+    expect(within(dialog).getByRole('button', { name: 'Отмена' })).toHaveAttribute('aria-disabled', 'true')
+
+    controller.abort(new DOMException('Истекло время', 'TimeoutError'))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
+    )
+    expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
+    expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
+    gate.release()
   })
 
   it('новый код стирается после «Готово»: повторное открытие снова просит пароль', async () => {

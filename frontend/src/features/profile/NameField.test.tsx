@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { readServer, toUser } from '../../mocks/server-state'
@@ -151,6 +151,34 @@ describe('NameField', () => {
     expect(await screen.findByText('Имя сохранено')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Имя' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Изменить имя' })).toHaveFocus()
+  })
+
+  it('запрос завис — по таймауту «Нет связи», правка остаётся открытой', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.patch('*/api/users/me', async () => {
+        await gate
+        return HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })
+      }),
+    )
+    const { user } = await openEditor()
+    await user.type(screen.getByRole('textbox', { name: 'Имя' }), '!')
+    // Подменяем только перед отправкой: обмен токена при загрузке берёт свой таймаут.
+    const controller = new AbortController()
+    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    await user.click(screen.getByRole('button', { name: 'Сохранить' }))
+    expect(await screen.findByRole('button', { name: 'Сохраняем…' })).toBeInTheDocument()
+
+    controller.abort(new DOMException('Истекло время', 'TimeoutError'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
+    )
+    expect(screen.getByRole('textbox', { name: 'Имя' })).toHaveValue('Анна Смирнова!')
+    expect(screen.getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
+    release()
   })
 
   it('HTML в имени выводится текстом', async () => {

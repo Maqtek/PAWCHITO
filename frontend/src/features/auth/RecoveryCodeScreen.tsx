@@ -1,6 +1,7 @@
 import { Copy } from 'lucide-react'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { Button, CheckboxField } from '../../components/ui'
+import { cn } from '../../lib/cn'
 
 type CopyState = 'idle' | 'copied' | 'manual'
 
@@ -16,6 +17,8 @@ interface RecoveryCodeScreenProps {
   /** h2 на экранах авторизации, h3 в модалке профиля со своим h2. */
   headingLevel?: 'h2' | 'h3'
   continueLabel?: string
+  /** Например, mt-0 в модалке: верхний отступ рассчитан на карточку входа. */
+  className?: string
 }
 
 /** Код восстановления показывается один раз: копирование, подтверждение и предупреждение при уходе со страницы. */
@@ -24,6 +27,7 @@ export function RecoveryCodeScreen({
   onContinue,
   headingLevel: Heading = 'h2',
   continueLabel = 'Продолжить',
+  className,
 }: RecoveryCodeScreenProps) {
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -64,7 +68,7 @@ export function RecoveryCodeScreen({
   }
 
   return (
-    <section aria-labelledby={headingId} className="mt-6 flex flex-col gap-4">
+    <section aria-labelledby={headingId} className={cn('mt-6 flex flex-col gap-4', className)}>
       <Heading id={headingId} ref={headingRef} tabIndex={-1} className="text-lg font-extrabold outline-none">
         Сохраните код восстановления
       </Heading>
