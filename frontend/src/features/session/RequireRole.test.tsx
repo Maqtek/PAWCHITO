@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
-import { setMockRole } from '../../mocks/session'
+import { loginMockAs, logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { RequireRole } from './RequireRole'
 
@@ -31,13 +31,13 @@ describe('RequireRole', () => {
   })
 
   it('отправляет другую роль в её раздел', async () => {
-    setMockRole('clinic')
+    loginMockAs('clinic')
     renderGuarded()
     expect(await screen.findByText('Записи клиники')).toBeInTheDocument()
   })
 
   it('отправляет гостя на вход', async () => {
-    setMockRole('guest')
+    logoutMock()
     renderGuarded()
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
   })

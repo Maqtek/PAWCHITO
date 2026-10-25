@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { setMockRole } from '../mocks/session'
+import { endMockSessions, loginMockAs, logoutMock } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppRoutes } from './routes'
 
@@ -12,7 +12,7 @@ describe('маршруты', () => {
   })
 
   it('клиника с главной попадает в свои записи', async () => {
-    setMockRole('clinic')
+    loginMockAs('clinic')
     renderWithProviders(<AppRoutes />)
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
   })
@@ -23,13 +23,38 @@ describe('маршруты', () => {
   })
 
   it('гость попадает на вход и входит клиникой через моки', async () => {
-    setMockRole('guest')
+    logoutMock()
     const { user } = renderWithProviders(<AppRoutes />, { route: '/tasks' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Клиника' }))
+    await user.click(await screen.findByRole('button', { name: 'Клиника' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
+  })
+
+  it('сервер завершил сессию во время работы: экран входа с «Сессия истекла»', async () => {
+    const { queryClient } = renderWithProviders(<AppRoutes />)
+    expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
+
+    endMockSessions()
+    await act(() => queryClient.invalidateQueries())
+
+    expect(await screen.findByText('Сессия истекла — войдите снова')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
+  })
+
+  it.each(['/login', '/register', '/recover'])('%s: экран — единственная область main', async (route) => {
+    logoutMock()
+    renderWithProviders(<AppRoutes />, { route })
+    const email = await screen.findByLabelText('Email')
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }))
+    expect(screen.getByRole('main')).toContainElement(email)
+  })
+
+  it('вошедший на /register уходит на главную', async () => {
+    renderWithProviders(<AppRoutes />, { route: '/register' })
+    expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
   })
 
   it('неизвестный адрес', async () => {

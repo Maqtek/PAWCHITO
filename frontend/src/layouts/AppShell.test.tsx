@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { getAccessToken } from '../api/auth-token'
 import { queryKeys } from '../api/queries'
 import { server } from '../mocks/node'
-import { getMockRole, setMockRole } from '../mocks/session'
+import { loginMockAs, readMockCookie } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppShell } from './AppShell'
 
@@ -41,7 +41,7 @@ describe('AppShell', () => {
   })
 
   it('клиника: свои разделы, без переключателя питомцев', async () => {
-    setMockRole('clinic')
+    loginMockAs('clinic')
     renderShell()
     const nav = await screen.findByRole('navigation', { name: 'Разделы' })
     expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Записи', 'Врачи'])
@@ -77,8 +77,9 @@ describe('AppShell', () => {
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
     expect(getAccessToken()).toBeNull()
-    expect(getMockRole()).toBe('guest')
+    expect(readMockCookie()).toBeNull()
     expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    expect(localStorage.getItem('pawchito:logout-pending')).toBeNull()
   })
 
   it('ошибка загрузки питомцев: ни переключателя, ни «Добавить питомца»', async () => {
@@ -102,7 +103,7 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Питомец: Майло. Сменить питомца' })).toBeInTheDocument()
   })
 
-  it('выход без сети всё равно ведёт на экран входа и забывает выбор питомца', async () => {
+  it('выход без сети: экран входа, метка «выход не завершён», выбор питомца забыт', async () => {
     server.use(http.post('*/api/auth/logout', () => HttpResponse.error()))
     localStorage.setItem('pawchito:selected-pet-id', '11')
     const { user } = renderShell()
@@ -111,7 +112,8 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('button', { name: 'Выйти' }))
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
+    expect(getAccessToken()).toBeNull()
+    expect(localStorage.getItem('pawchito:logout-pending')).toBe('1')
     expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
-    // Токен тут не проверяем: refresh-cookie без сети не отозвана, и семантика офлайн-выхода — задача этапа 2.
   })
 })

@@ -1,9 +1,57 @@
+import type { ValidationError } from './schema'
+
+interface ApiErrorDetails {
+  retryAfter?: number | null
+  fieldErrors?: Record<string, string>
+}
+
+/** Ответ API с ошибкой: статус, текст из {"detail": "..."} и подробности для форм. */
 export class ApiError extends Error {
   readonly status: number
+  readonly detail: string
+  /** Секунды из заголовка Retry-After (ответ 429), иначе null. */
+  readonly retryAfter: number | null
+  /** Ошибки полей из ответа 422: имя поля → текст. */
+  readonly fieldErrors: Record<string, string>
 
-  constructor(status: number, message: string) {
-    super(message)
+  constructor(status: number, detail: string, { retryAfter = null, fieldErrors = {} }: ApiErrorDetails = {}) {
+    super(detail)
     this.name = 'ApiError'
     this.status = status
+    this.detail = detail
+    this.retryAfter = retryAfter
+    this.fieldErrors = fieldErrors
   }
+
+  /** Ошибка из ответа и его разобранного тела: {"detail": "..."} или массив ошибок полей у 422. */
+  static fromResponse(response: Response, body: unknown): ApiError {
+    const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
+    const detail = typeof body === 'object' && body !== null && 'detail' in body ? body.detail : undefined
+    if (Array.isArray(detail)) {
+      const fieldErrors = Object.fromEntries(
+        (detail as ValidationError[]).map((item) => [String(item.loc[item.loc.length - 1]), item.msg]),
+      )
+      return new ApiError(response.status, Object.values(fieldErrors).join('; '), { retryAfter, fieldErrors })
+    }
+    return new ApiError(response.status, typeof detail === 'string' ? detail : response.statusText, { retryAfter })
+  }
+}
+
+function parseRetryAfter(value: string | null): number | null {
+  if (value === null || value.trim() === '') return null
+  const seconds = Number(value)
+  return Number.isFinite(seconds) && seconds >= 0 ? seconds : null
+}
+
+/** Сервер недоступен: нет сети, таймаут или сбой при обновлении токена. Сессию не завершает (БП §1). */
+export class NetworkError extends Error {
+  constructor(message = 'Нет связи с сервером') {
+    super(message)
+    this.name = 'NetworkError'
+  }
+}
+
+/** Ошибка сети: наш NetworkError или TypeError, которым fetch сообщает об обрыве. */
+export function isNetworkError(error: unknown): boolean {
+  return error instanceof NetworkError || error instanceof TypeError
 }
