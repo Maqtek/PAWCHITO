@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
-import { readServer } from '../../mocks/server-state'
+import { readServer, toAdminClinic, updateServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 
@@ -183,5 +183,125 @@ describe('AdminClinicPage: аккаунт клиники', () => {
     expect(await screen.findByText('Заблокирован — клиника скрыта')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Сбросить пароль' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Создать аккаунт' })).not.toBeInTheDocument()
+  })
+})
+
+describe('AdminClinicPage: скрытие', () => {
+  it('скрытие: свежее число записей в подтверждении, статус, метка и блокировка аккаунта', async () => {
+    const { user } = renderClinic(2)
+    await screen.findByRole('heading', { level: 1, name: 'ВетДоктор' })
+    // Пока админ смотрел страницу, владельцы успели записаться ещё.
+    updateServer((state) => {
+      const clinic = state.clinics.find((item) => item.id === 2)
+      if (clinic) clinic.futureAppointments = 9
+    })
+    await user.click(screen.getByRole('button', { name: 'Скрыть клинику' }))
+    const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
+    expect(await within(dialog).findByText('Будет отменено 9 записей. Владельцы получат уведомление.')).toBeInTheDocument()
+    expect(within(dialog).getByText('Аккаунт клиники будет заблокирован, её сессии завершатся.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Скрыть' }))
+    expect(await screen.findByText('Клиника скрыта. Отменено записей: 9.')).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Скрыть' })).not.toBeInTheDocument()
+    expect(dialog).not.toHaveAttribute('open')
+    expect(screen.getByText('Скрыта')).toBeInTheDocument()
+    expect(screen.getByText('Заблокирован — клиника скрыта')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Сбросить пароль' })).not.toBeInTheDocument()
+  })
+
+  it('пока идёт скрытие, окно не закрыть; ответ закрывает его и показывает статус', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    server.use(
+      http.post('*/api/admin/clinics/:id/archive', async () => {
+        await gate
+        const clinic = updateServer((state) => {
+          const item = state.clinics.find((entry) => entry.id === 2)
+          const account = state.accounts.find((entry) => entry.clinic_id === 2)
+          if (!item || !account) throw new Error('В seed нет клиники 2 с аккаунтом')
+          item.archived_at = '2026-10-25T10:00:00.000Z'
+          item.futureAppointments = 0
+          account.is_active = false
+          return toAdminClinic(state, item)
+        })
+        return HttpResponse.json({ clinic, cancelled_appointments: 7 })
+      }),
+    )
+    const { user } = renderClinic(2)
+    await user.click(await screen.findByRole('button', { name: 'Скрыть клинику' }))
+    const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
+    expect(await within(dialog).findByText('Будет отменено 7 записей. Владельцы получат уведомление.')).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Скрыть' }))
+    expect(await within(dialog).findByRole('button', { name: 'Скрываем…' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+    fireEvent(dialog, new Event('cancel', { cancelable: true }))
+    const cancel = within(dialog).getByRole('button', { name: 'Отмена' })
+    expect(cancel).toHaveAttribute('aria-disabled', 'true')
+    await user.click(cancel)
+    expect(dialog).toHaveAttribute('open')
+
+    release()
+    expect(await screen.findByText('Клиника скрыта. Отменено записей: 7.')).toBeInTheDocument()
+    expect(dialog).not.toHaveAttribute('open')
+  })
+
+  it('ошибка скрытия — в окне, после неё окно снова закрывается', async () => {
+    server.use(http.post('*/api/admin/clinics/:id/archive', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    const { user } = renderClinic(2)
+    await user.click(await screen.findByRole('button', { name: 'Скрыть клинику' }))
+    const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
+    expect(await within(dialog).findByText('Будет отменено 7 записей. Владельцы получат уведомление.')).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Скрыть' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Сервис временно недоступен. Попробуйте через несколько минут.',
+    )
+    expect(dialog).toHaveAttribute('open')
+    expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
+    await user.click(within(dialog).getByRole('button', { name: 'Закрыть' }))
+    expect(dialog).not.toHaveAttribute('open')
+    expect(screen.queryByText('Скрыта')).not.toBeInTheDocument()
+  })
+
+  it('не удалось проверить записи — об этом сказано вместо числа, скрыть всё равно можно', async () => {
+    const { user } = renderClinic(2)
+    await screen.findByRole('heading', { level: 1, name: 'ВетДоктор' })
+    // Страница уже загружена: ломается только перезапрос при открытии окна.
+    server.use(http.get('*/api/admin/clinics/:id', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    await user.click(screen.getByRole('button', { name: 'Скрыть клинику' }))
+    const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
+    expect(
+      await within(dialog).findByText('Не удалось проверить будущие записи. Число отменённых записей покажем после скрытия.'),
+    ).toBeInTheDocument()
+    expect(within(dialog).queryByText(/Будет отменено/)).not.toBeInTheDocument()
+    expect(within(dialog).getByText('Аккаунт клиники будет заблокирован, её сессии завершатся.')).toBeInTheDocument()
+
+    await user.click(within(dialog).getByRole('button', { name: 'Скрыть' }))
+    expect(await screen.findByText('Клиника скрыта. Отменено записей: 7.')).toBeInTheDocument()
+  })
+
+  it('без записей и без аккаунта — «Будущих записей нет.» без строки про аккаунт', async () => {
+    const { user } = renderClinic(4)
+    await user.click(await screen.findByRole('button', { name: 'Скрыть клинику' }))
+    const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
+    expect(await within(dialog).findByText('Будущих записей нет.')).toBeInTheDocument()
+    expect(within(dialog).queryByText('Аккаунт клиники будет заблокирован, её сессии завершатся.')).not.toBeInTheDocument()
+  })
+
+  it('возврат: без подтверждения, статус, аккаунт активен', async () => {
+    const { user } = renderClinic(5)
+    await user.click(await screen.findByRole('button', { name: 'Вернуть клинику' }))
+    expect(await screen.findByText('Клиника возвращена.')).toBeInTheDocument()
+    expect(screen.getByText('Активен')).toBeInTheDocument()
+    expect(screen.queryByText('Скрыта')).not.toBeInTheDocument()
+  })
+
+  it('ошибка возврата — текст над кнопкой', async () => {
+    server.use(http.post('*/api/admin/clinics/:id/restore', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
+    const { user } = renderClinic(5)
+    await user.click(await screen.findByRole('button', { name: 'Вернуть клинику' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Сервис временно недоступен. Попробуйте через несколько минут.')
   })
 })
