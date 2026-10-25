@@ -62,7 +62,8 @@ describe('AdminClinicsPage', () => {
     await user.type(within(dialog).getByLabelText('Телефон'), '89997778899')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Лапа' })).toBeInTheDocument()
-    expect(screen.getByText('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')).toBeInTheDocument()
+    // Сообщение приходит следующим рендером, в уже показанный регион статуса.
+    expect(await screen.findByText('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')).toBeInTheDocument()
   })
 
   it('пустой список и ошибка загрузки', async () => {

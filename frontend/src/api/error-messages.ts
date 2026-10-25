@@ -43,7 +43,7 @@ function tooManyAttempts(retryAfter: number | null): string {
   return `Слишком много попыток. Попробуйте через ${minutes}\u00A0${pluralize(minutes, ['минуту', 'минуты', 'минут'])}.`
 }
 
-/** Клиентские проверки форм авторизации (#29, #30). */
+/** Клиентские проверки форм (#29, #30, админка клиник). */
 export const validationMessages = {
   required: 'Заполните поле',
   email: 'Введите email в формате name@example.com',

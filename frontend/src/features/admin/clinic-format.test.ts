@@ -17,6 +17,11 @@ describe('formatWorkDays', () => {
     expect(formatWorkDays([6, 1, 3])).toBe('Пн, Ср, Сб')
     expect(formatWorkDays([1, 2])).toBe('Пн, Вт')
   })
+
+  it('не день — дробное и вне 1–7 — пропускается', () => {
+    expect(formatWorkDays([1.5, 2])).toBe('Вт')
+    expect(formatWorkDays([0, 3, 8])).toBe('Ср')
+  })
 })
 
 describe('formatSchedule', () => {

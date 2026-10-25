@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { adminClinicQuery } from '../../api/queries'
@@ -89,13 +89,17 @@ export function AdminClinicPage() {
     )
   }
 
+  // С данными из кэша (переход из списка после добавления) загрузки нет, и регион появился бы сразу с текстом —
+  // такой скринридер не озвучит. Первый рендер даёт пустой регион, текст приходит следующим.
+  const shownMessage = useDeferredValue(message, '')
+
   // Регион статуса смонтирован в любом состоянии страницы и на одном месте среди соседей:
   // сообщение, появившееся в уже существующем регионе, скринридер озвучит.
   return (
     <>
       {header}
       <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {message}
+        {shownMessage}
       </p>
       {content}
     </>

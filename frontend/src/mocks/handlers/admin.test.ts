@@ -134,6 +134,14 @@ describe('админка: правила полей (контракты, раз�
     expect((await call('POST', '/admin/clinics', { token, body: { ...NEW_CLINIC, opens_at: '00:00', closes_at: '23:30' } })).status).toBe(201)
   })
 
+  it('неверное время открытия — ошибка только у него, порядок часов не проверяется', async () => {
+    const token = await admin()
+    const response = await call('POST', '/admin/clinics', { token, body: { ...NEW_CLINIC, opens_at: '9:00', closes_at: '10:00' } })
+    expect(response.status).toBe(422)
+    const fields = ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc[1])
+    expect(fields).toEqual(['opens_at'])
+  })
+
   it('дни — строгие целые 1–7 без повторов; ответ отсортирован', async () => {
     const token = await admin()
     for (const days of [['3'], [true], [1.5], [0], [8], [1, 1]]) {

@@ -176,6 +176,9 @@ export function writeMockCookie(token: string | null): void {
   }
 }
 
+/** Ключ счётчика неудачных попыток: один для входа, восстановления и сброса пароля администратором. */
+export const attemptsKey = (email: string) => email.trim().toLowerCase()
+
 export function findAccount(state: MockServerState, email: string): MockAccount | undefined {
   const wanted = email.trim().toLowerCase()
   return state.accounts.find((account) => account.email.toLowerCase() === wanted)

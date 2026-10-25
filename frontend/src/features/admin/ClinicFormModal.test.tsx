@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { act, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { adminClinicQuery, queryKeys } from '../../api/queries'
+import { adminClinicQuery, adminClinicsQuery, queryKeys } from '../../api/queries'
 import type { AdminClinic } from '../../api/schema'
 import { server } from '../../mocks/node'
-import { readServer, toAdminClinic } from '../../mocks/server-state'
+import { readServer, toAdminClinic, updateServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { ClinicFormModal } from './ClinicFormModal'
@@ -29,6 +29,27 @@ async function fillRequired(user: UserEvent) {
 }
 
 const vetDoctor = () => toAdminClinic(readServer(), readServer().clinics[0])
+
+/** Список и страница клиники из кэша, как у страниц админки: видно, перечитаны ли они. */
+function CacheProbe({ id }: { id: number }) {
+  const { data: list } = useQuery(adminClinicsQuery)
+  const { data: clinic } = useQuery(adminClinicQuery(id))
+  return (
+    <>
+      <span data-testid="list">{list?.map((item) => item.name).join('|')}</span>
+      <span data-testid="clinic">{clinic?.phone}</span>
+    </>
+  )
+}
+
+/** Ворота: запрос держится, пока тест не вызовет release. */
+function createGate() {
+  let release!: () => void
+  const opened = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { opened, release }
+}
 
 /** Клиника приходит из кэша запроса, как на странице: обновление кэша меняет проп открытого окна. */
 function LiveClinicModal({ id, onSaved, onClose }: { id: number; onSaved: () => void; onClose: () => void }) {
@@ -117,6 +138,67 @@ describe('ClinicFormModal: добавление', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
     expect(await within(dialog).findByText('Название — не длиннее 100 символов')).toBeInTheDocument()
   })
+
+  it('пока идёт добавление, окно не закрыть: Esc и «Отмена» не действуют; ответ — onSaved', async () => {
+    const gate = createGate()
+    server.use(
+      http.post('*/api/admin/clinics', async () => {
+        await gate.opened
+        const clinic = updateServer((state) => {
+          const created = { ...state.clinics[0], id: state.nextClinicId, name: 'Лапа' }
+          state.nextClinicId += 1
+          state.clinics.push(created)
+          return toAdminClinic(state, created)
+        })
+        return HttpResponse.json(clinic, { status: 201 })
+      }),
+    )
+    const { user, dialog, onSaved, onClose } = renderForm()
+    expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
+    await fillRequired(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
+    expect(await within(dialog).findByRole('button', { name: 'Сохраняем…' })).toBeInTheDocument()
+
+    expect(within(dialog).queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+    fireEvent(dialog, new Event('cancel', { cancelable: true }))
+    const cancel = within(dialog).getByRole('button', { name: 'Отмена' })
+    expect(cancel).toHaveAttribute('aria-disabled', 'true')
+    await user.click(cancel)
+    expect(onClose).not.toHaveBeenCalled()
+
+    gate.release()
+    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(onSaved.mock.calls[0][0]).toMatchObject({ name: 'Лапа' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('ответ не дошёл, а клиника создана — список перечитывается: повтор не создаст дубль незаметно', async () => {
+    server.use(
+      http.post('*/api/admin/clinics', () => {
+        updateServer((state) => {
+          state.clinics.push({ ...state.clinics[0], id: state.nextClinicId, name: 'Лапа' })
+          state.nextClinicId += 1
+        })
+        return HttpResponse.error()
+      }),
+    )
+    const onSaved = vi.fn()
+    const { user } = renderWithProviders(
+      <>
+        <CacheProbe id={2} />
+        <ClinicFormModal open onClose={vi.fn()} onSaved={onSaved} />
+      </>,
+    )
+    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор'))
+    const dialog = screen.getByRole('dialog')
+    await fillRequired(user)
+    await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
+    )
+    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('|Лапа'))
+    expect(onSaved).not.toHaveBeenCalled()
+  })
 })
 
 describe('ClinicFormModal: изменение', () => {
@@ -149,6 +231,37 @@ describe('ClinicFormModal: изменение', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
     expect(calls).toBe(0)
+  })
+
+  it('ответ не дошёл, а изменение применилось — страница клиники и список перечитываются', async () => {
+    server.use(
+      http.patch('*/api/admin/clinics/:id', () => {
+        updateServer((state) => {
+          const clinic = state.clinics.find((item) => item.id === 2)
+          if (!clinic) throw new Error('В seed нет клиники 2')
+          clinic.phone = '+79991234567'
+          clinic.name = 'ВетДоктор Плюс'
+        })
+        return HttpResponse.error()
+      }),
+    )
+    const { user } = renderWithProviders(
+      <>
+        <CacheProbe id={2} />
+        <ClinicFormModal open clinic={vetDoctor()} onClose={vi.fn()} onSaved={vi.fn()} />
+      </>,
+    )
+    await vi.waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79990000000'))
+    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор|'))
+    const dialog = screen.getByRole('dialog')
+    await user.clear(screen.getByLabelText('Телефон'))
+    await user.type(screen.getByLabelText('Телефон'), '+7 999 123-45-67')
+    await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
+    )
+    await vi.waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79991234567'))
+    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор Плюс'))
   })
 })
 

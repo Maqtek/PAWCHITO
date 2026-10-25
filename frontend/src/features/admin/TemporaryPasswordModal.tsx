@@ -86,10 +86,10 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
-        // У клиники появился аккаунт: страница и список перечитают её.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
         onIssued(result.temporary_password)
       } finally {
+        // Перечитываем и после ошибки: при 409 аккаунт уже есть, после таймаута он мог создаться.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
         onBusyChange(false)
       }
     },
@@ -145,9 +145,10 @@ function ResetPasswordForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
-        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
         onIssued(result.temporary_password)
       } finally {
+        // Перечитываем и после ошибки: карточка покажет, что с аккаунтом на самом деле (например, 404 — его нет).
+        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
         onBusyChange(false)
       }
     },

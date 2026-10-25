@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { EyeOff, RotateCcw } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { adminClinicQuery, unwrap } from '../../api/queries'
@@ -9,7 +9,7 @@ import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, Card, FormAlert, Modal } from '../../components/ui'
 import { pluralize } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
-import { storeClinic } from './clinic-cache'
+import { refetchAfterFailure, storeClinic } from './clinic-cache'
 
 interface ClinicArchiveSectionProps {
   clinic: AdminClinic
@@ -22,7 +22,23 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
   const [busy, setBusy] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+  const focusHeading = useRef(false)
   const archived = clinic.archived_at !== null
+
+  // Кнопка, с которой начали, исчезает — без этого фокус упадёт на body.
+  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, заголовок получает его последним.
+  useEffect(() => {
+    if (!focusHeading.current) return
+    focusHeading.current = false
+    headingRef.current?.focus()
+  })
+
+  function closeConfirm() {
+    // Клиника успела скрыться (ответ не дошёл, страница перечитана) — кнопки «Скрыть клинику» уже нет.
+    if (archived) focusHeading.current = true
+    setConfirming(false)
+  }
 
   async function restore() {
     if (restoring) return
@@ -36,9 +52,11 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
+      focusHeading.current = true
       storeClinic(queryClient, saved)
       onStatus('Клиника возвращена.')
     } catch (error) {
+      refetchAfterFailure(queryClient, clinic.id)
       setRestoreError(errorMessage(error, 'clinic'))
     } finally {
       setRestoring(false)
@@ -47,7 +65,10 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
 
   return (
     <Card className="p-6">
-      <h2 className="text-lg font-extrabold">Скрытие</h2>
+      {/* Без outline-none: рамку фокуса рисует общий :focus-visible. */}
+      <h2 ref={headingRef} tabIndex={-1} className="text-lg font-extrabold">
+        Скрытие
+      </h2>
       {archived ? (
         <>
           <p className="mt-3 text-sm text-ink-muted">
@@ -70,6 +91,8 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
             className="mt-4"
             onClick={() => {
               onStatus('')
+              // Ошибка прошлого возврата (клиника всё же вернулась) не должна всплыть после нового скрытия.
+              setRestoreError(null)
               setConfirming(true)
             }}
           >
@@ -77,13 +100,14 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
           </Button>
         </>
       )}
-      <Modal open={confirming} onClose={() => setConfirming(false)} title="Скрыть клинику" dismissible={!busy}>
+      <Modal open={confirming} onClose={closeConfirm} title="Скрыть клинику" dismissible={!busy}>
         {confirming && (
           <ArchiveConfirm
             clinic={clinic}
             onBusyChange={setBusy}
-            onCancel={() => setConfirming(false)}
+            onCancel={closeConfirm}
             onArchived={(cancelled) => {
+              focusHeading.current = true
               setConfirming(false)
               onStatus(`Клиника скрыта. Отменено записей: ${cancelled}.`)
             }}
@@ -120,7 +144,10 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
             params: { path: { id: clinic.id } },
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
-        )
+        ).catch((error: unknown) => {
+          refetchAfterFailure(queryClient, clinic.id)
+          throw error
+        })
         storeClinic(queryClient, result.clinic)
         onArchived(result.cancelled_appointments)
       } finally {

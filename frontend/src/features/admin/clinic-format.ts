@@ -5,7 +5,7 @@ export const weekdayShort = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'В
 
 /** «Ежедневно», «Пн–Сб» для подряд идущих (от трёх дней) или «Пн, Ср, Пт». */
 export function formatWorkDays(days: number[]): string {
-  const sorted = [...new Set(days)].filter((day) => day >= 1 && day <= 7).sort((a, b) => a - b)
+  const sorted = [...new Set(days)].filter((day) => Number.isInteger(day) && day >= 1 && day <= 7).sort((a, b) => a - b)
   if (sorted.length === 7) return 'Ежедневно'
   const consecutive = sorted.every((day, index) => index === 0 || day === sorted[index - 1] + 1)
   if (sorted.length >= 3 && consecutive) {

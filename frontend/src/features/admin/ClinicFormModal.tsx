@@ -8,7 +8,7 @@ import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
 import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, CheckboxField, FormAlert, Modal, SelectField, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
-import { storeClinic } from './clinic-cache'
+import { refetchAfterFailure, storeClinic } from './clinic-cache'
 import {
   halfHourOptions,
   normalizePhone,
@@ -27,10 +27,11 @@ interface ClinicFormModalProps {
 }
 
 export function ClinicFormModal({ open, onClose, clinic, onSaved }: ClinicFormModalProps) {
+  const [busy, setBusy] = useState(false)
   return (
-    <Modal open={open} onClose={onClose} title={clinic ? 'Изменить клинику' : 'Новая клиника'}>
+    <Modal open={open} onClose={onClose} title={clinic ? 'Изменить клинику' : 'Новая клиника'} dismissible={!busy}>
       {/* Форма монтируется при каждом открытии — поля из текущих данных, прошлые ошибки не остаются. */}
-      {open && <ClinicForm clinic={clinic} onSaved={onSaved} onCancel={onClose} />}
+      {open && <ClinicForm clinic={clinic} onSaved={onSaved} onCancel={onClose} onBusyChange={setBusy} />}
     </Modal>
   )
 }
@@ -79,9 +80,11 @@ interface ClinicFormProps {
   clinic?: AdminClinic
   onSaved: (clinic: AdminClinic) => void
   onCancel: () => void
+  /** Запрос идёт: окно нельзя закрыть, иначе клиника сохранится, а ответ или ошибку показать будет некому. */
+  onBusyChange: (busy: boolean) => void
 }
 
-function ClinicForm({ clinic, onSaved, onCancel }: ClinicFormProps) {
+function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps) {
   const queryClient = useQueryClient()
   // Поля заполнены данными на момент открытия; сравнивать с обновившимся кэшем нельзя:
   // PATCH унёс бы старое значение поля, которое другой администратор уже поменял.
@@ -104,22 +107,34 @@ function ClinicForm({ clinic, onSaved, onCancel }: ClinicFormProps) {
     context: 'clinic',
     onSubmit: async (values) => {
       const payload = toPayload(values)
-      const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-      let saved: AdminClinic
-      if (baseline) {
-        const update = changedFields(payload, baseline)
-        if (Object.keys(update).length === 0) {
-          onCancel()
-          return
-        }
-        saved = await unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
-      } else {
-        saved = await unwrap(api.POST('/admin/clinics', { body: payload, signal }))
+      const update = baseline && changedFields(payload, baseline)
+      if (update && Object.keys(update).length === 0) {
+        onCancel()
+        return
       }
-      storeClinic(queryClient, saved)
-      onSaved(saved)
+      onBusyChange(true)
+      try {
+        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+        const request =
+          baseline && update
+            ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
+            : unwrap(api.POST('/admin/clinics', { body: payload, signal }))
+        const saved = await request.catch((error: unknown) => {
+          refetchAfterFailure(queryClient, baseline?.id)
+          throw error
+        })
+        storeClinic(queryClient, saved)
+        onSaved(saved)
+      } finally {
+        onBusyChange(false)
+      }
     },
   })
+
+  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
+  function cancel() {
+    if (!form.submitting) onCancel()
+  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -147,7 +162,7 @@ function ClinicForm({ clinic, onSaved, onCancel }: ClinicFormProps) {
       )}
       <FormAlert message={form.formError} />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" onClick={onCancel}>
+        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
           Отмена
         </Button>
         {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}

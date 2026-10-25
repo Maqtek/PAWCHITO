@@ -16,7 +16,7 @@ export function PageHeader({ eyebrow, title, documentTitle = title, description,
       <title>{`${documentTitle} — PAWCHITO`}</title>
       <div className="min-w-0">
         {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-        <h1 className="mt-1 text-3xl font-extrabold tracking-tight sm:text-4xl">{title}</h1>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight break-words sm:text-4xl">{title}</h1>
         {description && <p className="mt-2 text-ink-muted">{description}</p>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}

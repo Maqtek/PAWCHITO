@@ -11,6 +11,7 @@ import {
 } from '../clinic-validation'
 import { authorizeAccount } from '../http-utils'
 import {
+  attemptsKey,
   findAccount,
   newTemporaryPassword,
   readServer,
@@ -49,12 +50,15 @@ export const adminHandlers = [
     return updateServer((state) => {
       const account = authorizeAccount(state, request, { allowed: ['admin'] })
       if (account instanceof Response) return account
+      const opens = timeError(raw.opens_at, 'Открытие')
+      const closes = timeError(raw.closes_at, 'Закрытие')
       const invalid = validateBody({
         name: clinicNameError(raw.name),
         address: clinicAddressError(raw.address),
         phone: phoneError(raw.phone),
-        opens_at: timeError(raw.opens_at, 'Открытие'),
-        closes_at: timeError(raw.closes_at, 'Закрытие') ?? closesError(raw.opens_at, raw.closes_at),
+        opens_at: opens,
+        // Порядок часов — только у двух верных времён: «9:00» и «10:00» как строки сравниваются неверно.
+        closes_at: opens || closes ? closes : closesError(raw.opens_at, raw.closes_at),
         work_days: workDaysError(raw.work_days),
       })
       if (invalid) return invalid
@@ -198,7 +202,7 @@ export const adminHandlers = [
       clinicAccount.must_change_password = true
       revokeUserTokens(state, clinicAccount.id)
       // Пауза после неудачных попыток снимается: клиника войдёт с новым временным паролем сразу.
-      delete state.attempts[clinicAccount.email.trim().toLowerCase()]
+      delete state.attempts[attemptsKey(clinicAccount.email)]
       return HttpResponse.json({ temporary_password: temporaryPassword })
     }),
   ),

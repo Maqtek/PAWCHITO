@@ -20,6 +20,7 @@ import {
 } from '../auth-validation'
 import { authorizeAccount, forbidden, tooManyRequests, unauthorized } from '../http-utils'
 import {
+  attemptsKey,
   findAccount,
   issueRefreshToken,
   newRecoveryCode,
@@ -36,8 +37,6 @@ import {
 
 const MAX_FAILURES = 5
 const LOCK_MS = 15 * 60_000
-
-const attemptsKey = (email: string) => email.trim().toLowerCase()
 
 /**
  * Секунды до конца паузы после пяти неудач или null. Счётчик один на аккаунт: неверный пароль при входе,
