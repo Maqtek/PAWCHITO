@@ -53,7 +53,7 @@ export function LoginPage() {
     }),
     context: 'login',
     onSubmit: async ({ email, password }) => {
-      await signInWith(() => unwrap(api.POST('/auth/login', { body: { email: email.trim(), password } })))
+      await signInWith((signal) => unwrap(api.POST('/auth/login', { body: { email: email.trim(), password }, signal })))
       queryClient.clear()
       const user = await queryClient.fetchQuery(meQuery)
       navigate(homePathFor(user.role), { replace: true })

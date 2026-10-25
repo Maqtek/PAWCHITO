@@ -40,8 +40,10 @@ export function RegisterPage() {
     },
     context: 'register',
     onSubmit: async ({ full_name, email, password }) => {
-      const result = await signInWith(() =>
-        unwrap(api.POST('/auth/register', { body: { full_name: full_name.trim(), email: email.trim(), password } })),
+      const result = await signInWith((signal) =>
+        unwrap(
+          api.POST('/auth/register', { body: { full_name: full_name.trim(), email: email.trim(), password }, signal }),
+        ),
       )
       setIssued({ code: result.recovery_code, user: result.user })
     },

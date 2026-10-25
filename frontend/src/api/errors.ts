@@ -51,7 +51,10 @@ export class NetworkError extends Error {
   }
 }
 
-/** Ошибка сети: наш NetworkError или TypeError, которым fetch сообщает об обрыве. */
+/** Ошибка сети: наш NetworkError, TypeError, которым fetch сообщает об обрыве, или таймаут запроса (AbortSignal.timeout). */
 export function isNetworkError(error: unknown): boolean {
-  return error instanceof NetworkError || error instanceof TypeError
+  if (error instanceof NetworkError || error instanceof TypeError) return true
+  // DOMException из разных окружений (браузер, jsdom, Node) — сверяем по имени, а не по классу.
+  const name = typeof error === 'object' && error !== null && 'name' in error ? error.name : undefined
+  return name === 'TimeoutError' || name === 'AbortError'
 }

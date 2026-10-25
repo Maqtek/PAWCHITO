@@ -41,6 +41,14 @@ describe('isNetworkError', () => {
   })
 })
 
+describe('isNetworkError: таймаут', () => {
+  it('таймаут и отмена запроса — сетевая ошибка, другие DOMException — нет', () => {
+    expect(isNetworkError(new DOMException('Истекло время', 'TimeoutError'))).toBe(true)
+    expect(isNetworkError(new DOMException('Отменено', 'AbortError'))).toBe(true)
+    expect(isNetworkError(new DOMException('Не тот формат', 'SyntaxError'))).toBe(false)
+  })
+})
+
 describe('unwrap', () => {
   it('ошибка входа превращается в ApiError с Retry-After', async () => {
     server.use(

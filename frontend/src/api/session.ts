@@ -1,5 +1,6 @@
 import { getAccessToken, setAccessToken } from './auth-token'
 import { apiBaseUrl } from './base-url'
+import { ApiError, NetworkError } from './errors'
 
 export type RefreshResult =
   | { status: 'ok'; token: string }
@@ -232,21 +233,59 @@ export function signIn(token: string): void {
 }
 
 /**
- * Вход, регистрация (#29), смена пароля (#30): запрос, выдающий новую сессию, идёт в общей очереди обмена токена.
+ * Вход и регистрация (#29): запрос, выдающий новую сессию, идёт в общей очереди обмена токена.
  * Иначе ответ устаревшего обмена в другой вкладке перезапишет или сотрёт cookie новой сессии.
  * request не должен проходить через обмен токена в middleware (пути сессии: /auth/login, /auth/register):
- * Web Locks не реентерабельны, вложенный обмен заблокирует очередь. Смену пароля (#30) вызывать прямым запросом.
+ * Web Locks не реентерабельны, вложенный обмен заблокирует очередь. Смена пароля (#30) — reauthenticateWith.
  */
-export async function signInWith<T extends { access_token: string }>(request: () => Promise<T>): Promise<T> {
+export async function signInWith<T extends { access_token: string }>(
+  request: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   // Обмен этой вкладки, начатый раньше, свой результат не применит и закончится первым.
   generation += 1
   await refreshInFlight
   const result = await inRefreshQueue(async () => {
     // Выход без сети ещё не дошёл до сервера — доводим, иначе вход снимет метку, а старая сессия останется.
     if (isLogoutPending()) await finishLogout()
-    return request()
+    // Таймаут считается от запроса, а не от ожидания очереди: зависший вход не держит обмен во всех вкладках.
+    return request(AbortSignal.timeout(REQUEST_TIMEOUT_MS))
   })
   signIn(result.access_token)
+  return result
+}
+
+/**
+ * Смена пароля (#30): запрос с токеном выдаёт новую сессию, сервер отзывает остальные refresh-токены.
+ * Идёт в общей очереди обмена, как signInWith, а обмен на 401 делается здесь же, под уже взятой блокировкой:
+ * через middleware он встал бы в ту же очередь и заблокировал её. Поэтому request идёт мимо обмена в middleware
+ * (путь в SESSION_PATHS клиента), токен передаётся заголовком.
+ * Другим вкладкам ничего не сообщаем: их токены доживут своё, обмен пойдёт уже по новой cookie.
+ */
+export async function reauthenticateWith<T extends { access_token: string }>(
+  request: (token: string, signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  await ensureSession()
+  generation += 1
+  await refreshInFlight
+  const result = await inRefreshQueue(async () => {
+    const token = getAccessToken()
+    if (token) {
+      try {
+        return await request(token, AbortSignal.timeout(REQUEST_TIMEOUT_MS))
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 401)) throw error
+      }
+    }
+    const refreshed = await requestRefresh()
+    if (refreshed.status === 'ok') return request(refreshed.token, AbortSignal.timeout(REQUEST_TIMEOUT_MS))
+    if (refreshed.status === 'unavailable') throw new NetworkError()
+    endSession()
+    throw new ApiError(401, 'Сессия истекла')
+  })
+  generation += 1
+  setAccessToken(result.access_token)
+  restoring = Promise.resolve()
+  restoreUnavailable = false
   return result
 }
 
