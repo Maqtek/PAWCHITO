@@ -8,10 +8,12 @@ export interface ModalProps {
   title: string
   children: ReactNode
   footer?: ReactNode
+  /** false — закрывается только своими кнопками: нет крестика, Esc и клик по фону не закрывают. */
+  dismissible?: boolean
 }
 
 /** Нативный <dialog>: фокус внутри окна и закрытие по Esc даёт браузер. */
-export function Modal({ open, onClose, title, children, footer }: ModalProps) {
+export function Modal({ open, onClose, title, children, footer, dismissible = true }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -28,10 +30,14 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault()
-        onClose()
+        if (dismissible) onClose()
       }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (dismissible && event.target === event.currentTarget) onClose()
+      }}
+      // Нативное close, не пропс onClose: браузер закрывает окно сам при повторном Esc, родитель об этом не узнает.
+      onClose={() => {
+        if (!dismissible && open) ref.current?.showModal()
       }}
       className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-card border border-line bg-surface p-0 text-ink shadow-xl backdrop:bg-ink/30"
     >
@@ -39,7 +45,7 @@ export function Modal({ open, onClose, title, children, footer }: ModalProps) {
         <h2 id={titleId} className="text-lg font-extrabold">
           {title}
         </h2>
-        <IconButton icon={X} label="Закрыть" onClick={onClose} />
+        {dismissible && <IconButton icon={X} label="Закрыть" onClick={onClose} />}
       </div>
       <div className="px-6 py-5">{children}</div>
       {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}

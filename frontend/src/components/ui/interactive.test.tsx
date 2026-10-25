@@ -69,6 +69,62 @@ describe('Modal', () => {
     )
     expect(container.querySelector('dialog')).not.toHaveAttribute('open')
   })
+
+  it('dismissible={false}: нет крестика, Esc и клик по фону не закрывают', async () => {
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <Modal open onClose={onClose} title="Новый код" dismissible={false}>
+        <p>Тело окна</p>
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Новый код' })
+    expect(screen.queryByRole('button', { name: 'Закрыть' })).not.toBeInTheDocument()
+
+    const cancel = new Event('cancel', { cancelable: true })
+    fireEvent(dialog, cancel)
+    await user.click(dialog)
+
+    expect(cancel.defaultPrevented).toBe(true)
+    expect(onClose).not.toHaveBeenCalled()
+    expect(dialog).toHaveAttribute('open')
+  })
+
+  it('dismissible={false}: браузер закрыл окно сам — открываем обратно, родитель не закрывал', () => {
+    const onClose = vi.fn()
+    render(
+      <Modal open onClose={onClose} title="Новый код" dismissible={false}>
+        <p>Тело окна</p>
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Новый код' })
+
+    const native = dialog as HTMLDialogElement
+    native.close()
+    fireEvent(dialog, new Event('close'))
+
+    expect(dialog).toHaveAttribute('open')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('закрытое родителем окно не открывается снова по событию close', () => {
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="Новый код" dismissible={false}>
+        <p>Тело окна</p>
+      </Modal>,
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Новый код' })
+
+    rerender(
+      <Modal open={false} onClose={() => {}} title="Новый код" dismissible={false}>
+        <p>Тело окна</p>
+      </Modal>,
+    )
+    expect(dialog).not.toHaveAttribute('open')
+
+    fireEvent(dialog, new Event('close'))
+    expect(dialog).not.toHaveAttribute('open')
+  })
 })
 
 describe('Tabs', () => {

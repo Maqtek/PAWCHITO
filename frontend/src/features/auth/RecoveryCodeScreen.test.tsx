@@ -68,4 +68,15 @@ describe('RecoveryCodeScreen', () => {
     window.dispatchEvent(later)
     expect(later.defaultPrevented).toBe(false)
   })
+
+  it('в модалке: заголовок h3 и своя подпись кнопки', async () => {
+    const onContinue = vi.fn()
+    const { user } = renderWithProviders(
+      <RecoveryCodeScreen code="K7QM-2XPA-9RTD-4WNB" onContinue={onContinue} headingLevel="h3" continueLabel="Готово" />,
+    )
+    expect(screen.getByRole('heading', { level: 3, name: 'Сохраните код восстановления' })).toHaveFocus()
+    await user.click(screen.getByRole('checkbox', { name: 'Код сохранён в надёжном месте' }))
+    await user.click(screen.getByRole('button', { name: 'Готово' }))
+    expect(onContinue).toHaveBeenCalledTimes(1)
+  })
 })
