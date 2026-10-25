@@ -10,6 +10,7 @@ import {
   onSessionChange,
   refreshAccessToken,
   signIn,
+  signInWith,
   signOut,
   type SessionEvent,
 } from './session'
@@ -354,5 +355,134 @@ describe('события сессии', () => {
     expect(getAccessToken()).toBeNull()
     await ensureSession()
     expect(calls.refresh).toBe(2)
+  })
+})
+
+describe('signInWith', () => {
+  const login = (token = 'new') => async () => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
+
+  it('ждёт обмен этой вкладки и входит внутри очереди', async () => {
+    const names: string[] = []
+    installLocks((name, callback) => {
+      names.push(name)
+      return callback()
+    })
+    const gate = createGate()
+    const order: string[] = []
+    authServer({
+      refresh: async () => {
+        await gate.opened
+        order.push('refresh')
+        return tokenResponse('fresh')
+      },
+    })
+    setAccessToken('t0')
+    const refreshing = refreshAccessToken()
+    const signing = signInWith(async () => {
+      order.push('login')
+      return login()()
+    })
+    gate.release()
+    await refreshing
+    await signing
+    expect(order).toEqual(['refresh', 'login'])
+    expect(names).toEqual(['pawchito:refresh', 'pawchito:refresh'])
+    expect(getAccessToken()).toBe('new')
+  })
+
+  it('сначала доводит выход, начатый без сети, потом входит', async () => {
+    localStorage.setItem(PENDING, '1')
+    const order: string[] = []
+    authServer({
+      logout: () => {
+        order.push('logout')
+        return new HttpResponse(null, { status: 204 })
+      },
+    })
+    await signInWith(async () => {
+      order.push('login')
+      return login()()
+    })
+    expect(order).toEqual(['logout', 'login'])
+    expect(localStorage.getItem(PENDING)).toBeNull()
+    expect(getAccessToken()).toBe('new')
+  })
+
+  it('возвращает весь ответ и сообщает вкладкам о входе', async () => {
+    const tab = otherTab()
+    const result = await signInWith(async () => ({ ...(await login()()), recovery_code: 'AAAA-BBBB-CCCC-DDDD' }))
+    expect(result.recovery_code).toBe('AAAA-BBBB-CCCC-DDDD')
+    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-in' }]))
+  })
+
+  it('упавший запрос: токен не меняется, вкладкам ничего не уходит', async () => {
+    const tab = otherTab()
+    setAccessToken('t0')
+    await expect(signInWith(() => Promise.reject(new Error('401')))).rejects.toThrow('401')
+    expect(getAccessToken()).toBe('t0')
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(tab.received).toEqual([])
+  })
+
+  it('отказ navigator.locks.request: запрос выполняется один раз без очереди', async () => {
+    installLocks(() => Promise.reject(new DOMException('denied', 'SecurityError')))
+    let calls = 0
+    await signInWith(async () => {
+      calls += 1
+      return login()()
+    })
+    expect(calls).toBe(1)
+    expect(getAccessToken()).toBe('new')
+  })
+
+  it('ошибка самого запроса внутри очереди не повторяется', async () => {
+    installLocks((_, callback) => callback())
+    let calls = 0
+    await expect(
+      signInWith(async () => {
+        calls += 1
+        throw new Error('401')
+      }),
+    ).rejects.toThrow('401')
+    expect(calls).toBe(1)
+  })
+})
+
+describe('доработки после #28', () => {
+  it('довыход при запуске идёт внутри очереди', async () => {
+    const names: string[] = []
+    installLocks((name, callback) => {
+      names.push(name)
+      return callback()
+    })
+    localStorage.setItem(PENDING, '1')
+    authServer()
+    await finishPendingLogout()
+    expect(names).toEqual(['pawchito:refresh'])
+  })
+
+  it('довыход в очереди перепроверяет метку: пока ждали, выход уже довели — запроса нет', async () => {
+    const gate = createGate()
+    installLocks(async (_, callback) => {
+      await gate.opened
+      return callback()
+    })
+    localStorage.setItem(PENDING, '1')
+    const calls = authServer()
+    const finishing = finishPendingLogout()
+    localStorage.removeItem(PENDING)
+    gate.release()
+    await expect(finishing).resolves.toBe(true)
+    expect(calls.logout).toBe(0)
+  })
+
+  it('сообщение другой вкладки неизвестного типа игнорируется', async () => {
+    const tab = otherTab()
+    const events = collectEvents()
+    setAccessToken('t1')
+    tab.channel.postMessage({ type: 'reauthenticated' })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(getAccessToken()).toBe('t1')
+    expect(events).toEqual([])
   })
 })

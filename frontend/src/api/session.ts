@@ -9,7 +9,7 @@ export type RefreshResult =
   | { status: 'unavailable' }
 
 export type SessionEvent =
-  /** Сессия была и закончилась: refresh вернул 401. */
+  /** Сессия была и закончилась: сервер отказал в обмене токена. */
   | { type: 'expired' }
   | { type: 'signed-out'; serverConfirmed: boolean }
   | { type: 'signed-out-elsewhere' }
@@ -24,6 +24,7 @@ const REQUEST_TIMEOUT_MS = 10_000
 
 let restoring: Promise<void> | null = null
 let refreshInFlight: Promise<RefreshResult> | null = null
+let pendingLogout: Promise<boolean> | null = null
 let restoreUnavailable = false
 /** Растёт при каждом входе и выходе в этой или другой вкладке: обмен, начатый раньше, свой результат не применяет. */
 let generation = 0
@@ -66,10 +67,13 @@ export function onSessionChange(listener: (event: SessionEvent) => void): () => 
 function openChannel(): BroadcastChannel | null {
   if (typeof BroadcastChannel === 'undefined') return null
   const opened = new BroadcastChannel(CHANNEL_NAME)
-  opened.onmessage = (event: MessageEvent<TabMessage>) => {
+  opened.onmessage = (event: MessageEvent<unknown>) => {
+    const type = (event.data as { type?: unknown } | null)?.type
+    // Сообщения других типов (например, из новой версии в соседней вкладке) не трогают сессию.
+    if (type !== 'signed-out' && type !== 'signed-in') return
     generation += 1
     setAccessToken(null)
-    if (event.data.type === 'signed-out') {
+    if (type === 'signed-out') {
       emit({ type: 'signed-out-elsewhere' })
     } else {
       // Вошли заново — следующий запрос восстановит сессию по новой cookie.
@@ -132,7 +136,18 @@ async function requestRefresh(): Promise<RefreshResult> {
  * и следующая вкладка отправит уже новую cookie.
  */
 function inRefreshQueue<T>(task: () => Promise<T>): Promise<T> {
-  return 'locks' in navigator ? navigator.locks.request(REFRESH_LOCK, task) : task()
+  if (!('locks' in navigator)) return task()
+  let started = false
+  return navigator.locks
+    .request(REFRESH_LOCK, () => {
+      started = true
+      return task()
+    })
+    .catch((error: unknown) => {
+      // Блокировку не дали (например, SecurityError в песочнице) — работаем без очереди. Ошибку самой задачи не повторяем.
+      if (started) throw error
+      return task()
+    })
 }
 
 /** Обменивает refresh-cookie на access-токен. Параллельные вызовы вкладки ждут один запрос. */
@@ -160,14 +175,19 @@ async function finishLogout(): Promise<boolean> {
   }
 }
 
-let pendingLogout: Promise<boolean> | null = null
-
 /** Доводит выход, начатый без сети: при запуске приложения, при восстановлении сессии и по событию online. Параллельные вызовы ждут один запрос. */
 export function finishPendingLogout(): Promise<boolean> {
   if (!isLogoutPending()) return Promise.resolve(true)
-  pendingLogout ??= finishLogout().finally(() => {
-    pendingLogout = null
-  })
+  if (!pendingLogout) {
+    const attempt: Promise<boolean> = inRefreshQueue(() =>
+      // Пока ждали очереди, выход мог довести вход в этой или другой вкладке — тогда отзывать нечего.
+      isLogoutPending() ? finishLogout() : Promise.resolve(true),
+    ).finally(() => {
+      // Обнуляем, только если это всё ещё наш запрос: после сброса там может быть новый.
+      if (pendingLogout === attempt) pendingLogout = null
+    })
+    pendingLogout = attempt
+  }
   return pendingLogout
 }
 
@@ -206,22 +226,46 @@ export function signIn(token: string): void {
   tellOtherTabs({ type: 'signed-in' })
 }
 
+/**
+ * Вход, регистрация (#29), смена пароля (#30): запрос, выдающий новую сессию, идёт в общей очереди обмена токена.
+ * Иначе ответ устаревшего обмена в другой вкладке перезапишет или сотрёт cookie новой сессии.
+ * request не должен проходить через обмен токена в middleware (пути сессии: /auth/login, /auth/register):
+ * Web Locks не реентерабельны, вложенный обмен заблокирует очередь. Смену пароля (#30) вызывать прямым запросом.
+ */
+export async function signInWith<T extends { access_token: string }>(request: () => Promise<T>): Promise<T> {
+  // Обмен этой вкладки, начатый раньше, свой результат не применит и закончится первым.
+  generation += 1
+  await refreshInFlight
+  const result = await inRefreshQueue(async () => {
+    // Выход без сети ещё не дошёл до сервера — доводим, иначе вход снимет метку, а старая сессия останется.
+    if (isLogoutPending()) await finishLogout()
+    return request()
+  })
+  signIn(result.access_token)
+  return result
+}
+
 /** Выход: метка ставится до запроса, чтобы другие вкладки сразу перестали обновлять токен. */
 export async function signOut(): Promise<{ serverConfirmed: boolean }> {
   setLogoutPending(true)
   generation += 1
-  // Обмен, начатый до выхода, сначала заканчивается: logout отзовёт самую свежую cookie.
-  await refreshInFlight
-  const serverConfirmed = await inRefreshQueue(finishLogout)
-  setAccessToken(null)
-  restoring = Promise.resolve()
-  restoreUnavailable = false
-  tellOtherTabs({ type: 'signed-out' })
-  emit({ type: 'signed-out', serverConfirmed })
+  let serverConfirmed = false
+  try {
+    // Обмен, начатый до выхода, сначала заканчивается: logout отзовёт самую свежую cookie.
+    await refreshInFlight
+    serverConfirmed = await inRefreshQueue(finishLogout)
+  } finally {
+    // Локальный выход завершаем всегда, даже если очередь или сеть подвели.
+    setAccessToken(null)
+    restoring = Promise.resolve()
+    restoreUnavailable = false
+    tellOtherTabs({ type: 'signed-out' })
+    emit({ type: 'signed-out', serverConfirmed })
+  }
   return { serverConfirmed }
 }
 
-/** Refresh вернул 401 на запросе с токеном: сессия закончилась. */
+/** Сервер отказал в обмене токена на запросе с токеном: сессия закончилась. */
 export function endSession(): void {
   setAccessToken(null)
   emit({ type: 'expired' })
