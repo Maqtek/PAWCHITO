@@ -36,6 +36,14 @@ class UserBlockedError(Exception):
     pass
 
 
+class InvalidRefreshTokenError(Exception):
+    """Токена нет, он истёк или отозван, либо пользователь заблокирован — нужен новый вход."""
+
+
+def _now() -> datetime:
+    return datetime.now(ZoneInfo(settings.timezone))
+
+
 @dataclass(frozen=True)
 class IssuedTokens:
     access_token: str
@@ -76,12 +84,38 @@ class AuthService:
             raise UserBlockedError
         return self._issue_tokens(user)
 
+    def refresh(self, refresh_token: str | None) -> IssuedTokens:
+        """Обмен refresh-токена на новую пару: старый отзывается."""
+        if not refresh_token:
+            raise InvalidRefreshTokenError
+        now = _now()
+        token = self.refresh_tokens.get_by_hash(hash_refresh_token(refresh_token), for_update=True)
+        if token is None:
+            raise InvalidRefreshTokenError
+        if token.revoked_at is not None:
+            # Отозванный токен пришёл ещё раз: копия токена есть у кого-то ещё.
+            # Кто из двоих владелец, не понять — завершаем все сессии пользователя.
+            # Роутер не должен превращать это в исключение: отзыв обязан закоммититься.
+            self.refresh_tokens.revoke_all_for_user(token.user_id, now)
+            raise InvalidRefreshTokenError
+        if not token.is_valid(now) or not token.user.is_active:
+            raise InvalidRefreshTokenError
+        self.refresh_tokens.revoke(token, now)
+        return self._issue_tokens(token.user)
+
+    def logout(self, refresh_token: str | None) -> None:
+        """Отзывает текущий refresh-токен. Нет cookie или токен уже отозван — ничего не делаем."""
+        if not refresh_token:
+            return
+        token = self.refresh_tokens.get_by_hash(hash_refresh_token(refresh_token))
+        if token is not None and token.revoked_at is None:
+            self.refresh_tokens.revoke(token, _now())
+
     def _issue_tokens(self, user: User) -> IssuedTokens:
         refresh_token = generate_refresh_token()
-        now = datetime.now(ZoneInfo(settings.timezone))
         self.refresh_tokens.create(
             user_id=user.id,
             token_hash=hash_refresh_token(refresh_token),
-            expires_at=now + timedelta(days=settings.refresh_token_expire_days),
+            expires_at=_now() + timedelta(days=settings.refresh_token_expire_days),
         )
         return IssuedTokens(create_access_token(user.id, user.role.value), refresh_token)
