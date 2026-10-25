@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 import { cn } from '../../lib/cn'
 import { buttonClass, type ButtonSize, type ButtonVariant } from './button-styles'
 
@@ -31,6 +31,8 @@ export function Button({
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> {
   icon: LucideIcon
   label: string
+  /** React 19: ref — обычный проп, уходит на <button> вместе с остальными. */
+  ref?: Ref<HTMLButtonElement>
 }
 
 export function IconButton({ icon: Icon, label, className, type = 'button', ...props }: IconButtonProps) {
