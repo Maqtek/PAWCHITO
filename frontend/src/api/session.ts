@@ -3,9 +3,9 @@ import { apiBaseUrl } from './base-url'
 
 export type RefreshResult =
   | { status: 'ok'; token: string }
-  /** Сервер ответил 401 или стоит метка выхода. */
+  /** Сервер отказал в обмене (401 и другие 4xx) или стоит метка выхода. */
   | { status: 'signed-out' }
-  /** Нет сети, таймаут или 5xx: сессию не завершаем. */
+  /** Нет сети, таймаут, 5xx, 408 или 429: сессию не завершаем. */
   | { status: 'unavailable' }
 
 export type SessionEvent =
@@ -96,6 +96,11 @@ function postAuth(path: '/auth/refresh' | '/auth/logout'): Promise<Response> {
   })
 }
 
+/** Сервер не ответил по существу: 5xx, 408, 429 — сессию по такому ответу не завершаем. */
+function isServerUnavailable(status: number): boolean {
+  return status >= 500 || status === 408 || status === 429
+}
+
 async function exchangeCookie(): Promise<RefreshResult> {
   try {
     const response = await postAuth('/auth/refresh')
@@ -103,7 +108,8 @@ async function exchangeCookie(): Promise<RefreshResult> {
       const { access_token: token } = (await response.json()) as { access_token: string }
       return { status: 'ok', token }
     }
-    return response.status === 401 ? { status: 'signed-out' } : { status: 'unavailable' }
+    // 401 по контракту; 400/403/404/422 тоже значат «сессии по cookie нет», иначе гость застрянет на «Повторить».
+    return isServerUnavailable(response.status) ? { status: 'unavailable' } : { status: 'signed-out' }
   } catch {
     return { status: 'unavailable' }
   }
@@ -132,17 +138,21 @@ function inRefreshQueue<T>(task: () => Promise<T>): Promise<T> {
 /** Обменивает refresh-cookie на access-токен. Параллельные вызовы вкладки ждут один запрос. */
 export function refreshAccessToken(): Promise<RefreshResult> {
   if (isLogoutPending()) return Promise.resolve({ status: 'signed-out' })
-  refreshInFlight ??= inRefreshQueue(requestRefresh).finally(() => {
-    refreshInFlight = null
-  })
+  if (!refreshInFlight) {
+    const exchange: Promise<RefreshResult> = inRefreshQueue(requestRefresh).finally(() => {
+      // Обнуляем, только если это всё ещё наш обмен: после сброса там может быть новый.
+      if (refreshInFlight === exchange) refreshInFlight = null
+    })
+    refreshInFlight = exchange
+  }
   return refreshInFlight
 }
 
-/** Отзывает refresh-токен на сервере. true — сервер подтвердил (401 тоже: сессии уже нет). */
+/** Отзывает refresh-токен на сервере. true — сервер ответил по существу (2xx, 401 и другие 4xx): отзывать больше нечего. */
 async function finishLogout(): Promise<boolean> {
   try {
     const response = await postAuth('/auth/logout')
-    const confirmed = response.ok || response.status === 401
+    const confirmed = !isServerUnavailable(response.status)
     if (confirmed) setLogoutPending(false)
     return confirmed
   } catch {
@@ -150,11 +160,22 @@ async function finishLogout(): Promise<boolean> {
   }
 }
 
+let pendingLogout: Promise<boolean> | null = null
+
+/** Доводит выход, начатый без сети: при запуске приложения, при восстановлении сессии и по событию online. Параллельные вызовы ждут один запрос. */
+export function finishPendingLogout(): Promise<boolean> {
+  if (!isLogoutPending()) return Promise.resolve(true)
+  pendingLogout ??= finishLogout().finally(() => {
+    pendingLogout = null
+  })
+  return pendingLogout
+}
+
 async function restore(): Promise<void> {
   if (isLogoutPending()) {
     // Выход не завершён — вкладка намеренно гость, сбоя восстановления нет.
     restoreUnavailable = false
-    await finishLogout()
+    await finishPendingLogout()
     return
   }
   const result = await refreshAccessToken()
@@ -208,15 +229,14 @@ export function endSession(): void {
 
 if (typeof window !== 'undefined') {
   // Связь вернулась — доводим выход, начатый без сети.
-  window.addEventListener('online', () => {
-    if (isLogoutPending()) void finishLogout()
-  })
+  window.addEventListener('online', () => void finishPendingLogout())
 }
 
 /** Сбрасывает состояние модуля между тестами. */
 export function resetSessionForTests(): void {
   restoring = null
   refreshInFlight = null
+  pendingLogout = null
   restoreUnavailable = false
   generation += 1
   listeners.clear()

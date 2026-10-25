@@ -1,4 +1,4 @@
-import { act, screen } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -72,5 +72,21 @@ describe('SessionEvents', () => {
     renderApp('/login')
     otherTab().postMessage({ type: 'signed-in' })
     expect(await screen.findByText('Кабинет')).toBeInTheDocument()
+  })
+
+  it('при запуске довыходит на сервере, если выход был начат без сети', async () => {
+    let logoutCalls = 0
+    server.use(
+      http.post('*/api/auth/logout', () => {
+        logoutCalls += 1
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    localStorage.setItem('pawchito:logout-pending', '1')
+
+    renderApp('/login')
+
+    await waitFor(() => expect(localStorage.getItem('pawchito:logout-pending')).toBeNull())
+    expect(logoutCalls).toBe(1)
   })
 })

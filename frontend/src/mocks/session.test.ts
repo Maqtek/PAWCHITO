@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { apiBaseUrl } from '../api/base-url'
-import { readServer, SEED_PASSWORD } from './server-state'
+import { readServer, SEED_PASSWORD, type MockServerState } from './server-state'
 import { createConsoleHelpers, endMockSessions, expireMockAccess } from './session'
 
 const post = (path: string, body?: unknown) =>
@@ -53,5 +53,12 @@ describe('помощники моков', () => {
     await post('/auth/register', { email: 'new@example.com', password: 'secret123', full_name: 'Новый' })
     createConsoleHelpers().reset()
     expect(readServer().accounts.some((account) => account.email === 'new@example.com')).toBe(false)
+  })
+
+  it('сохранённое состояние без новых полей дополняется значениями seed', () => {
+    const old: Partial<MockServerState> = { ...readServer() }
+    delete old.network
+    localStorage.setItem('pawchito:mock-server', JSON.stringify(old))
+    expect(readServer().network).toBe(true)
   })
 })

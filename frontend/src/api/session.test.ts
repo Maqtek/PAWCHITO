@@ -5,6 +5,7 @@ import { getAccessToken, setAccessToken } from './auth-token'
 import {
   endSession,
   ensureSession,
+  finishPendingLogout,
   isRestoreUnavailable,
   onSessionChange,
   refreshAccessToken,
@@ -155,6 +156,21 @@ describe('refreshAccessToken', () => {
     expect(getAccessToken()).toBe('stale')
   })
 
+  it.each([
+    [400, 'signed-out'],
+    [401, 'signed-out'],
+    [403, 'signed-out'],
+    [404, 'signed-out'],
+    [422, 'signed-out'],
+    [408, 'unavailable'],
+    [429, 'unavailable'],
+    [500, 'unavailable'],
+    [503, 'unavailable'],
+  ] as const)('refresh отвечает %i → %s', async (status, expected) => {
+    authServer({ refresh: () => HttpResponse.json({ detail: 'x' }, { status }) })
+    await expect(refreshAccessToken()).resolves.toEqual({ status: expected })
+  })
+
   it('при метке выхода не ходит на сервер', async () => {
     localStorage.setItem(PENDING, '1')
     const calls = authServer()
@@ -219,6 +235,37 @@ describe('вход и выход', () => {
     expect(events).toEqual([{ type: 'signed-out', serverConfirmed: false }])
     await expect(refreshAccessToken()).resolves.toEqual({ status: 'signed-out' })
     expect(calls.refresh).toBe(0)
+  })
+
+  it.each([
+    [204, true],
+    [401, true],
+    [403, true],
+    [422, true],
+    [408, false],
+    [429, false],
+    [503, false],
+  ] as const)('logout отвечает %i → сервер подтвердил: %s', async (status, confirmed) => {
+    authServer({
+      logout: () => (status === 204 ? new HttpResponse(null, { status }) : HttpResponse.json({ detail: 'x' }, { status })),
+    })
+    setAccessToken('t1')
+    await expect(signOut()).resolves.toEqual({ serverConfirmed: confirmed })
+    expect(localStorage.getItem(PENDING)).toBe(confirmed ? null : '1')
+  })
+
+  it('finishPendingLogout: параллельные вызовы — один запрос, метка снята', async () => {
+    localStorage.setItem(PENDING, '1')
+    const calls = authServer()
+    await Promise.all([finishPendingLogout(), finishPendingLogout()])
+    expect(calls.logout).toBe(1)
+    expect(localStorage.getItem(PENDING)).toBeNull()
+  })
+
+  it('finishPendingLogout без метки ничего не отправляет', async () => {
+    const calls = authServer()
+    await expect(finishPendingLogout()).resolves.toBe(true)
+    expect(calls.logout).toBe(0)
   })
 
   it('событие online довыходит на сервере', async () => {

@@ -75,7 +75,8 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
 export function readServer(): MockServerState {
   try {
     const saved = localStorage.getItem(SERVER_KEY)
-    if (saved) return JSON.parse(saved) as MockServerState
+    // Новые поля состояния берутся из seed — сохранённое старое состояние не ломает моки.
+    if (saved) return { ...seedState(), ...(JSON.parse(saved) as Partial<MockServerState>) }
   } catch {
     // повреждённое состояние — начинаем с seed
   }

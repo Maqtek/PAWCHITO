@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { SessionReason } from '../../api/error-messages'
-import { onSessionChange, type SessionEvent } from '../../api/session'
+import { finishPendingLogout, onSessionChange, type SessionEvent } from '../../api/session'
 import { forgetSelectedPet } from '../pets/useSelectedPet'
 
 function reasonFor(event: Exclude<SessionEvent, { type: 'signed-in-elsewhere' }>): SessionReason | null {
@@ -29,6 +29,11 @@ export function SessionEvents() {
       }),
     [queryClient, navigate],
   )
+
+  // Выход, начатый без сети, доводим при запуске — даже если приложение открыто на /login без запросов к API.
+  useEffect(() => {
+    void finishPendingLogout()
+  }, [])
 
   return null
 }

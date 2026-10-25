@@ -129,6 +129,17 @@ describe('api', () => {
     await expect(api.GET('/users/me')).rejects.toBeInstanceOf(NetworkError)
   })
 
+  it('refresh без cookie отвечает 422 — гость получает 401, а не сетевую ошибку', async () => {
+    server.use(
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: [] }, { status: 422 })),
+      meOnlyWith('never'),
+    )
+
+    const { response } = await api.GET('/users/me')
+
+    expect(response.status).toBe(401)
+  })
+
   it('сессия закончилась на сервере — событие expired', async () => {
     const events: SessionEvent[] = []
     onSessionChange((event) => events.push(event))
