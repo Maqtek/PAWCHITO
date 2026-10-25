@@ -1,5 +1,5 @@
 import type { Role } from '../api/schema'
-import { issueRefreshToken, seedState, updateServer, writeMockCookie, writeServer } from './server-state'
+import { issueRefreshToken, readMockCookie, seedState, updateServer, writeMockCookie, writeServer } from './server-state'
 
 export { readMockCookie } from './server-state'
 
@@ -45,6 +45,17 @@ export function endMockSessions(): void {
   })
 }
 
+/** «Администратор сбросил пароль» аккаунту текущей cookie: следующий запрос с токеном получит 403 password_change_required. */
+export function requireMockPasswordChange(): void {
+  updateServer((state) => {
+    const cookie = readMockCookie()
+    const record = cookie ? state.refreshTokens[cookie] : undefined
+    const account = record && state.accounts.find((item) => item.id === record.userId)
+    if (!account) throw new Error('Нет вошедшего аккаунта: сначала войдите')
+    account.must_change_password = true
+  })
+}
+
 export function setMockNetwork(on: boolean): void {
   updateServer((state) => {
     state.network = on
@@ -56,6 +67,7 @@ export function createConsoleHelpers() {
   return {
     expireAccess: expireMockAccess,
     endSessions: endMockSessions,
+    requirePasswordChange: requireMockPasswordChange,
     /** «Сеть» моков; приложение узнаёт о ней, как о настоящей, — событием online/offline. */
     network(on: boolean) {
       setMockNetwork(on)

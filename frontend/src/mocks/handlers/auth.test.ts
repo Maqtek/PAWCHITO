@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apiBaseUrl } from '../../api/base-url'
 import { readServer, SEED_PASSWORD, updateServer, writeMockCookie } from '../server-state'
-import { loginMockAs, logoutMock, readMockCookie, resetMockServer } from '../session'
+import { loginMockAs, logoutMock, readMockCookie, requireMockPasswordChange, resetMockServer } from '../session'
 
 /** Запрос к мокам напрямую, без клиента и сессии приложения. */
 function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
@@ -301,5 +301,54 @@ describe('лимиты полей (как у бэкенда)', () => {
       body: 'не json',
     })
     expect(broken.status).toBe(422)
+  })
+})
+
+describe('временный пароль: доступ раньше тела', () => {
+  it('смена пароля без токена и с невалидным телом — 401, а не 422', async () => {
+    expect((await call('POST', '/auth/change-password', { body: { current_password: 1 } })).status).toBe(401)
+  })
+
+  it('PATCH /users/me с временным паролем — 403 password_change_required, даже с невалидным телом', async () => {
+    const token = await accessToken('clinic-new@example.com')
+    const valid = await call('PATCH', '/users/me', { token, body: { full_name: 'Клиника' } })
+    expect(valid.status).toBe(403)
+    expect(await valid.json()).toEqual({ detail: 'password_change_required' })
+    expect((await call('PATCH', '/users/me', { token, body: { full_name: 5 } })).status).toBe(403)
+  })
+
+  it('выход с временным паролем работает', async () => {
+    await login('clinic-new@example.com')
+    expect((await call('POST', '/auth/logout')).status).toBe(204)
+    expect(readMockCookie()).toBeNull()
+  })
+
+  it('после смены пароля новая cookie обменивается, старая — нет', async () => {
+    const token = await accessToken('clinic-new@example.com')
+    const before = readMockCookie()
+    const changed = await call('POST', '/auth/change-password', {
+      token,
+      body: { current_password: SEED_PASSWORD, new_password: 'newsecret1' },
+    })
+    expect(changed.status).toBe(200)
+    expect(readMockCookie()).not.toBe(before)
+    expect((await refresh()).status).toBe(200)
+    writeMockCookie(before)
+    expect((await refresh()).status).toBe(401)
+  })
+})
+
+describe('requireMockPasswordChange', () => {
+  it('вошедшему аккаунту ставит временный пароль: данные — 403 password_change_required', async () => {
+    const token = await accessToken('clinic@example.com')
+    requireMockPasswordChange()
+    const bell = await call('GET', '/notifications/unread-count', { token })
+    expect(bell.status).toBe(403)
+    expect(await bell.json()).toEqual({ detail: 'password_change_required' })
+  })
+
+  it('без cookie — понятная ошибка', () => {
+    logoutMock()
+    expect(() => requireMockPasswordChange()).toThrow('Нет вошедшего аккаунта')
   })
 })
