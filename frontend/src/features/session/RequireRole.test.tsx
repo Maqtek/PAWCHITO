@@ -20,6 +20,7 @@ function renderGuarded() {
       />
       <Route path="/clinic/appointments" element={<p>Записи клиники</p>} />
       <Route path="/login" element={<p>Экран входа</p>} />
+      <Route path="/change-password" element={<p>Смена пароля</p>} />
     </Routes>,
   )
 }
@@ -48,5 +49,40 @@ describe('RequireRole', () => {
     expect(await screen.findByRole('heading', { name: 'Не удалось загрузить данные' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Повторить' })).toBeInTheDocument()
     expect(screen.queryByText('Экран входа')).not.toBeInTheDocument()
+  })
+
+  it('временный пароль — на смену пароля, раньше проверки роли', async () => {
+    loginMockAs('clinic-new@example.com')
+    renderGuarded()
+    expect(await screen.findByText('Смена пароля')).toBeInTheDocument()
+  })
+
+  // Токен живёт в памяти модуля до afterEach — поэтому один аккаунт на тест.
+  function renderChangeScreen() {
+    return renderWithProviders(
+      <Routes>
+        <Route
+          path="/change-password"
+          element={
+            <RequireRole allow={['owner', 'clinic', 'admin']} passwordChange>
+              <p>Форма смены пароля</p>
+            </RequireRole>
+          }
+        />
+        <Route path="/" element={<p>Кабинет владельца</p>} />
+      </Routes>,
+      { route: '/change-password' },
+    )
+  }
+
+  it('экран смены пароля с временным паролем — показывается', async () => {
+    loginMockAs('clinic-new@example.com')
+    renderChangeScreen()
+    expect(await screen.findByText('Форма смены пароля')).toBeInTheDocument()
+  })
+
+  it('экран смены пароля без временного пароля — главная роли', async () => {
+    renderChangeScreen()
+    expect(await screen.findByText('Кабинет владельца')).toBeInTheDocument()
   })
 })

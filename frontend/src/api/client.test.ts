@@ -172,4 +172,77 @@ describe('api', () => {
     expect(refreshCalls).toBe(1)
     expect(events).toEqual([])
   })
+
+  it('403 password_change_required — событие, ответ возвращается как есть', async () => {
+    server.use(
+      http.get('*/api/notifications/unread-count', () =>
+        HttpResponse.json({ detail: 'password_change_required' }, { status: 403 }),
+      ),
+    )
+    const events: SessionEvent[] = []
+    onSessionChange((event) => events.push(event))
+    setAccessToken('t1')
+
+    const { response } = await api.GET('/notifications/unread-count')
+
+    expect(response.status).toBe(403)
+    expect(events).toEqual([{ type: 'password-change-required' }])
+  })
+
+  it('обычный 403 и 403 на путь сессии — без события', async () => {
+    server.use(
+      http.get('*/api/notifications/unread-count', () =>
+        HttpResponse.json({ detail: 'Аккаунт заблокирован' }, { status: 403 }),
+      ),
+      http.post('*/api/auth/login', () => HttpResponse.json({ detail: 'password_change_required' }, { status: 403 })),
+    )
+    const events: SessionEvent[] = []
+    onSessionChange((event) => events.push(event))
+    setAccessToken('t1')
+
+    await api.GET('/notifications/unread-count')
+    await api.POST('/auth/login', { body: { email: 'owner@example.com', password: 'pawchito1' } })
+
+    expect(events).toEqual([])
+  })
+
+  it('/auth/change-password: middleware не ставит токен и не обменивает его на 401', async () => {
+    let authorization: string | null = 'не было запроса'
+    let refreshCalls = 0
+    server.use(
+      http.post('*/api/auth/refresh', () => {
+        refreshCalls += 1
+        return tokenResponse('fresh')
+      }),
+      http.post('*/api/auth/change-password', ({ request }) => {
+        authorization = request.headers.get('Authorization')
+        return HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
+      }),
+    )
+    setAccessToken('t1')
+
+    const { response } = await api.POST('/auth/change-password', {
+      body: { current_password: 'pawchito1', new_password: 'newsecret1' },
+    })
+
+    expect(response.status).toBe(401)
+    expect(authorization).toBeNull()
+    expect(refreshCalls).toBe(0)
+  })
+
+  it('параллельные 401 с отказом обмена — одно событие expired', async () => {
+    const unauthorized = () => HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
+    server.use(
+      http.post('*/api/auth/refresh', unauthorized),
+      http.get('*/api/users/me', unauthorized),
+      http.get('*/api/pets', unauthorized),
+    )
+    const events: SessionEvent[] = []
+    onSessionChange((event) => events.push(event))
+    setAccessToken('stale')
+
+    await Promise.all([api.GET('/users/me'), api.GET('/pets')])
+
+    expect(events).toEqual([{ type: 'expired' }])
+  })
 })

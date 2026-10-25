@@ -11,6 +11,7 @@ import {
   onSessionChange,
   reauthenticateWith,
   refreshAccessToken,
+  requirePasswordChange,
   signIn,
   signInWith,
   signOut,
@@ -391,6 +392,14 @@ describe('события сессии', () => {
   })
 })
 
+describe('requirePasswordChange', () => {
+  it('сообщает событием password-change-required', () => {
+    const events = collectEvents()
+    requirePasswordChange()
+    expect(events).toEqual([{ type: 'password-change-required' }])
+  })
+})
+
 describe('signInWith', () => {
   const login = (token = 'new') => async () => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
 
@@ -569,6 +578,31 @@ describe('reauthenticateWith', () => {
       }),
     ).rejects.toBeInstanceOf(NetworkError)
     expect(events).toEqual([])
+    expect(getAccessToken()).toBe('stale')
+  })
+
+  it('обмен этой вкладки, начатый раньше, не теряет токен: его ждём до очереди', async () => {
+    installQueue()
+    const gate = createGate()
+    authServer({
+      refresh: async () => {
+        await gate.opened
+        return tokenResponse('fresh')
+      },
+    })
+    setAccessToken('stale')
+    const refreshing = refreshAccessToken()
+    const tokens: string[] = []
+
+    const changing = reauthenticateWith(async (token) => {
+      tokens.push(token)
+      return issued('changed')
+    })
+    gate.release()
+
+    await expect(refreshing).resolves.toEqual({ status: 'ok', token: 'fresh' })
+    await changing
+    expect(tokens).toEqual(['fresh'])
   })
 
   it('другая ошибка запроса пробрасывается без обмена, токен прежний', async () => {

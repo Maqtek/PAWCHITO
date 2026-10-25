@@ -15,6 +15,8 @@ export type SessionEvent =
   | { type: 'signed-out'; serverConfirmed: boolean }
   | { type: 'signed-out-elsewhere' }
   | { type: 'signed-in-elsewhere' }
+  /** Сервер ответил 403 password_change_required: временный пароль не сменён. */
+  | { type: 'password-change-required' }
 
 type TabMessage = { type: 'signed-in' } | { type: 'signed-out' }
 
@@ -265,7 +267,7 @@ export async function reauthenticateWith<T extends { access_token: string }>(
   request: (token: string, signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   await ensureSession()
-  generation += 1
+  // Обмен этой вкладки, начатый раньше, относится к той же сессии: даём ему закончиться, а не обесцениваем.
   await refreshInFlight
   const result = await inRefreshQueue(async () => {
     const token = getAccessToken()
@@ -316,6 +318,11 @@ export function endSession(): void {
   if (expiredIn === generation) return
   expiredIn = generation
   emit({ type: 'expired' })
+}
+
+/** Временный пароль не сменён (Контракты, 403 password_change_required): SessionEvents уведёт на /change-password. */
+export function requirePasswordChange(): void {
+  emit({ type: 'password-change-required' })
 }
 
 if (typeof window !== 'undefined') {

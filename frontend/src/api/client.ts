@@ -3,10 +3,18 @@ import { getAccessToken } from './auth-token'
 import { apiBaseUrl } from './base-url'
 import { NetworkError } from './errors'
 import type { paths } from './schema'
-import { endSession, ensureSession, isRestoreUnavailable, refreshAccessToken } from './session'
+import { endSession, ensureSession, isRestoreUnavailable, refreshAccessToken, requirePasswordChange } from './session'
 
 /** Запросы, которые сами управляют сессией: токен к ним не добавляем и не обновляем. */
-const SESSION_PATHS = new Set(['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout', '/auth/recover'])
+const SESSION_PATHS = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+  '/auth/logout',
+  '/auth/recover',
+  // Смена пароля сама передаёт токен и обменивает его на 401 внутри очереди (reauthenticateWith).
+  '/auth/change-password',
+])
 
 interface SentRequest {
   retry: Request
@@ -22,6 +30,16 @@ function retryWith(request: Request, token: string): Promise<Response> {
   return globalThis.fetch(request)
 }
 
+/** 403 с {"detail": "password_change_required"}: тело читаем из копии, ответ уходит вызывающему целым. */
+async function isPasswordChangeRequired(response: Response): Promise<boolean> {
+  try {
+    const body = (await response.clone().json()) as { detail?: unknown } | null
+    return body?.detail === 'password_change_required'
+  } catch {
+    return false
+  }
+}
+
 const authMiddleware: Middleware = {
   async onRequest({ request, schemaPath, id }) {
     if (SESSION_PATHS.has(schemaPath)) return undefined
@@ -35,7 +53,13 @@ const authMiddleware: Middleware = {
   async onResponse({ response, id }) {
     const sent = sentRequests.get(id)
     sentRequests.delete(id)
-    if (response.status !== 401 || !sent) return undefined
+    // Пути сессии сюда не записываются: их ответы не трогаем.
+    if (!sent) return undefined
+    if (response.status === 403) {
+      if (await isPasswordChangeRequired(response)) requirePasswordChange()
+      return undefined
+    }
+    if (response.status !== 401) return undefined
     if (!sent.token) {
       // Токена нет из-за сбоя при восстановлении — это не гость, выходом считать нельзя (БП §1).
       if (sent.restoreUnavailable) throw new NetworkError()

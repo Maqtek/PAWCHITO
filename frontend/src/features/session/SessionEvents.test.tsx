@@ -2,7 +2,9 @@ import { act, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes, useNavigationType } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
-import { endSession, signOut } from '../../api/session'
+import { meQuery } from '../../api/queries'
+import type { User } from '../../api/schema'
+import { endSession, requirePasswordChange, signOut } from '../../api/session'
 import { server } from '../../mocks/node'
 import { loginMockAs, logoutMock } from '../../mocks/session'
 import { LoginPage } from '../../pages/auth/LoginPage'
@@ -104,6 +106,34 @@ describe('SessionEvents', () => {
     otherTab().postMessage({ type: 'signed-in' })
     expect(await screen.findByText('Кабинет')).toBeInTheDocument()
     expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
+  })
+
+  it('403 password_change_required: на смену пароля с replace, кэш очищен, me с флагом', async () => {
+    const clinic: User = {
+      id: 6,
+      email: 'clinic@example.com',
+      role: 'clinic',
+      full_name: 'ВетДоктор',
+      must_change_password: false,
+    }
+    const { queryClient } = renderWithProviders(
+      <>
+        <Routes>
+          <Route path="/" element={<p>Кабинет</p>} />
+          <Route path="/change-password" element={<p>Форма смены пароля</p>} />
+        </Routes>
+        <NavigationProbe />
+      </>,
+    )
+    queryClient.setQueryData(['probe'], 1)
+    queryClient.setQueryData(meQuery.queryKey, clinic)
+
+    act(() => requirePasswordChange())
+
+    expect(await screen.findByText('Форма смены пароля')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
+    expect(queryClient.getQueryData(['probe'])).toBeUndefined()
+    expect(queryClient.getQueryData(meQuery.queryKey)).toEqual({ ...clinic, must_change_password: true })
   })
 
   it('после размонтирования события сессии кэш не трогают', () => {
