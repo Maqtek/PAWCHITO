@@ -4,6 +4,7 @@ import { Spinner } from '../components/ui'
 import { RequireRole } from '../features/session/RequireRole'
 import { AppShell } from '../layouts/AppShell'
 import { AdminClinicsPage } from '../pages/admin/AdminClinicsPage'
+import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
 import { LoginPage } from '../pages/auth/LoginPage'
 import { RecoverPage } from '../pages/auth/RecoverPage'
 import { RegisterPage } from '../pages/auth/RegisterPage'
@@ -30,6 +31,14 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/recover" element={<RecoverPage />} />
+      <Route
+        path="/change-password"
+        element={
+          <RequireRole allow={['owner', 'clinic', 'admin']} passwordChange>
+            <ChangePasswordPage />
+          </RequireRole>
+        }
+      />
       <Route
         element={
           <RequireRole allow={['owner', 'clinic', 'admin']}>
