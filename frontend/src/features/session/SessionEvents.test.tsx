@@ -4,7 +4,8 @@ import { Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import { endSession, signOut } from '../../api/session'
 import { server } from '../../mocks/node'
-import { LoginPage } from '../../pages/common/LoginPage'
+import { loginMockAs, logoutMock } from '../../mocks/session'
+import { LoginPage } from '../../pages/auth/LoginPage'
 import { renderWithProviders } from '../../test/render'
 
 const openTabs: BroadcastChannel[] = []
@@ -35,6 +36,7 @@ describe('SessionEvents', () => {
     const { queryClient } = renderApp()
     queryClient.setQueryData(['probe'], 1)
 
+    logoutMock() // сервер уже отозвал сессию — восстановить её на экране входа нечем
     act(() => endSession())
 
     expect(await screen.findByText('Сессия истекла — войдите снова')).toBeInTheDocument()
@@ -59,17 +61,33 @@ describe('SessionEvents', () => {
     await act(() => signOut())
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Сессия истекла|Вы вышли/)).not.toBeInTheDocument()
   })
 
   it('выход в другой вкладке: экран входа с причиной', async () => {
     renderApp()
+    logoutMock() // другая вкладка вышла и стёрла общую cookie
     otherTab().postMessage({ type: 'signed-out' })
     expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
   })
 
+  it('выход в другой вкладке: кэш очищен, питомец забыт', async () => {
+    localStorage.setItem('pawchito:selected-pet-id', '11')
+    const { queryClient } = renderApp()
+    queryClient.setQueryData(['probe'], 1)
+    logoutMock()
+
+    otherTab().postMessage({ type: 'signed-out' })
+
+    expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
+    expect(queryClient.getQueryData(['probe'])).toBeUndefined()
+    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+  })
+
   it('вход в другой вкладке: из экрана входа — в кабинет', async () => {
+    logoutMock()
     renderApp('/login')
+    loginMockAs('owner') // другая вкладка вошла и записала cookie
     otherTab().postMessage({ type: 'signed-in' })
     expect(await screen.findByText('Кабинет')).toBeInTheDocument()
   })
@@ -84,6 +102,7 @@ describe('SessionEvents', () => {
     )
     localStorage.setItem('pawchito:logout-pending', '1')
 
+    logoutMock()
     renderApp('/login')
 
     await waitFor(() => expect(localStorage.getItem('pawchito:logout-pending')).toBeNull())

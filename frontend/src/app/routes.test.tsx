@@ -1,6 +1,6 @@
-import { screen } from '@testing-library/react'
+import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { loginMockAs, logoutMock } from '../mocks/session'
+import { endMockSessions, loginMockAs, logoutMock } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppRoutes } from './routes'
 
@@ -30,6 +30,17 @@ describe('маршруты', () => {
     await user.click(await screen.findByRole('button', { name: 'Клиника' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
+  })
+
+  it('сервер завершил сессию во время работы: экран входа с «Сессия истекла»', async () => {
+    const { queryClient } = renderWithProviders(<AppRoutes />)
+    expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
+
+    endMockSessions()
+    await act(() => queryClient.invalidateQueries())
+
+    expect(await screen.findByText('Сессия истекла — войдите снова')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
   })
 
   it('неизвестный адрес', async () => {

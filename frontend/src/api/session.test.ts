@@ -335,6 +335,19 @@ describe('события сессии', () => {
     expect(events).toEqual([{ type: 'expired' }])
   })
 
+  it('несколько endSession подряд — одно событие expired; после нового входа — снова', () => {
+    const events = collectEvents()
+    setAccessToken('t1')
+    endSession()
+    endSession()
+    endSession()
+    expect(events).toEqual([{ type: 'expired' }])
+
+    signIn('t2')
+    endSession()
+    expect(events).toEqual([{ type: 'expired' }, { type: 'expired' }])
+  })
+
   it('выход в другой вкладке: токен стёрт, signed-out-elsewhere', async () => {
     const tab = otherTab()
     const events = collectEvents()

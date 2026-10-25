@@ -28,6 +28,8 @@ let pendingLogout: Promise<boolean> | null = null
 let restoreUnavailable = false
 /** Растёт при каждом входе и выходе в этой или другой вкладке: обмен, начатый раньше, свой результат не применяет. */
 let generation = 0
+/** Поколение, в котором уже сообщили об истечении: параллельные 401 дают одно событие. */
+let expiredIn = -1
 const listeners = new Set<(event: SessionEvent) => void>()
 
 // --- Метка «выход не завершён»: общая для вкладок, переживает перезагрузку ---
@@ -268,6 +270,9 @@ export async function signOut(): Promise<{ serverConfirmed: boolean }> {
 /** Сервер отказал в обмене токена на запросе с токеном: сессия закончилась. */
 export function endSession(): void {
   setAccessToken(null)
+  // Параллельные запросы с одним истёкшим токеном вызывают это по очереди — сообщаем один раз.
+  if (expiredIn === generation) return
+  expiredIn = generation
   emit({ type: 'expired' })
 }
 
@@ -282,6 +287,7 @@ export function resetSessionForTests(): void {
   refreshInFlight = null
   pendingLogout = null
   restoreUnavailable = false
+  expiredIn = -1
   generation += 1
   listeners.clear()
   channel?.close()
