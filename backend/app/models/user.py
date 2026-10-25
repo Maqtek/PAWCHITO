@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, Index, false, func, true
+from sqlalchemy import CheckConstraint, Index, false, func, text, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, CreatedAtMixin, IdMixin
@@ -17,8 +17,9 @@ class User(IdMixin, CreatedAtMixin, Base):
     __table_args__ = (
         # код восстановления есть только у владельца
         CheckConstraint("recovery_code_hash IS NULL OR role = 'owner'", name="recovery_owner"),
-        # email уникален без учёта регистра: Anna@mail.ru и anna@mail.ru — один адрес
-        Index("uq_users_email", func.lower("email"), unique=True),
+        # email уникален без учёта регистра: Anna@mail.ru и anna@mail.ru — один адрес.
+        # text("email") — ссылка на колонку; просто "email" стал бы строкой: lower('email')
+        Index("uq_users_email", func.lower(text("email")), unique=True),
     )
 
     email: Mapped[str]
