@@ -14,5 +14,7 @@ known-first-party = ["app"]
 
 [tool.mypy]
 ignore_missing_imports = true
+# папка alembic/ мешает mypy найти пакет alembic; env.py проверяет сам Alembic при запуске
+exclude = ["^alembic/"]
 # Settings() без аргументов: значения берутся из окружения.
 plugins = ["pydantic.mypy"]
