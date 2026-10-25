@@ -8,13 +8,11 @@ interface ApiResult<T> {
   response: Response
 }
 
-/** Данные ответа или ApiError с текстом из {"detail": "..."}. */
-async function unwrap<T>(request: Promise<ApiResult<T>>): Promise<T> {
+/** Данные ответа или ApiError с текстом из {"detail": "..."}. У 204 данных нет — undefined. */
+export async function unwrap<T>(request: Promise<ApiResult<T>>): Promise<T> {
   const { data, error, response } = await request
-  if (error === undefined && data !== undefined) return data
-  const detail =
-    typeof error === 'object' && error !== null && 'detail' in error ? String(error.detail) : response.statusText
-  throw new ApiError(response.status, detail)
+  if (response.ok) return data as T
+  throw ApiError.fromResponse(response, error)
 }
 
 export const queryKeys = {

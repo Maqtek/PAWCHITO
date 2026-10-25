@@ -9,6 +9,7 @@
 type Json<T> = { headers: { [name: string]: unknown }; content: { 'application/json': T } }
 type NoContent = { headers: { [name: string]: unknown }; content?: never }
 type NoParams = { query?: never; header?: never; path?: never; cookie?: never }
+type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
   schemas: {
@@ -26,6 +27,18 @@ export interface components {
       must_change_password: boolean
     }
     Token: { access_token: string; token_type: 'bearer'; expires_in: number }
+    LoginRequest: { email: string; password: string }
+    RegisterRequest: { email: string; password: string; full_name: string }
+    RegisterResponse: components['schemas']['Token'] & {
+      user: components['schemas']['User']
+      /** Показывается один раз, формат XXXX-XXXX-XXXX-XXXX. */
+      recovery_code: string
+    }
+    RecoverRequest: { email: string; recovery_code: string; new_password: string }
+    RecoveryCode: { recovery_code: string }
+    ChangePasswordRequest: { current_password: string; new_password: string }
+    UserUpdate: { full_name: string }
+    RecoveryCodeRequest: { current_password: string }
     ClinicRef: { id: number; name: string }
     Pet: {
       id: number
@@ -44,12 +57,41 @@ export interface components {
     }
     UnreadCount: { unread_count: number }
     Error: { detail: string }
+    /** Ошибка поля в ответе 422 (формат FastAPI). */
+    ValidationError: { loc: (string | number)[]; msg: string; type: string }
+    HTTPValidationError: { detail: components['schemas']['ValidationError'][] }
   }
 }
 
 type Schemas = components['schemas']
 
 export interface paths {
+  '/auth/register': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['RegisterRequest']>
+      responses: {
+        201: Json<Schemas['RegisterResponse']>
+        409: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/auth/login': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['LoginRequest']>
+      responses: {
+        200: Json<Schemas['Token']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+        429: Json<Schemas['Error']>
+      }
+    }
+  }
   '/auth/refresh': {
     parameters: NoParams
     post: {
@@ -66,12 +108,62 @@ export interface paths {
       responses: { 204: NoContent }
     }
   }
+  '/auth/recover': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['RecoverRequest']>
+      responses: {
+        200: Json<Schemas['RecoveryCode']>
+        400: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+        429: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/auth/change-password': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['ChangePasswordRequest']>
+      responses: {
+        200: Json<Schemas['Token']>
+        400: Json<Schemas['Error']>
+        401: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
   '/users/me': {
     parameters: NoParams
     get: {
       parameters: NoParams
       requestBody?: never
-      responses: { 200: Json<Schemas['User']>; 401: Json<Schemas['Error']> }
+      responses: { 200: Json<Schemas['User']>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
+    }
+    patch: {
+      parameters: NoParams
+      requestBody: Body<Schemas['UserUpdate']>
+      responses: {
+        200: Json<Schemas['User']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/users/me/recovery-code': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['RecoveryCodeRequest']>
+      responses: {
+        200: Json<Schemas['RecoveryCode']>
+        400: Json<Schemas['Error']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
     }
   }
   '/pets': {
@@ -104,3 +196,13 @@ export type ClinicRef = Schemas['ClinicRef']
 export type Pet = Schemas['Pet']
 export type UnreadCount = Schemas['UnreadCount']
 export type ApiErrorBody = Schemas['Error']
+export type LoginRequest = Schemas['LoginRequest']
+export type RegisterRequest = Schemas['RegisterRequest']
+export type RegisterResponse = Schemas['RegisterResponse']
+export type RecoverRequest = Schemas['RecoverRequest']
+export type RecoveryCode = Schemas['RecoveryCode']
+export type ChangePasswordRequest = Schemas['ChangePasswordRequest']
+export type UserUpdate = Schemas['UserUpdate']
+export type RecoveryCodeRequest = Schemas['RecoveryCodeRequest']
+export type ValidationError = Schemas['ValidationError']
+export type HTTPValidationError = Schemas['HTTPValidationError']
