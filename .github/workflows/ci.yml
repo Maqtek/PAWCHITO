@@ -1,0 +1,129 @@
+# Проверки на каждый PR и на push в main (роадмап, этап 1):
+# бэкенд — ruff, mypy, pytest, миграции с нуля и alembic check; фронтенд — ESLint, тесты, сборка; образы Docker.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Бэкенд — ruff, mypy, pytest, миграции
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: pawchito
+          POSTGRES_PASSWORD: pawchito
+          POSTGRES_DB: pawchito
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pawchito -d pawchito"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # Тестовая база в контейнере сервиса; пароль только для CI.
+      DATABASE_URL: postgresql+psycopg2://pawchito:pawchito@localhost:5432/pawchito
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Зависимости
+        run: |
+          pip install -r requirements.txt
+          # pytest пока ставится только здесь: в requirements.txt он появится вместе с тестами (#31)
+          pip install pytest
+
+      - name: Секрет JWT для тестов
+        # Свой на каждый запуск: приложение без JWT_SECRET не стартует, а хранить его в репозитории нельзя.
+        run: echo "JWT_SECRET=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+
+      - name: ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: mypy
+        run: mypy app
+
+      - name: pytest
+        # Код 5 — «тестов не найдено»: до первых тестов (#31) это не ошибка.
+        run: pytest || [ $? -eq 5 ]
+
+      - name: Миграции с нуля и alembic check
+        # Шаг включится сам, когда в бэкенде появится Alembic (#10).
+        if: hashFiles('backend/alembic.ini') != ''
+        run: |
+          alembic upgrade head
+          alembic check
+
+  frontend:
+    name: Фронтенд — ESLint, тесты, сборка
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      # pnpm той версии, что в packageManager, без вопроса о скачивании
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: pnpm
+        run: corepack enable
+
+      - name: Зависимости
+        run: pnpm install --frozen-lockfile
+
+      - name: ESLint
+        run: pnpm lint
+
+      - name: Тесты
+        run: pnpm test
+
+      - name: Проверка типов и сборка
+        run: pnpm build
+
+  docker:
+    name: Образы Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Сборка образов бэкенда и фронтенда
+        run: |
+          docker build -t pawchito-backend ./backend
+          docker build -t pawchito-frontend ./frontend
