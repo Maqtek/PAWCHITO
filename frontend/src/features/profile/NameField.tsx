@@ -36,7 +36,7 @@ export function NameField({ user }: { user: User }) {
       {editing ? (
         <NameForm name={user.full_name} onDone={close} />
       ) : (
-        <div className="grid gap-x-6 gap-y-1 sm:grid-cols-[8rem_1fr] sm:items-center">
+        <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-[8rem_minmax(0,1fr)] sm:items-center">
           <span className="text-sm text-ink-muted">Имя</span>
           <div className="flex min-w-0 items-center gap-1">
             <span className="min-w-0 font-bold break-words">{user.full_name}</span>
