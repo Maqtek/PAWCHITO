@@ -40,13 +40,10 @@ export function LoginPage() {
   const reasonRef = useRef<HTMLParagraphElement>(null)
 
   useEffect(() => {
-    if (location.state !== null) navigate(location.pathname, { replace: true, state: null })
-  }, [location.state, location.pathname, navigate])
-
-  // Причину выхода озвучиваем фокусом: область, появившаяся вместе со страницей, скринридером не читается.
-  useEffect(() => {
-    if (!checking && arrival.reason) reasonRef.current?.focus()
-  }, [checking, arrival.reason])
+    if (location.state === null) return
+    const { pathname, search, hash } = location
+    navigate({ pathname, search, hash }, { replace: true, state: null })
+  }, [location, navigate])
 
   const form = useForm({
     initial: { email: arrival.email, password: '' },
@@ -63,9 +60,17 @@ export function LoginPage() {
     },
   })
 
+  // При входе кэш очищается и me запрашивается заново — форма не должна мигать спиннером.
+  const showChecking = checking && !form.submitting
+
+  // Причину выхода озвучиваем фокусом: область, появившаяся вместе со страницей, скринридером не читается.
+  useEffect(() => {
+    if (!showChecking && arrival.reason) reasonRef.current?.focus()
+  }, [showChecking, arrival.reason])
+
   return (
     <AuthLayout title="Вход">
-      {checking ? (
+      {showChecking ? (
         <div className="mt-6">
           <Spinner label="Проверяем вход" />
         </div>
@@ -100,7 +105,8 @@ export function LoginPage() {
               Забыли пароль?
             </Link>
             <FormAlert message={form.formError} />
-            <Button type="submit" fullWidth disabled={form.submitting}>
+            {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
+            <Button type="submit" fullWidth aria-disabled={form.submitting}>
               {form.submitting ? 'Входим…' : 'Войти'}
             </Button>
           </form>

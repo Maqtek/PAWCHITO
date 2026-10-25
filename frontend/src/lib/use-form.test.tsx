@@ -107,6 +107,29 @@ describe('useForm', () => {
     expect(screen.queryByText('Слишком простой')).not.toBeInTheDocument()
   })
 
+  it('ошибки сервера по полям снимаются, когда уходит новая отправка', async () => {
+    let attempt = 0
+    let release!: () => void
+    const onSubmit = vi.fn(async () => {
+      attempt += 1
+      if (attempt === 1) throw new ApiError(422, 'Email занят', { fieldErrors: { email: 'Email занят' } })
+      await new Promise<void>((resolve) => (release = resolve))
+    })
+    const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
+    await user.type(screen.getByLabelText('Email'), 'a@b.c')
+    await user.type(screen.getByLabelText('Пароль'), '12345678')
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    expect(await screen.findByText('Email занят')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+
+    expect(await screen.findByRole('button', { name: 'Отправляем…' })).toBeInTheDocument()
+    expect(screen.queryByText('Email занят')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Email')).not.toHaveAttribute('aria-invalid')
+    release()
+    expect(await screen.findByRole('button', { name: 'Отправить' })).toBeInTheDocument()
+  })
+
   it('прочие ошибки — текстом формы по контексту', async () => {
     const onSubmit = vi.fn(async () => {
       throw new ApiError(401, 'Неверный email или пароль')

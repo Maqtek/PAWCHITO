@@ -92,13 +92,15 @@ export function PasswordField({
           type={visible ? 'text' : 'password'}
           aria-invalid={field.invalid}
           aria-describedby={field.describedBy}
-          className={cn(controlClass, 'pr-11', className)}
+          // Свой глаз Edge рисовался бы рядом с нашей кнопкой.
+          className={cn(controlClass, 'pr-11 [&::-ms-reveal]:hidden', className)}
           {...props}
         />
         <button
           type="button"
           aria-label="Показать пароль"
           aria-pressed={visible}
+          disabled={props.disabled}
           onClick={() => setVisible((current) => !current)}
           className="absolute inset-y-0 right-0 grid w-11 cursor-pointer place-items-center rounded-r-xl text-ink-muted transition-colors hover:text-ink"
         >

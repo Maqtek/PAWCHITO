@@ -79,7 +79,7 @@ export function RegisterPage() {
 
   return (
     <AuthLayout title="Регистрация">
-      {checking ? (
+      {checking && !form.submitting ? (
         <div className="mt-6">
           <Spinner label="Проверяем вход" />
         </div>
@@ -109,7 +109,8 @@ export function RegisterPage() {
               {...form.field('password_repeat')}
             />
             <FormAlert message={form.formError} />
-            <Button type="submit" fullWidth disabled={form.submitting}>
+            {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
+            <Button type="submit" fullWidth aria-disabled={form.submitting}>
               {form.submitting ? 'Регистрируем…' : 'Зарегистрироваться'}
             </Button>
           </form>

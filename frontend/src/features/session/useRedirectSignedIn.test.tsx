@@ -1,13 +1,23 @@
-import { screen } from '@testing-library/react'
+import { useIsFetching } from '@tanstack/react-query'
+import { act, screen } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { meQuery } from '../../api/queries'
+import { server } from '../../mocks/node'
 import { loginMockAs, logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { useRedirectSignedIn } from './useRedirectSignedIn'
 
 function Probe({ enabled }: { enabled?: boolean }) {
   const { checking } = useRedirectSignedIn(enabled)
-  return <p>{checking ? 'Проверяем' : 'Форма'}</p>
+  const fetching = useIsFetching({ queryKey: meQuery.queryKey })
+  return (
+    <>
+      <p>{checking ? 'Проверяем' : 'Форма'}</p>
+      <p>{fetching > 0 ? 'Запрос идёт' : 'Запросов нет'}</p>
+    </>
+  )
 }
 
 function renderProbe(enabled?: boolean) {
@@ -19,6 +29,23 @@ function renderProbe(enabled?: boolean) {
     </Routes>,
     { route: '/login' },
   )
+}
+
+/** Гость на /users/me; ответы, начиная с номера holdFrom, держатся до release. */
+function guestMe({ holdFrom = Infinity } = {}) {
+  let release!: () => void
+  const opened = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const calls = { me: 0 }
+  server.use(
+    http.get('*/api/users/me', async () => {
+      calls.me += 1
+      if (calls.me >= holdFrom) await opened
+      return HttpResponse.json({ detail: 'Не авторизован' }, { status: 401 })
+    }),
+  )
+  return { calls, release }
 }
 
 describe('useRedirectSignedIn', () => {
@@ -39,10 +66,40 @@ describe('useRedirectSignedIn', () => {
     expect(await screen.findByText('Форма')).toBeInTheDocument()
   })
 
-  it('выключенный хук никуда не уводит', async () => {
+  it('проверка идёт до первого ответа', async () => {
+    logoutMock()
+    renderProbe()
+    expect(screen.getByText('Проверяем')).toBeInTheDocument()
+    expect(await screen.findByText('Форма')).toBeInTheDocument()
+  })
+
+  it('повторный запрос после ошибки не возвращает проверку', async () => {
+    logoutMock()
+    const me = guestMe({ holdFrom: 2 })
+    const { queryClient } = renderProbe()
+    expect(await screen.findByText('Форма')).toBeInTheDocument()
+    expect(await screen.findByText('Запросов нет')).toBeInTheDocument()
+
+    let refetching!: Promise<void>
+    act(() => {
+      refetching = queryClient.refetchQueries({ queryKey: meQuery.queryKey })
+    })
+
+    expect(await screen.findByText('Запрос идёт')).toBeInTheDocument()
+    expect(screen.getByText('Форма')).toBeInTheDocument()
+
+    me.release()
+    await act(() => refetching)
+    expect(me.calls.me).toBe(2)
+    expect(screen.getByText('Форма')).toBeInTheDocument()
+  })
+
+  it('выключенный хук никуда не уводит и не запрашивает /users/me', async () => {
+    const me = guestMe()
     renderProbe(false)
     expect(screen.getByText('Форма')).toBeInTheDocument()
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(screen.getByText('Форма')).toBeInTheDocument()
+    expect(me.calls.me).toBe(0)
   })
 })

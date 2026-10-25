@@ -1,5 +1,5 @@
 import { Copy } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { Button, CheckboxField } from '../../components/ui'
 
 type CopyState = 'idle' | 'copied' | 'manual'
@@ -55,18 +55,30 @@ export function RecoveryCodeScreen({ code, onContinue }: { code: string; onConti
       <h2 id={headingId} ref={headingRef} tabIndex={-1} className="text-lg font-extrabold outline-none">
         Сохраните код восстановления
       </h2>
+      {/* Между дефисом и буквой браузер строку не переносит — wbr разрешает перенос только между группами. */}
       <p
         ref={codeRef}
-        className="rounded-xl border border-line bg-surface-muted px-4 py-3 text-center font-mono text-xl font-bold tracking-wider break-all sm:text-2xl"
+        className="rounded-xl border border-line bg-surface-muted px-4 py-3 text-center font-mono text-lg font-bold tracking-wider sm:text-2xl"
       >
-        {code}
+        {code.split('-').map((group, index) => (
+          <Fragment key={index}>
+            {index > 0 && (
+              <>
+                -<wbr />
+              </>
+            )}
+            {group}
+          </Fragment>
+        ))}
       </p>
-      <Button variant="secondary" icon={Copy} onClick={() => void copy()}>
-        Скопировать
-      </Button>
-      <p role="status" className="min-h-5 text-sm text-ink-muted">
-        {copyMessages[copyState]}
-      </p>
+      <div className="flex flex-col">
+        <Button variant="secondary" icon={Copy} onClick={() => void copy()}>
+          Скопировать
+        </Button>
+        <p role="status" className="mt-2 text-sm text-ink-muted empty:mt-0">
+          {copyMessages[copyState]}
+        </p>
+      </div>
       <p className="text-sm text-ink-muted">
         Код нужен, если забудете пароль. Без кода и пароля доступ к аккаунту не восстановить: администратор не
         сбрасывает пароли владельцев.

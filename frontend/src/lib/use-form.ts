@@ -86,6 +86,8 @@ export function useForm<V extends FormValues>({ initial, validate, onSubmit, con
       return
     }
     inFlight.current = true
+    // Ошибки сервера относились к прошлой отправке — новый ответ разложит свои.
+    setServerErrors({})
     setSubmitting(true)
     try {
       await onSubmit(values)

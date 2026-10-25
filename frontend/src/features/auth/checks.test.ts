@@ -28,7 +28,17 @@ describe('newPasswordErrors', () => {
     expect(newPasswordErrors(password, password).password).toBeUndefined()
   })
 
+  it('длина в символах Unicode: 7 эмодзи — коротко, хотя .length равна 14', () => {
+    const password = '😀'.repeat(7)
+    expect(password).toHaveLength(14)
+    expect(newPasswordErrors(password, password).password).toBe('Пароль — не короче 8 символов')
+  })
+
   it('повтор не совпадает', () => {
     expect(newPasswordErrors('12345678', '12345679').repeat).toBe('Пароли не совпадают')
+  })
+
+  it('пустой повтор при заполненном пароле — ошибка у повтора', () => {
+    expect(newPasswordErrors('12345678', '')).toEqual({ password: undefined, repeat: 'Заполните поле' })
   })
 })

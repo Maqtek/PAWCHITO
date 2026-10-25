@@ -1,7 +1,9 @@
 import { screen } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
+import { http } from 'msw'
 import { Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { server } from '../../mocks/node'
 import { logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { LoginPage } from './LoginPage'
@@ -32,10 +34,19 @@ beforeEach(() => {
 
 describe('RecoverPage', () => {
   it('код не в формате — проверка без запроса', async () => {
+    let calls = 0
+    server.use(
+      http.post('*/api/auth/recover', () => {
+        calls += 1
+        // Ничего не возвращаем — запрос, если всё же ушёл, отвечает обычный обработчик моков.
+      }),
+    )
     const { user } = renderRecover()
     await fill(user, { email: 'owner@example.com', code: 'abc', password: 'newsecret1', repeat: 'newsecret1' })
     expect(screen.getByText('Код в формате XXXX-XXXX-XXXX-XXXX')).toBeInTheDocument()
     expect(screen.getByLabelText('Код восстановления')).toHaveFocus()
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(calls).toBe(0)
   })
 
   it('неверный код — текст над кнопкой', async () => {

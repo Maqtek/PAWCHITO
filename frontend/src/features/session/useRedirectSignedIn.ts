@@ -7,11 +7,13 @@ import { homePathFor } from '../../app/navigation'
 /** Экраны для гостей: вошедшего сразу уводим на главную его роли. enabled = false — не трогаем (показан код восстановления). */
 export function useRedirectSignedIn(enabled = true): { checking: boolean } {
   const navigate = useNavigate()
-  const { data: user, isPending } = useQuery({ ...meQuery, enabled })
+  const { data: user, isPending, isFetched } = useQuery({ ...meQuery, enabled })
 
   useEffect(() => {
     if (enabled && user) navigate(homePathFor(user.role), { replace: true })
   }, [enabled, user, navigate])
 
-  return { checking: enabled && isPending }
+  // Запрос гостя без данных при перезапросе (online, invalidate) снова pending — проверяем только до первого ответа,
+  // иначе форма посреди ввода сменится спиннером.
+  return { checking: enabled && isPending && !isFetched }
 }

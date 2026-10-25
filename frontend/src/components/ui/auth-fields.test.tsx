@@ -26,6 +26,18 @@ describe('PasswordField', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true')
     expect(input).toHaveAccessibleDescription('Пароль — не короче 8 символов')
   })
+
+  it('выключенное поле: недоступны и ввод, и кнопка показа пароля', async () => {
+    const user = userEvent.setup()
+    render(<PasswordField label="Пароль" defaultValue="secret123" disabled />)
+    const input = screen.getByLabelText('Пароль')
+    const toggle = screen.getByRole('button', { name: 'Показать пароль' })
+    expect(input).toBeDisabled()
+    expect(toggle).toBeDisabled()
+
+    await user.click(toggle)
+    expect(input).toHaveAttribute('type', 'password')
+  })
 })
 
 describe('CheckboxField', () => {

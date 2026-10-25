@@ -64,7 +64,7 @@ export function RecoverPage() {
 
   return (
     <AuthLayout title="Восстановление доступа">
-      {checking ? (
+      {checking && !form.submitting ? (
         <div className="mt-6">
           <Spinner label="Проверяем вход" />
         </div>
@@ -85,6 +85,7 @@ export function RecoverPage() {
               autoComplete="one-time-code"
               autoCapitalize="characters"
               spellCheck={false}
+              // Код вводят с пробелами и дефисами — строка бывает длиннее 19 символов.
               maxLength={40}
               {...form.field('recovery_code')}
             />
@@ -102,7 +103,8 @@ export function RecoverPage() {
               {...form.field('password_repeat')}
             />
             <FormAlert message={form.formError} />
-            <Button type="submit" fullWidth disabled={form.submitting}>
+            {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
+            <Button type="submit" fullWidth aria-disabled={form.submitting}>
               {form.submitting ? 'Проверяем…' : 'Восстановить доступ'}
             </Button>
           </form>

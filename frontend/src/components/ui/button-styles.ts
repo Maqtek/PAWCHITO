@@ -24,7 +24,8 @@ export function buttonClass({
 }: { variant?: ButtonVariant; size?: ButtonSize; fullWidth?: boolean } = {}): string {
   return cn(
     'inline-flex cursor-pointer items-center justify-center rounded-xl font-bold whitespace-nowrap transition-colors',
-    'disabled:cursor-not-allowed disabled:opacity-50',
+    // aria-disabled выглядит так же: им блокируют кнопку отправки, чтобы она не теряла фокус.
+    'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
     variantClass[variant],
     sizeClass[size],
     fullWidth && 'w-full',

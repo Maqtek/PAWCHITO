@@ -238,6 +238,24 @@ describe('вход и выход', () => {
     expect(calls.refresh).toBe(0)
   })
 
+  it('signOut: очередь отказала после запроса — локальный выход всё равно завершён', async () => {
+    installLocks(async (_, callback) => {
+      await callback()
+      throw new DOMException('lock lost', 'AbortError')
+    })
+    const tab = otherTab()
+    const calls = authServer()
+    const events = collectEvents()
+    setAccessToken('t1')
+
+    await expect(signOut()).rejects.toThrow('lock lost')
+
+    expect(calls.logout).toBe(1)
+    expect(getAccessToken()).toBeNull()
+    expect(events).toEqual([expect.objectContaining({ type: 'signed-out' })])
+    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-out' }]))
+  })
+
   it.each([
     [204, true],
     [401, true],
@@ -493,9 +511,10 @@ describe('доработки после #28', () => {
     const tab = otherTab()
     const events = collectEvents()
     setAccessToken('t1')
+    // Канал доставляет по порядку: когда дошёл signed-out, неизвестное сообщение уже обработано.
     tab.channel.postMessage({ type: 'reauthenticated' })
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(getAccessToken()).toBe('t1')
-    expect(events).toEqual([])
+    tab.channel.postMessage({ type: 'signed-out' })
+    await vi.waitFor(() => expect(events).toContainEqual({ type: 'signed-out-elsewhere' }))
+    expect(events).toEqual([{ type: 'signed-out-elsewhere' }])
   })
 })

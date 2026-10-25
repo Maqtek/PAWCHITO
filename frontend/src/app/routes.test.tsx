@@ -43,6 +43,15 @@ describe('маршруты', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
   })
 
+  it.each(['/login', '/register', '/recover'])('%s: экран — единственная область main', async (route) => {
+    logoutMock()
+    renderWithProviders(<AppRoutes />, { route })
+    const email = await screen.findByLabelText('Email')
+    expect(screen.getAllByRole('main')).toHaveLength(1)
+    expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }))
+    expect(screen.getByRole('main')).toContainElement(email)
+  })
+
   it('вошедший на /register уходит на главную', async () => {
     renderWithProviders(<AppRoutes />, { route: '/register' })
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()

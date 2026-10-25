@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { Route, Routes } from 'react-router-dom'
@@ -8,6 +8,7 @@ import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { logoutMock } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
+import { LoginPage } from './LoginPage'
 import { RegisterPage } from './RegisterPage'
 
 function renderRegister() {
@@ -15,7 +16,7 @@ function renderRegister() {
     <Routes>
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/" element={<p>Главная владельца</p>} />
-      <Route path="/login" element={<p>Страница входа</p>} />
+      <Route path="/login" element={<LoginPage />} />
     </Routes>,
     { route: '/register' },
   )
@@ -45,13 +46,14 @@ describe('RegisterPage', () => {
     expect(screen.getByLabelText('Имя')).toHaveFocus()
   })
 
-  it('409: ошибка у поля email со ссылкой «Войти»', async () => {
+  it('409: ошибка у поля email со ссылкой «Войти», email переходит в форму входа', async () => {
     const { user } = renderRegister()
     await fill(user, { name: 'Анна', email: 'OWNER@example.com', password: 'pawchito1', repeat: 'pawchito1' })
 
     const error = await screen.findByText(/Этот email уже зарегистрирован\./)
     await user.click(within(error).getByRole('link', { name: 'Войти' }))
-    expect(await screen.findByText('Страница входа')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Email')).toHaveValue('OWNER@example.com')
   })
 
   it('422 от сервера — под полем и текст над кнопкой', async () => {
@@ -86,5 +88,16 @@ describe('RegisterPage', () => {
 
     expect(await screen.findByText('Главная владельца')).toBeInTheDocument()
     expect(queryClient.getQueryData(meQuery.queryKey)).toMatchObject({ email: 'new@example.com', full_name: 'Новый Владелец' })
+  })
+
+  it('экран кода: перезапрос сессии не уводит с него, хотя пользователь уже вошёл', async () => {
+    const { user, queryClient } = renderRegister()
+    await fill(user, { name: 'Анна', email: 'new@example.com', password: 'pawchito1', repeat: 'pawchito1' })
+    expect(await screen.findByRole('heading', { name: 'Сохраните код восстановления' })).toBeInTheDocument()
+
+    await act(() => queryClient.invalidateQueries())
+
+    expect(screen.getByRole('heading', { name: 'Сохраните код восстановления' })).toBeInTheDocument()
+    expect(screen.queryByText('Главная владельца')).not.toBeInTheDocument()
   })
 })

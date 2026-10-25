@@ -12,6 +12,24 @@ describe('RecoveryCodeScreen', () => {
     expect(screen.getByText(CODE)).toBeInTheDocument()
   })
 
+  it('код переносится только между группами: после дефиса — wbr', () => {
+    renderWithProviders(<RecoveryCodeScreen code={CODE} onContinue={() => {}} />)
+    const code = screen.getByText(CODE)
+    expect(code).toHaveTextContent(CODE)
+    expect(code.innerHTML).toBe('K7QM-<wbr>2XPA-<wbr>9RTD-<wbr>4WNB')
+    expect(code).not.toHaveClass('break-all')
+  })
+
+  it('пустая строка статуса — в одном блоке с кнопкой «Скопировать»', () => {
+    renderWithProviders(<RecoveryCodeScreen code={CODE} onContinue={() => {}} />)
+    const status = screen.getByRole('status')
+    expect(status).toBeEmptyDOMElement()
+    // Отступ секции не ставится перед пустой строкой: у кнопки и статуса свой общий блок.
+    const group = screen.getByRole('button', { name: 'Скопировать' }).parentElement
+    expect(group?.children).toHaveLength(2)
+    expect(group).toContainElement(status)
+  })
+
   it('«Скопировать» кладёт код в буфер и сообщает об этом', async () => {
     const { user } = renderWithProviders(<RecoveryCodeScreen code={CODE} onContinue={() => {}} />)
     await user.click(screen.getByRole('button', { name: 'Скопировать' }))
