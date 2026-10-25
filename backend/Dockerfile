@@ -12,5 +12,7 @@ COPY . .
 
 EXPOSE 8000
 
-# Перед uvicorn здесь появятся alembic upgrade head (#10) и seed (#27)
+# start.sh применяет миграции (alembic upgrade head), затем запускает CMD.
+# command из docker-compose.yml заменяет только CMD, миграции выполняются всё равно.
+ENTRYPOINT ["sh", "start.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
