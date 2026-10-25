@@ -58,7 +58,8 @@ export function useForm<V extends FormValues>({ initial, validate, onSubmit, con
     return {
       name,
       value: values[name],
-      onChange: (event: ChangeEvent<HTMLInputElement>) => setValue(name, event.target.value),
+      onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+        setValue(name, event.target.value),
       error: clientErrors[name] ?? serverErrors[name],
     }
   }
