@@ -28,7 +28,7 @@ export function ClinicDetailsSection({
           Изменить
         </Button>
       </div>
-      <dl className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-[9rem_1fr]">
+      <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
         <dt className="text-sm text-ink-muted">Адрес</dt>
         <dd className="font-bold break-words">{clinic.address}</dd>
         <dt className="text-sm text-ink-muted">Телефон</dt>
