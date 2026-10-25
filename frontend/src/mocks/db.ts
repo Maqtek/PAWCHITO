@@ -1,10 +1,4 @@
-import type { Pet, Role, User } from '../api/schema'
-
-export const users: Record<Role, User> = {
-  owner: { id: 1, email: 'owner@example.com', role: 'owner', full_name: 'Анна Смирнова', must_change_password: false },
-  clinic: { id: 6, email: 'clinic@example.com', role: 'clinic', full_name: 'ВетДоктор', must_change_password: false },
-  admin: { id: 9, email: 'admin@example.com', role: 'admin', full_name: 'Администратор', must_change_password: false },
-}
+import type { Pet, Role } from '../api/schema'
 
 export const pets: Pet[] = [
   {

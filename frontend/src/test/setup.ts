@@ -1,8 +1,9 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
-import { afterAll, afterEach } from 'vitest'
+import { afterAll, afterEach, beforeEach } from 'vitest'
 import { resetSessionForTests } from '../api/session'
 import { server } from '../mocks/node'
+import { loginMockAs, resetMockServer } from '../mocks/session'
 
 // Слушаем сразу: модули тестов импортируются раньше, чем срабатывают хуки.
 server.listen({ onUnhandledFrame: 'error' })
@@ -18,6 +19,12 @@ HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogEleme
 HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
   this.open = false
 }
+
+// По умолчанию тест идёт от вошедшего владельца: у «браузера» есть его refresh-cookie.
+beforeEach(() => {
+  resetMockServer()
+  loginMockAs('owner')
+})
 
 afterEach(() => {
   cleanup()

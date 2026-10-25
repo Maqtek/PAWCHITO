@@ -1,6 +1,6 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { setMockRole } from '../mocks/session'
+import { loginMockAs, logoutMock } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppRoutes } from './routes'
 
@@ -12,7 +12,7 @@ describe('маршруты', () => {
   })
 
   it('клиника с главной попадает в свои записи', async () => {
-    setMockRole('clinic')
+    loginMockAs('clinic')
     renderWithProviders(<AppRoutes />)
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
   })
@@ -23,11 +23,11 @@ describe('маршруты', () => {
   })
 
   it('гость попадает на вход и входит клиникой через моки', async () => {
-    setMockRole('guest')
+    logoutMock()
     const { user } = renderWithProviders(<AppRoutes />, { route: '/tasks' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Клиника' }))
+    await user.click(await screen.findByRole('button', { name: 'Клиника' }))
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
   })

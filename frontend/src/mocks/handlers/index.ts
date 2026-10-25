@@ -1,5 +1,7 @@
 import { authHandlers } from './auth'
+import { networkHandlers } from './network'
 import { notificationHandlers } from './notifications'
 import { petHandlers } from './pets'
 
-export const handlers = [...authHandlers, ...petHandlers, ...notificationHandlers]
+// Выключатель сети стоит первым: при network: false он отвечает раньше остальных.
+export const handlers = [...networkHandlers, ...authHandlers, ...petHandlers, ...notificationHandlers]

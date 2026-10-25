@@ -1,14 +1,15 @@
 import { http, HttpResponse } from 'msw'
-import { pets, users } from '../db'
-import { authorize } from '../http-utils'
+import { pets } from '../db'
+import { authorizeAccount } from '../http-utils'
+import { readServer } from '../server-state'
 
 export const petHandlers = [
   http.get('*/api/pets', ({ request }) => {
-    const role = authorize(request, ['owner'])
-    if (role instanceof Response) return role
+    const account = authorizeAccount(readServer(), request, { allowed: ['owner'] })
+    if (account instanceof Response) return account
     const archived = new URL(request.url).searchParams.get('archived') === 'true'
     return HttpResponse.json(
-      pets.filter((pet) => pet.owner_id === users.owner.id && (pet.archived_at !== null) === archived),
+      pets.filter((pet) => pet.owner_id === account.id && (pet.archived_at !== null) === archived),
     )
   }),
 ]

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { getAccessToken } from '../api/auth-token'
 import { queryKeys } from '../api/queries'
 import { server } from '../mocks/node'
-import { getMockRole, setMockRole } from '../mocks/session'
+import { loginMockAs, readMockCookie } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
 import { AppShell } from './AppShell'
 
@@ -41,7 +41,7 @@ describe('AppShell', () => {
   })
 
   it('клиника: свои разделы, без переключателя питомцев', async () => {
-    setMockRole('clinic')
+    loginMockAs('clinic')
     renderShell()
     const nav = await screen.findByRole('navigation', { name: 'Разделы' })
     expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['Записи', 'Врачи'])
@@ -77,7 +77,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
     expect(getAccessToken()).toBeNull()
-    expect(getMockRole()).toBe('guest')
+    expect(readMockCookie()).toBeNull()
     expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
     expect(localStorage.getItem('pawchito:logout-pending')).toBeNull()
   })
