@@ -1,15 +1,17 @@
-"""Эндпоинты /api/auth/*: регистрация и вход (контракты, раздел 1)."""
+"""Эндпоинты /api/auth/*: регистрация и вход, обмен токена и выход."""
 
 from fastapi import APIRouter, HTTPException, Response, status
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.cookies import set_refresh_cookie
-from app.routers.deps import AuthServiceDep
+from app.core.cookies import clear_refresh_cookie, set_refresh_cookie
+from app.routers.deps import AuthServiceDep, RefreshCookie
 from app.schemas.auth import LoginIn, RegisterIn, RegisterOut, TokenOut
 from app.schemas.user import UserOut
 from app.services.auth import (
     EmailTakenError,
     InvalidCredentialsError,
+    InvalidRefreshTokenError,
     IssuedTokens,
     UserBlockedError,
 )
@@ -47,3 +49,26 @@ def login(data: LoginIn, response: Response, service: AuthServiceDep) -> TokenOu
     except UserBlockedError:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Аккаунт заблокирован") from None
     return _token_out(response, tokens)
+
+
+@router.post("/refresh", response_model=TokenOut, status_code=status.HTTP_200_OK)
+def refresh(
+    response: Response, service: AuthServiceDep, refresh_token: RefreshCookie = None
+) -> TokenOut | JSONResponse:
+    try:
+        tokens = service.refresh(refresh_token)
+    except InvalidRefreshTokenError:
+        # Ответ возвращаем, а не бросаем HTTPException: исключение откатило бы транзакцию
+        # в get_db, и отзыв всех сессий при повторном использовании токена не сохранился бы.
+        error = JSONResponse({"detail": "Сессия истекла, войдите снова"}, status_code=401)
+        clear_refresh_cookie(error)
+        return error
+    return _token_out(response, tokens)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    response: Response, service: AuthServiceDep, refresh_token: RefreshCookie = None
+) -> None:
+    service.logout(refresh_token)
+    clear_refresh_cookie(response)

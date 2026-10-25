@@ -11,9 +11,16 @@ from app.repositories.base import BaseRepository
 class RefreshTokenRepository(BaseRepository[RefreshToken]):
     model = RefreshToken
 
-    def get_by_hash(self, token_hash: str) -> RefreshToken | None:
-        """Токен по хешу из cookie: hash_refresh_token(cookie) из core/security.py."""
+    def get_by_hash(self, token_hash: str, *, for_update: bool = False) -> RefreshToken | None:
+        """Токен по хешу из cookie: hash_refresh_token(cookie) из core/security.py.
+
+        for_update=True блокирует строку до конца транзакции (SELECT ... FOR UPDATE):
+        два одновременных refresh одним токеном не выпустят две новые сессии —
+        второй дождётся первого и увидит, что токен уже отозван.
+        """
         stmt = select(RefreshToken).where(RefreshToken.token_hash == token_hash)
+        if for_update:
+            stmt = stmt.with_for_update()
         return self.session.scalars(stmt).one_or_none()
 
     def revoke(self, token: RefreshToken, now: datetime) -> None:
