@@ -63,5 +63,14 @@ it('тексты клиентских проверок форм', () => {
     passwordLength: 'Пароль — не короче 8 символов',
     passwordMismatch: 'Пароли не совпадают',
     recoveryCode: 'Код в формате XXXX-XXXX-XXXX-XXXX',
+    phone: 'Телефон: +7 и 10 цифр',
+    closesAfterOpens: 'Закрытие — позже открытия',
+    workDays: 'Выберите хотя бы один рабочий день',
+  })
+})
+
+describe('тексты админки клиник', () => {
+  it('409 при создании аккаунта клиники', () => {
+    expect(errorMessage(new ApiError(409, 'conflict'), 'clinic-account')).toBe('У клиники уже есть аккаунт или email занят.')
   })
 })

@@ -2,7 +2,16 @@ import { pluralize } from '../lib/format'
 import { ApiError, isNetworkError } from './errors'
 
 /** Где случилась ошибка: от этого зависит текст для 400–409. */
-export type ErrorContext = 'login' | 'register' | 'recover' | 'change-password' | 'recovery-code' | 'profile' | 'default'
+export type ErrorContext =
+  | 'login'
+  | 'register'
+  | 'recover'
+  | 'change-password'
+  | 'recovery-code'
+  | 'profile'
+  | 'clinic'
+  | 'clinic-account'
+  | 'default'
 
 const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
 const SERVER = 'Сервис временно недоступен. Попробуйте через несколько минут.'
@@ -15,6 +24,7 @@ const byContext: Partial<Record<ErrorContext, Partial<Record<number, string>>>> 
   recover: { 400: 'Неверный email или код.' },
   'change-password': { 400: 'Неверный текущий пароль.' },
   'recovery-code': { 400: 'Неверный текущий пароль.' },
+  'clinic-account': { 409: 'У клиники уже есть аккаунт или email занят.' },
 }
 
 /** Текст ошибки запроса для пользователя. Ошибки полей 422 — в ApiError.fieldErrors. */
@@ -40,6 +50,9 @@ export const validationMessages = {
   passwordLength: 'Пароль — не короче 8 символов',
   passwordMismatch: 'Пароли не совпадают',
   recoveryCode: 'Код в формате XXXX-XXXX-XXXX-XXXX',
+  phone: 'Телефон: +7 и 10 цифр',
+  closesAfterOpens: 'Закрытие — позже открытия',
+  workDays: 'Выберите хотя бы один рабочий день',
 } as const
 
 /** Почему пользователь оказался на экране входа. */
