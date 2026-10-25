@@ -31,6 +31,8 @@ docs/       требования, бизнес-правила, глоссари�
 
 ```bash
 cp .env.example .env
+# в .env заполнить JWT_SECRET — сгенерировать можно так:
+docker run --rm python:3.12-slim python -c "import secrets; print(secrets.token_urlsafe(64))"
 docker compose up --build
 ```
 
@@ -38,6 +40,10 @@ docker compose up --build
 |---|---|
 | Фронтенд | http://localhost:5173 |
 | API и Swagger | http://localhost:8000/docs |
+| PostgreSQL | localhost:5432 |
+| Redis | localhost:6379 |
+
+Фронтенд в Docker по умолчанию работает на моках MSW; чтобы запросы шли на бэкенд — `VITE_API_MOCKS=false` в `.env`.
 
 Миграции применяются при старте бэкенда.
 
@@ -49,6 +55,16 @@ docker compose up --build
 | Новая миграция | `docker compose exec backend alembic revision --autogenerate -m "..."` |
 | Тесты бэкенда | `docker compose exec backend pytest` |
 | Логи | `docker compose exec redis redis-cli XREVRANGE logs + - COUNT 50` |
+
+## CI
+
+GitHub Actions (`.github/workflows/ci.yml`) на каждый PR и на push в `main`:
+
+- бэкенд — `ruff check`, `ruff format --check`, `mypy app`, `pytest`; миграции с нуля и `alembic check` — как только в бэкенде появится Alembic (#10);
+- фронтенд — `pnpm lint`, `pnpm test`, `pnpm build`;
+- сборка образов `backend` и `frontend`.
+
+Чтобы PR с красным CI нельзя было слить, проверки нужно отметить обязательными в защите `main` (Settings → Branches; делает администратор репозитория).
 
 ## Правила
 

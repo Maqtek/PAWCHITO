@@ -1,0 +1,74 @@
+# Разработка: docker compose up --build
+# Переменные берутся из .env в корне репозитория (скопировать из .env.example).
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?заполните POSTGRES_USER в .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?заполните POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:?заполните POSTGRES_DB в .env}
+    volumes:
+      # с PostgreSQL 18 том монтируется в /var/lib/postgresql, а не в .../data
+      - pgdata:/var/lib/postgresql
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    # AOF — логи переживают перезапуск; 256 МБ под VPS на 2 ГБ.
+    # noeviction: при нехватке памяти запись отклоняется, и бэкенд пишет логи в stdout.
+    # Старые записи обрезает сам бэкенд (XADD MINID, 14 дней).
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build: ./backend
+    # --reload и том с кодом: правки и сгенерированные миграции сразу видны и в контейнере, и в репозитории
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
+    environment:
+      # в контейнере база и Redis доступны по именам сервисов, а не по localhost
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?заполните JWT_SECRET в .env, команда есть в .env.example}
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    environment:
+      # прокси Vite отправляет /api в контейнер бэкенда
+      API_PROXY_TARGET: http://backend:8000
+      VITE_API_MOCKS: ${VITE_API_MOCKS:-true}
+    ports:
+      - "5173:5173"
+
+volumes:
+  pgdata:
+  redisdata:
