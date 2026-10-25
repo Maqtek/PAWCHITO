@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 import { useSyncExternalStore } from 'react'
 import { petsQuery } from '../../api/queries'
 import type { Pet } from '../../api/schema'
@@ -32,15 +32,26 @@ function selectPet(id: number) {
   listeners.forEach((listener) => listener())
 }
 
+/** Забыть выбор при выходе: следующий вход начнётся с первого питомца. */
+export function forgetSelectedPet(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // хранилище недоступно — забывать нечего
+  }
+  listeners.forEach((listener) => listener())
+}
+
 export function useSelectedPet(): {
   pets: Pet[]
   pet: Pet | null
   select: (id: number) => void
   isPending: boolean
   isError: boolean
+  refetch: UseQueryResult<Pet[]>['refetch']
 } {
-  const { data: pets = [], isPending, isError } = useQuery(petsQuery)
+  const { data: pets = [], isPending, isError, refetch } = useQuery(petsQuery)
   const selectedId = useSyncExternalStore(subscribe, readSelectedId, () => null)
   const pet = pets.find((item) => item.id === selectedId) ?? pets[0] ?? null
-  return { pets, pet, select: selectPet, isPending, isError }
+  return { pets, pet, select: selectPet, isPending, isError, refetch }
 }

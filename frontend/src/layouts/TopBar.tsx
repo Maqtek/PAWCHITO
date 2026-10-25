@@ -14,7 +14,8 @@ export function TopBar({ user, homePath }: { user: User; homePath: string }) {
       <div className="ml-auto flex min-w-0 items-center gap-2">
         {user.role === 'owner' && <PetSwitcher />}
         {user.role !== 'admin' && <NotificationBell />}
-        <div className="md:hidden">
+        {/* На низком экране (телефон боком) меню в сайдбаре уходит под сгиб — дублируем его здесь. */}
+        <div className="md:hidden [@media(max-height:560px)]:block">
           <UserMenu user={user} compact />
         </div>
       </div>

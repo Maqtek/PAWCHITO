@@ -120,6 +120,8 @@ describe('Dropdown', () => {
 
     await user.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    // Длинное меню на низком экране прокручивается внутри, а не уходит за край.
+    expect(document.getElementById(trigger.getAttribute('aria-controls')!)).toHaveClass('max-h-[70dvh]', 'overflow-y-auto')
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('button', { name: 'Пункт' })).not.toBeInTheDocument()
 

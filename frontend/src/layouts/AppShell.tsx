@@ -18,7 +18,7 @@ export function AppShell() {
       <Sidebar user={user} items={items} />
       <div className="flex min-h-dvh min-w-0 flex-col pb-20 md:pb-0">
         <TopBar user={user} homePath={homePathFor(user.role)} />
-        <main className="flex-1 px-4 pt-2 pb-8 md:px-10">
+        <main className="flex-1 px-4 pt-4 pb-8 md:px-10 md:pt-2">
           <div className="mx-auto w-full max-w-6xl">
             <Outlet />
           </div>

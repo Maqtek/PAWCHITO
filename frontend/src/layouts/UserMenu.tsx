@@ -5,6 +5,7 @@ import { setAccessToken } from '../api/auth-token'
 import { api } from '../api/client'
 import type { User } from '../api/schema'
 import { Avatar, Dropdown, menuItemClass } from '../components/ui'
+import { forgetSelectedPet } from '../features/pets/useSelectedPet'
 import { roleLabel } from '../lib/labels'
 
 export function UserMenu({ user, compact = false }: { user: User; compact?: boolean }) {
@@ -18,13 +19,14 @@ export function UserMenu({ user, compact = false }: { user: User; compact?: bool
       // сеть недоступна — выходим локально
     } finally {
       setAccessToken(null)
+      forgetSelectedPet()
       queryClient.clear()
       navigate('/login', { replace: true })
     }
   }
 
   const button = compact ? (
-    <Avatar name={user.full_name} className="size-9" />
+    <Avatar name={user.full_name} className="size-10" />
   ) : (
     <span className="flex items-center gap-3 rounded-xl p-2 hover:bg-surface-muted">
       <Avatar name={user.full_name} />
@@ -36,8 +38,13 @@ export function UserMenu({ user, compact = false }: { user: User; compact?: bool
     </span>
   )
 
+  // Доступное имя начинается с видимого текста кнопки (WCAG 2.5.3): у компактной видны только инициалы.
+  const label = compact
+    ? `Меню пользователя: ${user.full_name}`
+    : `${user.full_name}, ${roleLabel[user.role]} — меню пользователя`
+
   return (
-    <Dropdown label="Меню пользователя" button={button} align={compact ? 'end' : 'start'} placement={compact ? 'bottom' : 'top'}>
+    <Dropdown label={label} button={button} align={compact ? 'end' : 'start'} placement={compact ? 'bottom' : 'top'}>
       {(close) => (
         <>
           <Link to="/profile" className={menuItemClass} onClick={close}>
