@@ -5,6 +5,7 @@ import { RequireRole } from '../features/session/RequireRole'
 import { AppShell } from '../layouts/AppShell'
 import { AdminClinicsPage } from '../pages/admin/AdminClinicsPage'
 import { LoginPage } from '../pages/auth/LoginPage'
+import { RegisterPage } from '../pages/auth/RegisterPage'
 import { ClinicAppointmentsPage } from '../pages/clinic/ClinicAppointmentsPage'
 import { ClinicPetPage } from '../pages/clinic/ClinicPetPage'
 import { ClinicVetsPage } from '../pages/clinic/ClinicVetsPage'
@@ -26,6 +27,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route
         element={
           <RequireRole allow={['owner', 'clinic', 'admin']}>

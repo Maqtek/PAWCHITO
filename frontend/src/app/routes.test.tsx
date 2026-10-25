@@ -43,6 +43,11 @@ describe('маршруты', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
   })
 
+  it('вошедший на /register уходит на главную', async () => {
+    renderWithProviders(<AppRoutes />, { route: '/register' })
+    expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
+  })
+
   it('неизвестный адрес', async () => {
     renderWithProviders(<AppRoutes />, { route: '/nope' })
     expect(await screen.findByRole('heading', { level: 1, name: 'Страница не найдена' })).toBeInTheDocument()
