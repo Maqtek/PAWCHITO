@@ -19,6 +19,8 @@ export const queryKeys = {
   me: ['me'] as const,
   pets: ['pets'] as const,
   unreadCount: ['notifications', 'unread-count'] as const,
+  adminClinics: ['admin', 'clinics'] as const,
+  adminClinic: (id: number) => ['admin', 'clinics', id] as const,
 }
 
 export const meQuery = queryOptions({
@@ -37,3 +39,14 @@ export const unreadCountQuery = queryOptions({
   // БП §9: опрос раз в 60 секунд, без WebSocket.
   refetchInterval: 60_000,
 })
+
+export const adminClinicsQuery = queryOptions({
+  queryKey: queryKeys.adminClinics,
+  queryFn: () => unwrap(api.GET('/admin/clinics')),
+})
+
+export const adminClinicQuery = (id: number) =>
+  queryOptions({
+    queryKey: queryKeys.adminClinic(id),
+    queryFn: () => unwrap(api.GET('/admin/clinics/{id}', { params: { path: { id } } })),
+  })
