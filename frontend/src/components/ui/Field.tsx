@@ -1,5 +1,7 @@
+import { Eye, EyeOff } from 'lucide-react'
 import {
   useId,
+  useState,
   type InputHTMLAttributes,
   type ReactNode,
   type SelectHTMLAttributes,
@@ -13,7 +15,7 @@ const controlClass =
 interface FieldOwnProps {
   label: string
   hint?: string
-  error?: string
+  error?: ReactNode
 }
 
 function useField({ hint, error }: Pick<FieldOwnProps, 'hint' | 'error'>) {
@@ -69,6 +71,60 @@ export function TextField({ label, hint, error, className, ...props }: FieldOwnP
         {...props}
       />
     </FieldFrame>
+  )
+}
+
+/** Поле пароля с кнопкой «Показать пароль»: подпись постоянная, состояние — aria-pressed. */
+export function PasswordField({
+  label,
+  hint,
+  error,
+  className,
+  ...props
+}: FieldOwnProps & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const field = useField({ hint, error })
+  const [visible, setVisible] = useState(false)
+  return (
+    <FieldFrame id={field.id} label={label} hint={hint} hintId={field.hintId} error={error} errorId={field.errorId}>
+      <div className="relative">
+        <input
+          id={field.id}
+          type={visible ? 'text' : 'password'}
+          aria-invalid={field.invalid}
+          aria-describedby={field.describedBy}
+          // Свой глаз Edge рисовался бы рядом с нашей кнопкой.
+          className={cn(controlClass, 'pr-11 [&::-ms-reveal]:hidden', className)}
+          {...props}
+        />
+        <button
+          type="button"
+          aria-label="Показать пароль"
+          aria-pressed={visible}
+          disabled={props.disabled}
+          onClick={() => setVisible((current) => !current)}
+          className="absolute inset-y-0 right-0 grid w-11 cursor-pointer place-items-center rounded-r-xl text-ink-muted transition-colors hover:text-ink"
+        >
+          {visible ? <EyeOff aria-hidden className="size-4" /> : <Eye aria-hidden className="size-4" />}
+        </button>
+      </div>
+    </FieldFrame>
+  )
+}
+
+/** Чекбокс с подписью справа; клик по подписи переключает его. */
+export function CheckboxField({
+  label,
+  className,
+  ...props
+}: { label: ReactNode } & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
+  const id = useId()
+  return (
+    <div className={cn('flex items-start gap-3', className)}>
+      <input id={id} type="checkbox" className="mt-0.5 size-5 shrink-0 cursor-pointer accent-primary" {...props} />
+      <label htmlFor={id} className="cursor-pointer text-sm font-bold text-ink">
+        {label}
+      </label>
+    </div>
   )
 }
 

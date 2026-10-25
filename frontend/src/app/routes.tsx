@@ -4,10 +4,12 @@ import { Spinner } from '../components/ui'
 import { RequireRole } from '../features/session/RequireRole'
 import { AppShell } from '../layouts/AppShell'
 import { AdminClinicsPage } from '../pages/admin/AdminClinicsPage'
+import { LoginPage } from '../pages/auth/LoginPage'
+import { RecoverPage } from '../pages/auth/RecoverPage'
+import { RegisterPage } from '../pages/auth/RegisterPage'
 import { ClinicAppointmentsPage } from '../pages/clinic/ClinicAppointmentsPage'
 import { ClinicPetPage } from '../pages/clinic/ClinicPetPage'
 import { ClinicVetsPage } from '../pages/clinic/ClinicVetsPage'
-import { LoginPage } from '../pages/common/LoginPage'
 import { NotFoundPage } from '../pages/common/NotFoundPage'
 import { ProfilePage } from '../pages/common/ProfilePage'
 import { AppointmentsPage } from '../pages/owner/AppointmentsPage'
@@ -26,6 +28,8 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/recover" element={<RecoverPage />} />
       <Route
         element={
           <RequireRole allow={['owner', 'clinic', 'admin']}>

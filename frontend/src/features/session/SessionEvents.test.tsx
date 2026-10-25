@@ -1,10 +1,11 @@
 import { act, screen, waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { Route, Routes } from 'react-router-dom'
+import { Route, Routes, useNavigationType } from 'react-router-dom'
 import { afterEach, describe, expect, it } from 'vitest'
 import { endSession, signOut } from '../../api/session'
 import { server } from '../../mocks/node'
-import { LoginPage } from '../../pages/common/LoginPage'
+import { loginMockAs, logoutMock } from '../../mocks/session'
+import { LoginPage } from '../../pages/auth/LoginPage'
 import { renderWithProviders } from '../../test/render'
 
 const openTabs: BroadcastChannel[] = []
@@ -19,12 +20,20 @@ afterEach(() => {
   openTabs.splice(0).forEach((channel) => channel.close())
 })
 
+/** Как изменилась история при последнем переходе: POP, PUSH или REPLACE. */
+function NavigationProbe() {
+  return <output data-testid="navigation">{useNavigationType()}</output>
+}
+
 function renderApp(route = '/') {
   return renderWithProviders(
-    <Routes>
-      <Route path="/" element={<p>Кабинет</p>} />
-      <Route path="/login" element={<LoginPage />} />
-    </Routes>,
+    <>
+      <Routes>
+        <Route path="/" element={<p>Кабинет</p>} />
+        <Route path="/login" element={<LoginPage />} />
+      </Routes>
+      <NavigationProbe />
+    </>,
     { route },
   )
 }
@@ -35,6 +44,7 @@ describe('SessionEvents', () => {
     const { queryClient } = renderApp()
     queryClient.setQueryData(['probe'], 1)
 
+    logoutMock() // сервер уже отозвал сессию — восстановить её на экране входа нечем
     act(() => endSession())
 
     expect(await screen.findByText('Сессия истекла — войдите снова')).toBeInTheDocument()
@@ -53,25 +63,57 @@ describe('SessionEvents', () => {
     ).toBeInTheDocument()
   })
 
-  it('подтверждённый выход: экран входа без причины', async () => {
+  it('подтверждённый выход: экран входа без причины, запись истории заменена', async () => {
     renderApp()
+    expect(screen.getByTestId('navigation')).toHaveTextContent('POP')
 
     await act(() => signOut())
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
-    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    // Причина показывается вместе с формой — проверяем её отсутствие, когда форма уже на экране.
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    expect(screen.queryByText(/Сессия истекла|Вы вышли/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
   })
 
   it('выход в другой вкладке: экран входа с причиной', async () => {
     renderApp()
+    logoutMock() // другая вкладка вышла и стёрла общую cookie
     otherTab().postMessage({ type: 'signed-out' })
     expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
   })
 
-  it('вход в другой вкладке: из экрана входа — в кабинет', async () => {
+  it('выход в другой вкладке: кэш очищен, питомец забыт', async () => {
+    localStorage.setItem('pawchito:selected-pet-id', '11')
+    const { queryClient } = renderApp()
+    queryClient.setQueryData(['probe'], 1)
+    logoutMock()
+
+    otherTab().postMessage({ type: 'signed-out' })
+
+    expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
+    expect(queryClient.getQueryData(['probe'])).toBeUndefined()
+    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+  })
+
+  it('вход в другой вкладке: из экрана входа — в кабинет, запись истории заменена', async () => {
+    logoutMock()
     renderApp('/login')
+    // Форма на экране — проверка входа закончилась гостем; дальше в кабинет ведёт только сообщение вкладки.
+    expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
+    loginMockAs('owner') // другая вкладка вошла и записала cookie
     otherTab().postMessage({ type: 'signed-in' })
     expect(await screen.findByText('Кабинет')).toBeInTheDocument()
+    expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
+  })
+
+  it('после размонтирования события сессии кэш не трогают', () => {
+    const { queryClient, unmount } = renderApp()
+    unmount()
+
+    queryClient.setQueryData(['probe'], 1)
+    endSession()
+
+    expect(queryClient.getQueryData(['probe'])).toBe(1)
   })
 
   it('при запуске довыходит на сервере, если выход был начат без сети', async () => {

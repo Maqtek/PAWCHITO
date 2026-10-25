@@ -5,7 +5,7 @@ import { api } from '../api/client'
 import { errorMessage } from '../api/error-messages'
 import { unwrap } from '../api/queries'
 import type { Role } from '../api/schema'
-import { signIn } from '../api/session'
+import { signInWith } from '../api/session'
 import { homePathFor } from '../app/navigation'
 import { Button, Eyebrow } from '../components/ui'
 import { SEED_PASSWORD } from './server-state'
@@ -33,8 +33,7 @@ export function MockLogin() {
   async function loginAs({ email, role }: SeedAccount) {
     setError(null)
     try {
-      const token = await unwrap(api.POST('/auth/login', { body: { email, password: SEED_PASSWORD } }))
-      signIn(token.access_token)
+      await signInWith(() => unwrap(api.POST('/auth/login', { body: { email, password: SEED_PASSWORD } })))
       queryClient.clear()
       navigate(homePathFor(role), { replace: true })
     } catch (caught) {
