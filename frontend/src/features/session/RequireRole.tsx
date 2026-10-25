@@ -7,7 +7,14 @@ import type { Role } from '../../api/schema'
 import { homePathFor } from '../../app/navigation'
 import { Button, EmptyState, Spinner } from '../../components/ui'
 
-export function RequireRole({ allow, children }: { allow: Role[]; children: ReactNode }) {
+interface RequireRoleProps {
+  allow: Role[]
+  /** Экран смены временного пароля: пускает только с must_change_password, остальных — на главную роли. */
+  passwordChange?: boolean
+  children: ReactNode
+}
+
+export function RequireRole({ allow, passwordChange = false, children }: RequireRoleProps) {
   const { data: user, error, isPending, refetch } = useQuery(meQuery)
 
   if (isPending) {
@@ -30,6 +37,11 @@ export function RequireRole({ allow, children }: { allow: Role[]; children: Reac
         />
       </div>
     )
+  }
+  // Временный пароль: пока не сменён, доступен только экран смены, а он — только с временным паролем.
+  // Строго === true: без поля в ответе undefined !== false увёл бы всех по кругу через /change-password.
+  if ((user.must_change_password === true) !== passwordChange) {
+    return <Navigate to={passwordChange ? homePathFor(user.role) : '/change-password'} replace />
   }
   if (!allow.includes(user.role)) return <Navigate to={homePathFor(user.role)} replace />
   return children

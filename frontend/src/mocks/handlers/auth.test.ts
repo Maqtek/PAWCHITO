@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { apiBaseUrl } from '../../api/base-url'
 import { readServer, SEED_PASSWORD, updateServer, writeMockCookie } from '../server-state'
-import { loginMockAs, logoutMock, readMockCookie, resetMockServer } from '../session'
+import { loginMockAs, logoutMock, readMockCookie, requireMockPasswordChange, resetMockServer } from '../session'
 
 /** Запрос к мокам напрямую, без клиента и сессии приложения. */
 function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
@@ -156,6 +156,24 @@ describe('восстановление', () => {
     expect((await refresh()).status).toBe(401)
     expect((await login('owner@example.com', 'newsecret1')).status).toBe(200)
   })
+
+  it.each(['k7qm 2xpa 9rtd 4wnb', 'K7QM2XPA9RTD4WNB'])('200: код «%s» — регистр и разделители не важны', async (code) => {
+    const response = await call('POST', '/auth/recover', {
+      body: { email: 'owner@example.com', recovery_code: code, new_password: 'newsecret1' },
+    })
+    expect(response.status).toBe(200)
+  })
+
+  it.each([
+    ['15', 'K7QM-2XPA-9RTD-4WN'],
+    ['17', 'K7QM-2XPA-9RTD-4WNBX'],
+  ])('422: %s символов после очистки — не код, попытка не считается', async (_length, code) => {
+    const response = await call('POST', '/auth/recover', {
+      body: { email: 'owner@example.com', recovery_code: code, new_password: 'newsecret1' },
+    })
+    expect(response.status).toBe(422)
+    expect(readServer().attempts).toEqual({})
+  })
 })
 
 describe('временный пароль и смена пароля', () => {
@@ -185,6 +203,38 @@ describe('временный пароль и смена пароля', () => {
     const me = await call('GET', '/users/me', { token: fresh })
     expect(await me.json()).toMatchObject({ must_change_password: false })
   })
+
+  it('смена пароля без токена и с невалидным телом — 401, а не 422', async () => {
+    expect((await call('POST', '/auth/change-password', { body: { current_password: 1 } })).status).toBe(401)
+  })
+
+  it('PATCH /users/me с временным паролем — 403 password_change_required, даже с невалидным телом', async () => {
+    const token = await accessToken('clinic-new@example.com')
+    const valid = await call('PATCH', '/users/me', { token, body: { full_name: 'Клиника' } })
+    expect(valid.status).toBe(403)
+    expect(await valid.json()).toEqual({ detail: 'password_change_required' })
+    expect((await call('PATCH', '/users/me', { token, body: { full_name: 5 } })).status).toBe(403)
+  })
+
+  it('выход с временным паролем работает', async () => {
+    await login('clinic-new@example.com')
+    expect((await call('POST', '/auth/logout')).status).toBe(204)
+    expect(readMockCookie()).toBeNull()
+  })
+
+  it('после смены пароля новая cookie обменивается, старая — нет', async () => {
+    const token = await accessToken('clinic-new@example.com')
+    const before = readMockCookie()
+    const changed = await call('POST', '/auth/change-password', {
+      token,
+      body: { current_password: SEED_PASSWORD, new_password: 'newsecret1' },
+    })
+    expect(changed.status).toBe(200)
+    expect(readMockCookie()).not.toBe(before)
+    expect((await refresh()).status).toBe(200)
+    writeMockCookie(before)
+    expect((await refresh()).status).toBe(401)
+  })
 })
 
 describe('профиль', () => {
@@ -208,6 +258,64 @@ describe('профиль', () => {
     expect(
       (await call('POST', '/users/me/recovery-code', { token: clinic, body: { current_password: SEED_PASSWORD } })).status,
     ).toBe(403)
+  })
+})
+
+describe('счётчик попыток: смена пароля и новый код', () => {
+  const changePassword = (token: string, current: string) =>
+    call('POST', '/auth/change-password', { token, body: { current_password: current, new_password: 'newsecret1' } })
+  const issueCode = (token: string, current: string) =>
+    call('POST', '/users/me/recovery-code', { token, body: { current_password: current } })
+  const ownerAccount = () => readServer().accounts.find((item) => item.email === 'owner@example.com')
+
+  it('смена пароля: после 5 неверных текущих — 429 с Retry-After даже с верным, и вход тоже 429', async () => {
+    const token = await accessToken('owner@example.com')
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await changePassword(token, 'wrong-pass')).status).toBe(400)
+    }
+    const locked = await changePassword(token, SEED_PASSWORD)
+    expect(locked.status).toBe(429)
+    expect(Number(locked.headers.get('Retry-After'))).toBeGreaterThanOrEqual(899)
+    expect(ownerAccount()?.password).toBe(SEED_PASSWORD)
+    // Тело проверяется раньше паузы: 422 и во время паузы.
+    expect((await changePassword(token, 'x'.repeat(129))).status).toBe(422)
+    expect((await login('owner@example.com')).status).toBe(429)
+  })
+
+  it('новый код: после 5 неверных паролей — 429 с Retry-After даже с верным, код прежний', async () => {
+    const token = await accessToken('owner@example.com')
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect((await issueCode(token, 'wrong-pass')).status).toBe(400)
+    }
+    const locked = await issueCode(token, SEED_PASSWORD)
+    expect(locked.status).toBe(429)
+    expect(Number(locked.headers.get('Retry-After'))).toBeGreaterThanOrEqual(899)
+    expect(ownerAccount()?.recovery_code).toBe('K7QM-2XPA-9RTD-4WNB')
+  })
+
+  it('счётчик общий с входом: 4 неудачи входа и неверный пароль при новом коде — пауза', async () => {
+    const token = await accessToken('owner@example.com')
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect((await login('owner@example.com', 'wrong-pass')).status).toBe(401)
+    }
+    expect((await issueCode(token, 'wrong-pass')).status).toBe(400)
+    expect((await changePassword(token, SEED_PASSWORD)).status).toBe(429)
+  })
+
+  it('верный пароль сбрасывает счётчик', async () => {
+    const token = await accessToken('owner@example.com')
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      expect((await issueCode(token, 'wrong-pass')).status).toBe(400)
+    }
+    expect((await issueCode(token, SEED_PASSWORD)).status).toBe(200)
+    expect(readServer().attempts).toEqual({})
+  })
+
+  it('422: текущий пароль длиннее 128 — попытка не считается', async () => {
+    const token = await accessToken('owner@example.com')
+    expect((await changePassword(token, 'x'.repeat(129))).status).toBe(422)
+    expect((await issueCode(token, 'x'.repeat(129))).status).toBe(422)
+    expect(readServer().attempts).toEqual({})
   })
 })
 
@@ -301,5 +409,24 @@ describe('лимиты полей (как у бэкенда)', () => {
       body: 'не json',
     })
     expect(broken.status).toBe(422)
+  })
+})
+
+describe('requireMockPasswordChange', () => {
+  it('вошедшему аккаунту ставит временный пароль: данные — 403 password_change_required, профиль — 200', async () => {
+    const token = await accessToken('clinic@example.com')
+    expect((await call('GET', '/notifications/unread-count', { token })).status).toBe(200)
+    requireMockPasswordChange()
+    const bell = await call('GET', '/notifications/unread-count', { token })
+    expect(bell.status).toBe(403)
+    expect(await bell.json()).toEqual({ detail: 'password_change_required' })
+    const me = await call('GET', '/users/me', { token })
+    expect(me.status).toBe(200)
+    expect(await me.json()).toMatchObject({ email: 'clinic@example.com', must_change_password: true })
+  })
+
+  it('без cookie — понятная ошибка', () => {
+    logoutMock()
+    expect(() => requireMockPasswordChange()).toThrow('Нет вошедшего аккаунта')
   })
 })

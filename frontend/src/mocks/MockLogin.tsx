@@ -33,7 +33,7 @@ export function MockLogin() {
   async function loginAs({ email, role }: SeedAccount) {
     setError(null)
     try {
-      await signInWith(() => unwrap(api.POST('/auth/login', { body: { email, password: SEED_PASSWORD } })))
+      await signInWith((signal) => unwrap(api.POST('/auth/login', { body: { email, password: SEED_PASSWORD }, signal })))
       queryClient.clear()
       navigate(homePathFor(role), { replace: true })
     } catch (caught) {

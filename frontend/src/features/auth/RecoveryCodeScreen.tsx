@@ -1,6 +1,7 @@
 import { Copy } from 'lucide-react'
 import { Fragment, useEffect, useId, useRef, useState } from 'react'
 import { Button, CheckboxField } from '../../components/ui'
+import { cn } from '../../lib/cn'
 
 type CopyState = 'idle' | 'copied' | 'manual'
 
@@ -10,8 +11,24 @@ const copyMessages: Record<CopyState, string> = {
   manual: 'Выделите код и скопируйте вручную',
 }
 
+interface RecoveryCodeScreenProps {
+  code: string
+  onContinue: () => void
+  /** h2 на экранах авторизации, h3 в модалке профиля со своим h2. */
+  headingLevel?: 'h2' | 'h3'
+  continueLabel?: string
+  /** Например, mt-0 в модалке: верхний отступ рассчитан на карточку входа. */
+  className?: string
+}
+
 /** Код восстановления показывается один раз: копирование, подтверждение и предупреждение при уходе со страницы. */
-export function RecoveryCodeScreen({ code, onContinue }: { code: string; onContinue: () => void }) {
+export function RecoveryCodeScreen({
+  code,
+  onContinue,
+  headingLevel: Heading = 'h2',
+  continueLabel = 'Продолжить',
+  className,
+}: RecoveryCodeScreenProps) {
   const headingId = useId()
   const headingRef = useRef<HTMLHeadingElement>(null)
   const codeRef = useRef<HTMLParagraphElement>(null)
@@ -51,10 +68,10 @@ export function RecoveryCodeScreen({ code, onContinue }: { code: string; onConti
   }
 
   return (
-    <section aria-labelledby={headingId} className="mt-6 flex flex-col gap-4">
-      <h2 id={headingId} ref={headingRef} tabIndex={-1} className="text-lg font-extrabold outline-none">
+    <section aria-labelledby={headingId} className={cn('mt-6 flex flex-col gap-4', className)}>
+      <Heading id={headingId} ref={headingRef} tabIndex={-1} className="text-lg font-extrabold outline-none">
         Сохраните код восстановления
-      </h2>
+      </Heading>
       {/* Между дефисом и буквой браузер строку не переносит — wbr разрешает перенос только между группами. */}
       <p
         ref={codeRef}
@@ -89,7 +106,7 @@ export function RecoveryCodeScreen({ code, onContinue }: { code: string; onConti
         onChange={(event) => setSaved(event.target.checked)}
       />
       <Button fullWidth disabled={!saved} onClick={onContinue}>
-        Продолжить
+        {continueLabel}
       </Button>
     </section>
   )

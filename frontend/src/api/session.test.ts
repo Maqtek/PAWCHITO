@@ -2,13 +2,16 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../mocks/node'
 import { getAccessToken, setAccessToken } from './auth-token'
+import { ApiError, NetworkError } from './errors'
 import {
   endSession,
   ensureSession,
   finishPendingLogout,
   isRestoreUnavailable,
   onSessionChange,
+  reauthenticateWith,
   refreshAccessToken,
+  requirePasswordChange,
   signIn,
   signInWith,
   signOut,
@@ -389,6 +392,14 @@ describe('события сессии', () => {
   })
 })
 
+describe('requirePasswordChange', () => {
+  it('сообщает событием password-change-required', () => {
+    const events = collectEvents()
+    requirePasswordChange()
+    expect(events).toEqual([{ type: 'password-change-required' }])
+  })
+})
+
 describe('signInWith', () => {
   const login = (token = 'new') => async () => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
 
@@ -476,6 +487,134 @@ describe('signInWith', () => {
       }),
     ).rejects.toThrow('401')
     expect(calls).toBe(1)
+  })
+
+  it('передаёт запросу сигнал таймаута', async () => {
+    const signals: AbortSignal[] = []
+    await signInWith(async (signal) => {
+      signals.push(signal)
+      return login()()
+    })
+    expect(signals).toHaveLength(1)
+    expect(signals[0]).toBeInstanceOf(AbortSignal)
+    expect(signals[0].aborted).toBe(false)
+  })
+})
+
+describe('reauthenticateWith', () => {
+  const issued = (token: string) => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
+  const unauthorized = () => new ApiError(401, 'Требуется вход')
+
+  /** Очередь как у Web Locks: задачи по одной, вложенный запрос того же имени ждал бы вечно. */
+  function installQueue() {
+    const names: string[] = []
+    let tail: Promise<unknown> = Promise.resolve()
+    installLocks((name, callback) => {
+      names.push(name)
+      const run = tail.then(callback)
+      tail = run.then(
+        () => undefined,
+        () => undefined,
+      )
+      return run
+    })
+    return names
+  }
+
+  it('запрос в очереди с текущим токеном и сигналом; новый токен ставится, другим вкладкам ничего', async () => {
+    const names = installQueue()
+    const tab = otherTab()
+    setAccessToken('t0')
+    const seen: { token: string; signal: AbortSignal }[] = []
+    const result = await reauthenticateWith(async (token, signal) => {
+      seen.push({ token, signal })
+      return issued('t1')
+    })
+    expect(result.access_token).toBe('t1')
+    expect(seen.map((item) => item.token)).toEqual(['t0'])
+    expect(seen[0].signal).toBeInstanceOf(AbortSignal)
+    expect(names).toEqual(['pawchito:refresh'])
+    expect(getAccessToken()).toBe('t1')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(tab.received).toEqual([])
+  })
+
+  it('на 401 обменивает cookie под той же блокировкой и повторяет один раз', async () => {
+    const names = installQueue()
+    authServer({ refresh: () => tokenResponse('fresh') })
+    setAccessToken('stale')
+    const tokens: string[] = []
+    const result = await reauthenticateWith(async (token) => {
+      tokens.push(token)
+      if (token === 'stale') throw unauthorized()
+      return issued('changed')
+    })
+    expect(tokens).toEqual(['stale', 'fresh'])
+    expect(names).toEqual(['pawchito:refresh'])
+    expect(result.access_token).toBe('changed')
+    expect(getAccessToken()).toBe('changed')
+  })
+
+  it('обмен отказал — событие expired и ошибка 401', async () => {
+    authServer({ refresh: () => HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 }) })
+    const events = collectEvents()
+    setAccessToken('stale')
+    await expect(
+      reauthenticateWith(async () => {
+        throw unauthorized()
+      }),
+    ).rejects.toMatchObject({ status: 401 })
+    expect(events).toEqual([{ type: 'expired' }])
+    expect(getAccessToken()).toBeNull()
+  })
+
+  it('обмен недоступен — NetworkError, сессия не завершается', async () => {
+    authServer({ refresh: () => HttpResponse.json({ detail: 'Ошибка' }, { status: 503 }) })
+    const events = collectEvents()
+    setAccessToken('stale')
+    await expect(
+      reauthenticateWith(async () => {
+        throw unauthorized()
+      }),
+    ).rejects.toBeInstanceOf(NetworkError)
+    expect(events).toEqual([])
+    expect(getAccessToken()).toBe('stale')
+  })
+
+  it('обмен этой вкладки, начатый раньше, не теряет токен: его ждём до очереди', async () => {
+    installQueue()
+    const gate = createGate()
+    authServer({
+      refresh: async () => {
+        await gate.opened
+        return tokenResponse('fresh')
+      },
+    })
+    setAccessToken('stale')
+    const refreshing = refreshAccessToken()
+    const tokens: string[] = []
+
+    const changing = reauthenticateWith(async (token) => {
+      tokens.push(token)
+      return issued('changed')
+    })
+    gate.release()
+
+    await expect(refreshing).resolves.toEqual({ status: 'ok', token: 'fresh' })
+    await changing
+    expect(tokens).toEqual(['fresh'])
+  })
+
+  it('другая ошибка запроса пробрасывается без обмена, токен прежний', async () => {
+    const calls = authServer()
+    setAccessToken('t0')
+    await expect(
+      reauthenticateWith(async () => {
+        throw new ApiError(400, 'Неверный текущий пароль')
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(calls.refresh).toBe(0)
+    expect(getAccessToken()).toBe('t0')
   })
 })
 

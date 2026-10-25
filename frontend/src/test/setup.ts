@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeEach } from 'vitest'
 import { resetSessionForTests } from '../api/session'
 import { server } from '../mocks/node'
 import { loginMockAs, resetMockServer } from '../mocks/session'
+import { settleRenderedClients } from './render'
 
 // Слушаем сразу: модули тестов импортируются раньше, чем срабатывают хуки.
 server.listen({ onUnhandledFrame: 'error' })
@@ -26,7 +27,9 @@ beforeEach(() => {
   loginMockAs('owner')
 })
 
-afterEach(() => {
+afterEach(async () => {
+  // До сброса моков: иначе поздний ответ прошлого теста придёт уже к следующему.
+  await settleRenderedClients()
   cleanup()
   server.resetHandlers()
   resetSessionForTests()
