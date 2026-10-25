@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { sessionReasonMessage } from '../../api/error-messages'
 import type { Role } from '../../api/schema'
 import { refreshAccessToken, signIn } from '../../api/session'
 import { Button, Card, Eyebrow } from '../../components/ui'
@@ -14,6 +15,8 @@ const MOCK_ROLES: Role[] = ['owner', 'clinic', 'admin']
 export function LoginPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const location = useLocation()
+  const reason = sessionReasonMessage((location.state as { reason?: unknown } | null)?.reason)
 
   async function loginAs(role: Role) {
     // Временно до мок-сервера: роль в моках, токен — обменом cookie.
@@ -30,6 +33,11 @@ export function LoginPage() {
       <Card className="w-full max-w-sm p-8">
         <Logo />
         <h1 className="mt-6 text-2xl font-extrabold">Вход</h1>
+        {reason && (
+          <p role="status" className="mt-4 rounded-xl bg-sand p-3 text-sm text-sand-ink">
+            {reason}
+          </p>
+        )}
         <p className="mt-2 text-sm text-ink-muted">Вход по email и паролю появится на этапе 2 роадмапа.</p>
         {mocksEnabled && (
           <div className="mt-6">

@@ -1,30 +1,11 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { Ellipsis, LogOut, UserRound } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
-import { setAccessToken } from '../api/auth-token'
-import { api } from '../api/client'
+import { Link } from 'react-router-dom'
 import type { User } from '../api/schema'
+import { signOut } from '../api/session'
 import { Avatar, Dropdown, menuItemClass } from '../components/ui'
-import { forgetSelectedPet } from '../features/pets/useSelectedPet'
 import { roleLabel } from '../lib/labels'
 
 export function UserMenu({ user, compact = false }: { user: User; compact?: boolean }) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-
-  async function logout() {
-    try {
-      await api.POST('/auth/logout')
-    } catch {
-      // сеть недоступна — выходим локально
-    } finally {
-      setAccessToken(null)
-      forgetSelectedPet()
-      queryClient.clear()
-      navigate('/login', { replace: true })
-    }
-  }
-
   const button = compact ? (
     <Avatar name={user.full_name} className="size-10" />
   ) : (
@@ -56,7 +37,8 @@ export function UserMenu({ user, compact = false }: { user: User; compact?: bool
             className={menuItemClass}
             onClick={() => {
               close()
-              void logout()
+              // Очистку кэша и переход на /login делает SessionEvents.
+              void signOut()
             }}
           >
             <LogOut aria-hidden className="size-4" />
