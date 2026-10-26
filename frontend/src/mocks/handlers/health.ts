@@ -19,7 +19,7 @@ import {
   readPeriod,
 } from '../access'
 import { isoDateError, pastDateError } from '../date-validation'
-import { conditionKindError, conditionTitleError, levelError, vaccineNameError, weightError } from '../health-validation'
+import { conditionChecks, levelError, vaccineNameError, weightError } from '../health-validation'
 import { fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
 import { addCondition, addObservation, addVaccination, readServer, updateServer } from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
@@ -65,13 +65,7 @@ export const healthHandlers = [
     return updateServer((state) => {
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
-      const invalid = validateBody({
-        kind: conditionKindError(raw.kind),
-        title: conditionTitleError(raw.title),
-        description: sent(raw, 'description')
-          ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax)
-          : null,
-      })
+      const invalid = validateBody(conditionChecks(raw, { creating: true }))
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
@@ -85,13 +79,7 @@ export const healthHandlers = [
     return updateServer((state) => {
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
-      const invalid = validateBody({
-        kind: sent(raw, 'kind') ? conditionKindError(raw.kind) : null,
-        title: sent(raw, 'title') ? conditionTitleError(raw.title) : null,
-        description: sent(raw, 'description')
-          ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax)
-          : null,
-      })
+      const invalid = validateBody(conditionChecks(raw, { creating: false }))
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()

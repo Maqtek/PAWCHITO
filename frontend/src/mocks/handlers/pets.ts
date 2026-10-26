@@ -3,7 +3,7 @@ import type { PetCreate, PetUpdate } from '../../api/schema'
 import { authorizeOwner, findPet, petNotFound } from '../access'
 import { readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
-import { birthDateError, breedError, petNameError, sexError, speciesError } from '../pet-validation'
+import { petChecks } from '../pet-validation'
 import { cancelFutureAppointments, newPet, readServer, updateServer } from '../server-state'
 import { normalizeText } from '../text-validation'
 
@@ -28,14 +28,7 @@ export const petHandlers = [
     return updateServer((state) => {
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
-      const sent = (field: string) => field in raw
-      const invalid = validateBody({
-        name: petNameError(raw.name),
-        species: speciesError(raw.species),
-        breed: sent('breed') ? breedError(raw.breed) : null,
-        birth_date: sent('birth_date') ? birthDateError(raw.birth_date) : null,
-        sex: sent('sex') ? sexError(raw.sex) : null,
-      })
+      const invalid = validateBody(petChecks(raw, { creating: true }))
       if (invalid) return invalid
       const body = raw as PetCreate
       // Фото и статус ухода из тела не берутся: их ставит только клиника.
@@ -68,14 +61,7 @@ export const petHandlers = [
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       // Проверяются только присланные поля; null проходит только у породы и даты рождения — он их убирает.
-      const sent = (field: string) => field in raw
-      const invalid = validateBody({
-        name: sent('name') ? petNameError(raw.name) : null,
-        species: sent('species') ? speciesError(raw.species) : null,
-        breed: sent('breed') ? breedError(raw.breed) : null,
-        birth_date: sent('birth_date') ? birthDateError(raw.birth_date) : null,
-        sex: sent('sex') ? sexError(raw.sex) : null,
-      })
+      const invalid = validateBody(petChecks(raw, { creating: false }))
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()

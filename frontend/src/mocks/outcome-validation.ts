@@ -1,11 +1,11 @@
-import { healthLimits, outcomeLimits } from '../api/limits'
+import { outcomeLimits } from '../api/limits'
 import type { CareStatus } from '../api/schema'
 import { addDays } from '../lib/dates'
 import { moscowIsoDate } from '../lib/format'
 import { isoDateError } from './date-validation'
-import { conditionKindError, conditionTitleError, vaccineNameError, weightError } from './health-validation'
+import { conditionChecks, vaccineNameError, weightError } from './health-validation'
 import { fieldError, isObject, type FieldError } from './http-utils'
-import { birthDateError, breedError, sexError } from './pet-validation'
+import { clinicPetChecks } from './pet-validation'
 import { multilineTextError, textError } from './text-validation'
 
 const CARE_STATUSES: readonly CareStatus[] = ['routine', 'attention', 'treatment', 'recovery', 'prevention']
@@ -21,6 +21,10 @@ export function outcomeErrors(raw: Raw, appointmentDay: string | null, now = new
   const errors: FieldError[] = []
   const add = (loc: (string | number)[], msg: string | null) => {
     if (msg) errors.push(fieldError(['body', ...loc], msg))
+  }
+  /** Набор проверок полей вложенного объекта — по порядку полей. */
+  const addChecks = (at: (string | number)[], checks: Record<string, string | null>) => {
+    for (const [field, msg] of Object.entries(checks)) add([...at, field], msg)
   }
 
   // Поля самого итога — только на первом проходе, иначе ошибки повторятся.
@@ -90,14 +94,7 @@ export function outcomeErrors(raw: Raw, appointmentDay: string | null, now = new
   })
 
   list('conditions', outcomeLimits.conditionsMax, (item, index) => {
-    if (appointmentDay !== null) return
-    const at = (field: string) => ['conditions', index, field]
-    add(at('kind'), conditionKindError(item.kind))
-    add(at('title'), conditionTitleError(item.title))
-    add(
-      at('description'),
-      'description' in item ? multilineTextError(item.description, 'Комментарий', healthLimits.conditionDescriptionMax) : null,
-    )
+    if (appointmentDay === null) addChecks(['conditions', index], conditionChecks(item, { creating: true }))
   })
 
   if (appointmentDay === null && 'pet_update' in raw) {
@@ -105,11 +102,10 @@ export function outcomeErrors(raw: Raw, appointmentDay: string | null, now = new
     if (!isObject(update)) {
       add(['pet_update'], 'pet_update: ожидается объект')
     } else {
-      const at = (field: string) => ['pet_update', field]
-      add(at('weight'), 'weight' in update ? (update.weight === null ? 'Вес: ожидается число' : weightError(update.weight)) : null)
-      add(at('breed'), 'breed' in update ? breedError(update.breed) : null)
-      add(at('birth_date'), 'birth_date' in update ? birthDateError(update.birth_date, now) : null)
-      add(at('sex'), 'sex' in update ? sexError(update.sex) : null)
+      addChecks(['pet_update'], {
+        weight: 'weight' in update ? (update.weight === null ? 'Вес: ожидается число' : weightError(update.weight)) : null,
+        ...clinicPetChecks(update, now),
+      })
     }
   }
   return errors
