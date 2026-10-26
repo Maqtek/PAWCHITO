@@ -108,6 +108,13 @@ jobs:
       - name: Зависимости
         run: pnpm install --frozen-lockfile
 
+      - name: Проверка сгенерированных типов API
+        if: ${{ hashFiles('backend/openapi.json') != '' }}
+        run: |
+          git ls-files --error-unmatch -- src/api/generated/schema.ts
+          pnpm gen:api
+          git diff --exit-code -- src/api/generated/schema.ts
+
       - name: ESLint
         run: pnpm lint
 
