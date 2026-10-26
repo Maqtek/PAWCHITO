@@ -8,6 +8,7 @@ from app.models.clinic import Clinic
 from app.models.enums import UserRole
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
+from app.models.vet import Vet
 
 __all__ = [
     "ArchivedMixin",
@@ -18,4 +19,5 @@ __all__ = [
     "RefreshToken",
     "User",
     "UserRole",
+    "Vet",
 ]
