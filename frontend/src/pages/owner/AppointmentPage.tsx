@@ -5,7 +5,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
 import { ApiError } from '../../api/errors'
 import type { AppointmentOutcome } from '../../api/schema'
-import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, LoadError, Spinner, linkClass } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
@@ -49,15 +49,7 @@ export function AppointmentPage() {
       return <EmptyState title="Запись не найдена" description="Возможно, ссылка устарела." action={back} />
     }
     if (isPending) return <Spinner label="Загружаем запись" />
-    if (!appointment) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить запись"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!appointment) return <LoadError title="Не удалось загрузить запись" onRetry={() => void refetch()} />
     const rows: [string, string][] = [
       ['Питомец', appointment.pet.name],
       ['Клиника', appointment.clinic.name],

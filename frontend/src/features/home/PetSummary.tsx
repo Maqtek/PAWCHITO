@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { homeSummaryQuery } from '../../api/queries'
 import type { Pet } from '../../api/schema'
 import { PetCard } from '../../components/pet/PetCard'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { LoadError, Spinner } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
 import { ActiveCourses } from './ActiveCourses'
 import { LatestNotifications } from './LatestNotifications'
@@ -27,13 +27,7 @@ export function PetSummary({ pet, now, onStatus }: PetSummaryProps) {
   function main() {
     if (summary.isPending) return <Spinner label="Загружаем дела, курсы и записи" />
     if (!summary.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить дела, курсы и записи"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void summary.refetch()}>Повторить</Button>}
-        />
-      )
+      return <LoadError title="Не удалось загрузить дела, курсы и записи" onRetry={() => void summary.refetch()} />
     }
     return (
       <>

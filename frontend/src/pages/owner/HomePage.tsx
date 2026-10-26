@@ -3,7 +3,7 @@ import { CloudOff, PawPrint, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { meQuery } from '../../api/queries'
-import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { PetSummary } from '../../features/home/PetSummary'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -19,16 +19,7 @@ export function HomePage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) {
-      return (
-        <EmptyState
-          icon={CloudOff}
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!pet && isError) return <LoadError icon={CloudOff} title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
     if (!pet) {
       return (
         <EmptyState

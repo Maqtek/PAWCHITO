@@ -1,6 +1,6 @@
 import { ArrowLeft, PawPrint } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Button, buttonClass, EmptyState, linkClass, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, linkClass, LoadError, Spinner } from '../../components/ui'
 import { BookingWizard } from '../../features/appointments/BookingWizard'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -11,15 +11,7 @@ export function NewAppointmentPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!pet && isError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
     if (!pet) {
       return (
         <EmptyState

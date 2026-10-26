@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Route } from 'lucide-react'
 import { useId, useState } from 'react'
 import { petAppointmentsQuery, prescriptionProgressQuery } from '../../api/queries'
-import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import { Card, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { formatShortDate, moscowIsoDate } from '../../lib/format'
 import { ActiveCourse } from './ActiveCourse'
 import { petCourses, progressText, type Course } from './course'
@@ -20,13 +20,7 @@ export function PetCourses({ petId, onStatus }: PetCoursesProps) {
 
   if (appointments.isPending) return <Spinner label="Загружаем курсы лечения" />
   if (!appointments.data) {
-    return (
-      <EmptyState
-        title="Не удалось загрузить курсы лечения"
-        description="Проверьте соединение и попробуйте ещё раз."
-        action={<Button onClick={() => void appointments.refetch()}>Повторить</Button>}
-      />
-    )
+    return <LoadError title="Не удалось загрузить курсы лечения" onRetry={() => void appointments.refetch()} />
   }
   const courses = petCourses(appointments.data)
   if (courses.length === 0) {

@@ -3,7 +3,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { remindersQuery } from '../../api/queries'
 import type { Reminder } from '../../api/schema'
-import { Badge, Button, Card, EmptyState, ProgressBar, Spinner, linkClass } from '../../components/ui'
+import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from '../../components/ui'
 import { formatDayDate, formatShortDate, formatTime, NBSP, pluralize } from '../../lib/format'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
 import { progressText, type Course } from './course'
@@ -51,15 +51,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
 
   function days() {
     if (reminders.isPending) return <Spinner label="Загружаем дни курса" />
-    if (!reminders.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить дни курса"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void reminders.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!reminders.data) return <LoadError title="Не удалось загрузить дни курса" onRetry={() => void reminders.refetch()} />
     const all = reminders.data
     const count = (status: Reminder['status']) => all.filter((item) => item.status === status).length
     const progress = { total: all.length, done: count('done'), skipped: count('skipped') }

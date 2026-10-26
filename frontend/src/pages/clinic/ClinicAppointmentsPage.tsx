@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { validationMessages } from '../../api/error-messages'
 import { clinicAppointmentsQuery, clinicVetsQuery, type ClinicAppointmentFilters } from '../../api/queries'
 import type { Appointment, AppointmentStatus } from '../../api/schema'
-import { Button, EmptyState, SelectField, Spinner, Tabs, TextField, type SelectOption } from '../../components/ui'
+import { EmptyState, LoadError, SelectField, Spinner, Tabs, TextField, type SelectOption } from '../../components/ui'
 import { ClinicAppointmentCard, type VetAvailability } from '../../features/clinic-appointments/ClinicAppointmentCard'
 import { ClinicCancelModal } from '../../features/clinic-appointments/ClinicCancelModal'
 import { OutcomeFormModal } from '../../features/clinic-appointments/OutcomeFormModal'
@@ -108,15 +108,7 @@ export function ClinicAppointmentsPage() {
   function content() {
     if (view === 'schedule' && rangeInvalid) return <p className="text-sm">{validationMessages.dateRange}.</p>
     if (current.isPending) return <Spinner label="Загружаем записи" />
-    if (!current.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить записи"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void current.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!current.data) return <LoadError title="Не удалось загрузить записи" onRetry={() => void current.refetch()} />
     if (current.data.length === 0) {
       const empty = {
         schedule: { title: 'Записей нет', description: 'На эти даты с такими фильтрами записей нет.' },

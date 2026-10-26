@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useId, type ReactNode, type Ref } from 'react'
-import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import { Button, Card, EmptyState, LoadError, Spinner } from '../../components/ui'
 
 interface HealthSectionProps<T> {
   title: string
@@ -32,15 +32,7 @@ export function HealthSection<T>({
 
   function content() {
     if (list.isPending) return <Spinner label={loadingLabel} />
-    if (!list.data) {
-      return (
-        <EmptyState
-          title={errorTitle}
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void list.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!list.data) return <LoadError title={errorTitle} onRetry={() => void list.refetch()} />
     if (list.data.length === 0) return <EmptyState title={empty.title} description={empty.description} />
     return children(list.data)
   }

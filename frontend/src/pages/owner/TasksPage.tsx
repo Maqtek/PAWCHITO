@@ -1,7 +1,7 @@
 import { PawPrint } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { buttonClass, Button, EmptyState, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PlannedReminders } from '../../features/reminders/PlannedReminders'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -13,15 +13,7 @@ export function TasksPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!pet && isError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
     if (!pet) {
       return (
         <EmptyState

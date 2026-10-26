@@ -5,7 +5,7 @@ import { ApiError } from '../../api/errors'
 import { meQuery } from '../../api/queries'
 import type { Role } from '../../api/schema'
 import { homePathFor } from '../../app/navigation'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { LoadError, Spinner } from '../../components/ui'
 
 interface RequireRoleProps {
   allow: Role[]
@@ -30,11 +30,7 @@ export function RequireRole({ allow, passwordChange = false, children }: Require
   if (!user) {
     return (
       <div className="grid min-h-dvh place-items-center p-4">
-        <EmptyState
-          title="Не удалось загрузить данные"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
+        <LoadError title="Не удалось загрузить данные" onRetry={() => void refetch()} />
       </div>
     )
   }

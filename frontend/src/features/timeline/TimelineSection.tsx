@@ -3,7 +3,7 @@ import { HistoryIcon } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import { timelineQuery } from '../../api/queries'
 import type { TimelineItem } from '../../api/schema'
-import { Button, Card, EmptyState, FormAlert, Spinner } from '../../components/ui'
+import { Button, Card, EmptyState, FormAlert, LoadError, Spinner } from '../../components/ui'
 import { formatLongDate } from '../../lib/format'
 import { groupByDate, timelineItemKey } from './timeline'
 import { TimelineEntry } from './TimelineEntry'
@@ -38,15 +38,7 @@ export function TimelineSection({ petId }: { petId: number }) {
 
   function content() {
     if (timeline.isPending) return <Spinner label="Загружаем ленту" />
-    if (!timeline.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить ленту"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void timeline.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!timeline.data) return <LoadError title="Не удалось загрузить ленту" onRetry={() => void timeline.refetch()} />
     const items = timeline.data.pages.flat()
     if (items.length === 0) {
       return (

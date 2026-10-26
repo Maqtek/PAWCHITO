@@ -8,7 +8,17 @@ import { appointmentLimits } from '../../api/limits'
 import { bookingClinicsQuery, bookingVetsQuery, slotsQuery, unwrap } from '../../api/queries'
 import type { Appointment, AppointmentReason, Clinic, Pet, Slot, Vet } from '../../api/schema'
 import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, EmptyState, FormAlert, SelectField, Spinner, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import {
+  Button,
+  EmptyState,
+  FormAlert,
+  LoadError,
+  SelectField,
+  Spinner,
+  TextareaField,
+  TextField,
+  type SelectOption,
+} from '../../components/ui'
 import { cn } from '../../lib/cn'
 import { addDays, isoWeekday } from '../../lib/dates'
 import { formatTime, moscowIsoDate } from '../../lib/format'
@@ -179,16 +189,6 @@ function BackButton({ onBack, children }: { onBack: () => void; children: ReactN
         {children}
       </Button>
     </div>
-  )
-}
-
-function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
-  return (
-    <EmptyState
-      title={title}
-      description="Проверьте соединение и попробуйте ещё раз."
-      action={<Button onClick={onRetry}>Повторить</Button>}
-    />
   )
 }
 

@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { clinicPetObservationsQuery, clinicPetQuery } from '../../api/queries'
 import { PetCard } from '../../components/pet/PetCard'
-import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
+import { Badge, Card, EmptyState, LoadError, Spinner, linkClass } from '../../components/ui'
 import { formatSlot } from '../../features/appointments/format'
 import { PetPhotoUpload } from '../../features/clinic-appointments/PetPhotoUpload'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -65,15 +65,7 @@ export function ClinicPetPage() {
       )
     }
     if (card.isPending) return <Spinner label="Загружаем карточку питомца" />
-    if (!card.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить карточку"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void card.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!card.data) return <LoadError title="Не удалось загрузить карточку" onRetry={() => void card.refetch()} />
     const { pet, conditions, vaccinations, appointments } = card.data
     return (
       <div className="flex flex-col gap-4">

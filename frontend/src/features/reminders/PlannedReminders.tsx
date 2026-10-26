@@ -3,7 +3,7 @@ import { CalendarPlus, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { calendarQuery } from '../../api/queries'
 import type { CalendarEvent, Pet, Reminder } from '../../api/schema'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { Button, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
 import { AppointmentEventItem } from '../calendar/AppointmentEventItem'
 import { calendarGroups, eventReminder, formatDueWithYear, groupPeriod } from '../calendar/calendar-event'
@@ -85,15 +85,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
 
   function groups() {
     if (calendar.isPending) return <Spinner label="Загружаем дела" />
-    if (!calendar.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить дела"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void calendar.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!calendar.data) return <LoadError title="Не удалось загрузить дела" onRetry={() => void calendar.refetch()} />
     const { data } = calendar
     if (calendarGroups.every(({ key }) => data[key].length === 0)) {
       return (

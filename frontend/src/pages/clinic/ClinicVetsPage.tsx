@@ -3,7 +3,7 @@ import { Plus, Stethoscope } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { clinicVetsQuery } from '../../api/queries'
 import type { Vet } from '../../api/schema'
-import { Button, EmptyState, Spinner, Tabs } from '../../components/ui'
+import { Button, EmptyState, LoadError, Spinner, Tabs } from '../../components/ui'
 import { VetArchiveModal, type ArchiveAction } from '../../features/vets/VetArchiveModal'
 import { VetCard } from '../../features/vets/VetCard'
 import { VetFormModal } from '../../features/vets/VetFormModal'
@@ -75,15 +75,7 @@ export function ClinicVetsPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем врачей" />
-    if (!vets) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить врачей"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!vets) return <LoadError title="Не удалось загрузить врачей" onRetry={() => void refetch()} />
     return (
       <div className="flex flex-col gap-4">
         <div ref={tabsRef}>

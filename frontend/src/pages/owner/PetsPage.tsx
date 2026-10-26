@@ -3,7 +3,7 @@ import { PawPrint, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { petsQuery } from '../../api/queries'
 import type { Pet, PetArchived } from '../../api/schema'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { Button, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { PetArchiveModal } from '../../features/pets/PetArchiveModal'
 import { PetFormModal } from '../../features/pets/PetFormModal'
 import { PetListItem } from '../../features/pets/PetListItem'
@@ -70,15 +70,7 @@ export function PetsPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pets) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!pets) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
     if (pets.length === 0) {
       return (
         <EmptyState

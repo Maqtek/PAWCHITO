@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { AppointmentCard } from '../../features/appointments/AppointmentCard'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
@@ -29,15 +29,7 @@ export function AppointmentsPage() {
 
   function content() {
     if (petsPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && petsError) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetchPets()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!pet && petsError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetchPets()} />
     if (!pet) {
       return (
         <EmptyState
@@ -94,15 +86,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
 
   function content() {
     if (isPending) return <Spinner label="Загружаем записи" />
-    if (!appointments) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить записи"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!appointments) return <LoadError title="Не удалось загрузить записи" onRetry={() => void refetch()} />
     if (appointments.length === 0) {
       return (
         <EmptyState

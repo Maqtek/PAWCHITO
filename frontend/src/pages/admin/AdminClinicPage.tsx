@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { adminClinicQuery } from '../../api/queries'
-import { Badge, Button, EmptyState, linkClass, Spinner } from '../../components/ui'
+import { Badge, EmptyState, linkClass, LoadError, Spinner } from '../../components/ui'
 import { ClinicAccountSection } from '../../features/admin/ClinicAccountSection'
 import { ClinicArchiveSection } from '../../features/admin/ClinicArchiveSection'
 import { ClinicDetailsSection } from '../../features/admin/ClinicDetailsSection'
@@ -55,14 +55,7 @@ export function AdminClinicPage() {
   } else if (isPending) {
     content = <Spinner label="Загружаем клинику" />
   } else if (!clinic) {
-    content = (
-      <EmptyState
-        className="mt-6"
-        title="Не удалось загрузить клинику"
-        description="Проверьте соединение и попробуйте ещё раз."
-        action={<Button onClick={() => void refetch()}>Повторить</Button>}
-      />
-    )
+    content = <LoadError className="mt-6" title="Не удалось загрузить клинику" onRetry={() => void refetch()} />
   } else {
     message = status
     header = (
