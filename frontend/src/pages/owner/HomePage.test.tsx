@@ -79,7 +79,6 @@ describe('HomePage: сводка выбранного питомца', () => {
     const scale = screen.getByRole('list', { name: 'Статус ухода' })
     expect(within(scale).getByText('На лечении').closest('li')).toHaveAttribute('aria-current', 'true')
     expect(screen.getByText('ВетДоктор, 10 октября')).toBeInTheDocument()
-    expect(screen.queryByText('Появится на этапе 11 роадмапа.')).not.toBeInTheDocument()
 
     // Дела — по времени, просроченное первым; отметить можно каждое, удалить — только в «Делах».
     expect(titles()).toEqual(['Мелоксикам, 1,5 мл', 'Купить корм', 'Мелоксикам, 1,5 мл'])

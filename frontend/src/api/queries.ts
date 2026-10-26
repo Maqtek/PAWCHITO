@@ -66,7 +66,7 @@ export interface ClinicAppointmentFilters {
 }
 
 /** Фильтры дел (Р-60): пустые не передаются, даты — по плановой дате включительно. */
-export interface ReminderFilters {
+interface ReminderFilters {
   pet_id?: number
   date_from?: string
   date_to?: string

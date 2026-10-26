@@ -26,7 +26,7 @@ import { clinicDayLink, noticeText } from './notification-texts'
 export const SEED_PASSWORD = 'pawchito1'
 
 /** Задержка ответа /auth/refresh: в браузере видна гонка вкладок, в тестах набор не тормозит. */
-export const DEFAULT_REFRESH_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 300
+const DEFAULT_REFRESH_DELAY_MS = import.meta.env.MODE === 'test' ? 0 : 300
 
 export interface MockAccount {
   id: number
@@ -431,7 +431,7 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
     nextObservationId: 100,
     vaccinations: [
       { id: 1, pet_id: 10, name: 'Нобивак Rabies', date: '2026-01-15', next_date: '2027-01-15', source: 'owner', appointment_id: null },
-      // Внесена клиникой при итоге приёма; приёмов в моках нет до этапа 9 — номер условный.
+      // Внесена клиникой при итоге приёма; этого приёма в seed нет — номер условный.
       { id: 2, pet_id: 10, name: 'Нобивак DHPPi', date: '2026-10-10', next_date: '2027-10-10', source: 'clinic', appointment_id: 501 },
       // Следующая уже прошла — прививка просрочена (Р-46).
       { id: 3, pet_id: 11, name: 'Нобивак Tricat Trio', date: '2025-06-01', next_date: '2026-06-01', source: 'owner', appointment_id: null },
@@ -524,7 +524,6 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
   }
 }
 
-/** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
 /**
  * Отмена системой (БП §5): записи «Заявка» и «Подтверждена», которые ещё не начались, — при архиве питомца и скрытии
  * клиники (Р-51). Возвращает отменённые записи: по ним уходят уведомления.
@@ -547,9 +546,8 @@ export function cancelFutureAppointments(
   return future
 }
 
-/** Ответ Appointment: клиника — по врачу, клички и имена — текущие (Р-50). */
 /** Дозы курса: каждое время каждого дня рецепта, по порядку (БП §6.2). */
-export function courseDoses(prescription: Prescription): string[] {
+function courseDoses(prescription: Prescription): string[] {
   const doses: string[] = []
   for (let day = 0; day < prescription.duration_days; day += 1) {
     const date = addDays(prescription.start_date, day)
@@ -590,6 +588,7 @@ export function toReminder(reminder: MockReminder, now = new Date()): Reminder {
   return { ...reminder, is_overdue: reminder.status === 'pending' && new Date(reminder.due_at).getTime() < now.getTime() }
 }
 
+/** Ответ Appointment: клиника — по врачу, клички и имена — текущие (Р-50). */
 export function toAppointment(state: MockServerState, appointment: MockAppointment): Appointment {
   const { pet_id, vet_id, ...fields } = appointment
   const pet = state.pets.find((item) => item.id === pet_id)
@@ -610,6 +609,7 @@ function moscowSlotEnd(start: Date): string {
   return toMoscowString(new Date(start.getTime() + 30 * 60 * 1000))
 }
 
+/** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
 export function toUser(state: MockServerState, account: MockAccount): User {
   const { id, email, role, full_name, must_change_password } = account
   const clinic = role === 'clinic' ? state.clinics.find((item) => item.id === account.clinic_id) : undefined

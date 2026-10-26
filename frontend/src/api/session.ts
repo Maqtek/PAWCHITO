@@ -2,7 +2,7 @@ import { getAccessToken, setAccessToken } from './auth-token'
 import { apiBaseUrl } from './base-url'
 import { ApiError, NetworkError } from './errors'
 
-export type RefreshResult =
+type RefreshResult =
   | { status: 'ok'; token: string }
   /** Сервер отказал в обмене (401 и другие 4xx) или стоит метка выхода. */
   | { status: 'signed-out' }

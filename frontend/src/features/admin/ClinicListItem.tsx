@@ -3,7 +3,7 @@ import type { AdminClinic } from '../../api/schema'
 import { Badge } from '../../components/ui'
 import { formatSchedule } from './clinic-format'
 
-export function AccountBadge({ clinic }: { clinic: AdminClinic }) {
+function AccountBadge({ clinic }: { clinic: AdminClinic }) {
   if (!clinic.account) return <Badge tone="butter">Нет аккаунта</Badge>
   if (!clinic.account.is_active) return <Badge tone="coral">Заблокирован</Badge>
   return (

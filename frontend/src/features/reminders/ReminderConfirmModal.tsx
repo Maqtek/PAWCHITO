@@ -11,7 +11,7 @@ interface ReminderConfirmModalProps {
   onClose: () => void
   onSkipped: (result: ReminderMarked) => void
   /** Удаление — только в «Делах»: в «Курсе лечения» удалять нечего, дела курса не удаляются. */
-  onDeleted?: (reminder: Reminder) => void
+  onDeleted?: () => void
 }
 
 /** Пропуск и удаление дела — с подтверждением: отметку не отменить, удалённое не вернуть (Р-61, Р-62). */
@@ -27,7 +27,7 @@ export function ReminderConfirmModal({ open, kind, reminder, today, onClose, onS
         onSkipped(await markReminder(reminder.id, 'skip'))
       } else {
         await deleteReminder(reminder.id)
-        onDeleted?.(reminder)
+        onDeleted?.()
       }
     } finally {
       refetchReminders(queryClient)

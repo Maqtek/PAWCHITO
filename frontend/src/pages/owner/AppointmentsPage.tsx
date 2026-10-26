@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, ClipboardList, PawPrint } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
 import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
@@ -71,9 +71,7 @@ export function AppointmentsPage() {
 
 function PetAppointments({ petId, petName }: { petId: number; petName: string }) {
   const { data: appointments, isPending, refetch } = useQuery(petAppointmentsQuery(petId))
-  const location = useLocation()
-  // Сообщение мастера записи приходит через state перехода и показывается один раз.
-  const [status, setStatus] = useState(() => (location.state as { status?: string } | null)?.status ?? '')
+  const [status, setStatus] = useState('')
   const [dialog, setDialog] = useState<Dialog>({ open: false })
   const [now] = useState(() => new Date())
   const listRef = useRef<HTMLDivElement>(null)

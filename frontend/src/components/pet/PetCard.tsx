@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react'
 import type { Pet } from '../../api/schema'
 import { cn } from '../../lib/cn'
 import { formatAge, formatShortDate } from '../../lib/format'
@@ -11,10 +10,9 @@ export interface PetCardProps {
   pet: Pet
   /** Дата, от которой считается возраст. */
   today: Date
-  actions?: ReactNode
 }
 
-export function PetCard({ pet, today, actions }: PetCardProps) {
+export function PetCard({ pet, today }: PetCardProps) {
   const meta = [pet.breed, pet.birth_date && formatAge(pet.birth_date, today)].filter(Boolean).join(' · ')
   const statusSuffix = [pet.care_status_clinic?.name, pet.care_status_set_at && formatShortDate(pet.care_status_set_at)]
     .filter(Boolean)
@@ -52,7 +50,6 @@ export function PetCard({ pet, today, actions }: PetCardProps) {
             </p>
           )}
         </div>
-        {actions}
       </div>
       <div className="border-t border-line bg-surface-muted px-5 py-4 sm:px-6">
         <CareStatusScale status={pet.care_status} />
