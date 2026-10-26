@@ -132,13 +132,14 @@ const ACCESS_TTL_SECONDS = 900
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
-// Фабрики newAccount, newClinic, newVet, newAppointment и newCustomReminder перечисляют поля в порядке схемы ответа:
-// незаданные берутся по умолчанию, а JSON ответа остаётся прежним.
+// newAccount, newClinic, newVet, newAppointment и newCustomReminder перечисляют поля в порядке схемы: в этом же порядке
+// поля идут в JSON ответа.
 
 type AccountFields = Pick<MockAccount, 'id' | 'email' | 'password' | 'role'> & Partial<MockAccount>
 
 /** Аккаунт: активен, без временного пароля и кода восстановления; full_name у клиники пустое (Р-35). */
-export function newAccount({ id, email, password, role, ...rest }: AccountFields): MockAccount {
+export function newAccount(fields: AccountFields): MockAccount {
+  const { id, email, password, role, ...rest } = fields
   return {
     id,
     email,
@@ -155,23 +156,18 @@ export function newAccount({ id, email, password, role, ...rest }: AccountFields
 
 const seedAccount = (fields: Omit<AccountFields, 'password'>) => newAccount({ password: SEED_PASSWORD, ...fields })
 
+type ClinicFields = Pick<MockClinic, 'id' | 'name' | 'address' | 'phone' | 'opens_at' | 'closes_at' | 'work_days'> &
+  Partial<MockClinic>
+
 /** Клиника: не скрыта, будущих записей в счётчике seed нет. */
-export function newClinic({
-  id,
-  name,
-  address,
-  phone,
-  opens_at,
-  closes_at,
-  work_days,
-  ...rest
-}: Pick<MockClinic, 'id' | 'name' | 'address' | 'phone' | 'opens_at' | 'closes_at' | 'work_days'> &
-  Partial<MockClinic>): MockClinic {
+export function newClinic(fields: ClinicFields): MockClinic {
+  const { id, name, address, phone, opens_at, closes_at, work_days, ...rest } = fields
   return { id, name, address, phone, opens_at, closes_at, work_days, archived_at: null, futureAppointments: 0, ...rest }
 }
 
 /** Врач: без специализации, не в отпуске, не в архиве. */
-export function newVet({ id, clinic_id, full_name, ...rest }: Pick<Vet, 'id' | 'clinic_id' | 'full_name'> & Partial<Vet>): Vet {
+export function newVet(fields: Pick<Vet, 'id' | 'clinic_id' | 'full_name'> & Partial<Vet>): Vet {
+  const { id, clinic_id, full_name, ...rest } = fields
   return { id, clinic_id, full_name, specialization: null, on_vacation: false, archived_at: null, ...rest }
 }
 
@@ -206,10 +202,9 @@ export function addObservation(state: MockServerState, fields: Omit<ObservationF
 }
 
 /** Новая особенность здоровья из тела ConditionCreate: название без пробелов по краям, пустой комментарий — null. */
-export function addCondition(
-  state: MockServerState,
-  { pet_id, kind, title, description, source }: ConditionCreate & Pick<Condition, 'pet_id' | 'source'>,
-): Condition {
+export function addCondition(state: MockServerState, fields: ConditionCreate & Pick<Condition, 'pet_id' | 'source'>): Condition {
+  // Поля тела — поимённо: лишние поля запроса в запись не попадают.
+  const { pet_id, kind, title, description, source } = fields
   const condition: Condition = {
     id: state.nextConditionId,
     pet_id,
@@ -227,9 +222,9 @@ export function addCondition(
 /** Новая прививка из тела VaccinationCreate: название без пробелов по краям, без следующей — null. */
 export function addVaccination(
   state: MockServerState,
-  { pet_id, name, date, next_date, source, appointment_id }: VaccinationCreate &
-    Pick<Vaccination, 'pet_id' | 'source' | 'appointment_id'>,
+  fields: VaccinationCreate & Pick<Vaccination, 'pet_id' | 'source' | 'appointment_id'>,
 ): Vaccination {
+  const { pet_id, name, date, next_date, source, appointment_id } = fields
   const vaccination: Vaccination = {
     id: state.nextVaccinationId,
     pet_id,
@@ -255,14 +250,10 @@ function seedDay(days: number): string {
 }
 
 /** Запись: заявка без комментариев и итога. */
-export function newAppointment({
-  id,
-  pet_id,
-  vet_id,
-  slot_start,
-  reason,
-  ...rest
-}: Pick<MockAppointment, 'id' | 'pet_id' | 'vet_id' | 'slot_start' | 'reason'> & Partial<MockAppointment>): MockAppointment {
+export function newAppointment(
+  fields: Pick<MockAppointment, 'id' | 'pet_id' | 'vet_id' | 'slot_start' | 'reason'> & Partial<MockAppointment>,
+): MockAppointment {
+  const { id, pet_id, vet_id, slot_start, reason, ...rest } = fields
   return {
     id,
     pet_id,
@@ -282,15 +273,7 @@ export function newAppointment({
 function seedAppointments(prescription: Prescription): MockAppointment[] {
   const at = (days: number, time: string) => moscowDateTime(seedDay(days), time)
   return [
-    newAppointment({
-      id: 20,
-      pet_id: 10,
-      vet_id: 4,
-      slot_start: at(2, '10:00'),
-      reason: 'vaccination',
-      status: 'confirmed',
-      reason_comment: 'Плановая от бешенства',
-    }),
+    newAppointment({ id: 20, pet_id: 10, vet_id: 4, slot_start: at(2, '10:00'), reason: 'vaccination', status: 'confirmed', reason_comment: 'Плановая от бешенства' }),
     newAppointment({ id: 21, pet_id: 10, vet_id: 6, slot_start: at(5, '15:30'), reason: 'follow_up' }),
     newAppointment({
       id: 22,
@@ -309,16 +292,7 @@ function seedAppointments(prescription: Prescription): MockAppointment[] {
         vaccinations: [],
       },
     }),
-    newAppointment({
-      id: 23,
-      pet_id: 10,
-      vet_id: 5,
-      slot_start: at(-5, '12:00'),
-      reason: 'checkup',
-      status: 'cancelled',
-      cancelled_by: 'clinic',
-      clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
-    }),
+    newAppointment({ id: 23, pet_id: 10, vet_id: 5, slot_start: at(-5, '12:00'), reason: 'checkup', status: 'cancelled', cancelled_by: 'clinic', clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста' }),
     newAppointment({ id: 24, pet_id: 11, vet_id: 6, slot_start: at(1, '09:00'), reason: 'checkup' }),
     // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
     newAppointment({ id: 25, pet_id: 13, vet_id: 4, slot_start: at(2, '10:30'), reason: 'checkup', status: 'confirmed' }),
@@ -331,16 +305,11 @@ function seedPrescription(): Prescription {
 }
 
 /** Своё дело: запланировано; серия с повтором — по первому делу, следующие получат его id (Р-61). */
-export function newCustomReminder({
-  id,
-  pet_id,
-  title,
-  category,
-  due_at,
-  repeat_interval_days,
-  ...rest
-}: Pick<MockReminder, 'id' | 'pet_id' | 'title' | 'category' | 'due_at' | 'repeat_interval_days'> &
-  Partial<MockReminder>): MockReminder {
+export function newCustomReminder(
+  fields: Pick<MockReminder, 'id' | 'pet_id' | 'title' | 'category' | 'due_at' | 'repeat_interval_days'> &
+    Partial<MockReminder>,
+): MockReminder {
+  const { id, pet_id, title, category, due_at, repeat_interval_days, ...rest } = fields
   return {
     id,
     pet_id,
@@ -375,22 +344,8 @@ function seedReminders(prescription: Prescription): MockReminder[] {
     ...course,
     newCustomReminder({ ...brushing, id: 30, due_at: at(-6, '21:00'), status: 'done', done_at: markedAfter(at(-6, '21:00')) }),
     newCustomReminder({ ...brushing, id: 31, due_at: at(1, '21:00'), series_id: 30 }),
-    newCustomReminder({
-      id: 32,
-      pet_id: 10,
-      title: 'Купить корм',
-      category: 'routine',
-      due_at: at(0, '18:00'),
-      repeat_interval_days: null,
-    }),
-    newCustomReminder({
-      id: 33,
-      pet_id: 11,
-      title: 'Капли от блох',
-      category: 'prevention',
-      due_at: at(3, '10:00'),
-      repeat_interval_days: 30,
-    }),
+    newCustomReminder({ id: 32, pet_id: 10, title: 'Купить корм', category: 'routine', due_at: at(0, '18:00'), repeat_interval_days: null }),
+    newCustomReminder({ id: 33, pet_id: 11, title: 'Капли от блох', category: 'prevention', due_at: at(3, '10:00'), repeat_interval_days: 30 }),
   ]
 }
 
@@ -436,57 +391,17 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
     ],
     nextUserId: 100,
     clinics: [
-      newClinic({
-        id: 2,
-        name: 'ВетДоктор',
-        address: 'ул. Ленина, 10',
-        phone: '+79990000000',
-        opens_at: '09:00',
-        closes_at: '20:00',
-        work_days: [1, 2, 3, 4, 5, 6],
-        futureAppointments: 7,
-      }),
-      newClinic({
-        id: 3,
-        name: 'Клиника «Новая»',
-        address: 'пр. Мира, 5',
-        phone: '+79991112233',
-        opens_at: '10:00',
-        closes_at: '19:00',
-        work_days: [1, 2, 3, 4, 5],
-      }),
-      newClinic({
-        id: 4,
-        name: 'Зоовет',
-        address: 'ул. Садовая, 21',
-        phone: '+79993334455',
-        opens_at: '08:00',
-        closes_at: '22:00',
-        work_days: [1, 2, 3, 4, 5, 6, 7],
-      }),
-      newClinic({
-        id: 5,
-        name: 'Айболит',
-        address: 'ул. Чехова, 3',
-        phone: '+79995556677',
-        opens_at: '09:00',
-        closes_at: '18:00',
-        work_days: [1, 2, 3, 4, 5],
-        archived_at: '2026-10-01T12:00:00+03:00',
-      }),
+      newClinic({ id: 2, name: 'ВетДоктор', address: 'ул. Ленина, 10', phone: '+79990000000', opens_at: '09:00', closes_at: '20:00', work_days: [1, 2, 3, 4, 5, 6], futureAppointments: 7 }),
+      newClinic({ id: 3, name: 'Клиника «Новая»', address: 'пр. Мира, 5', phone: '+79991112233', opens_at: '10:00', closes_at: '19:00', work_days: [1, 2, 3, 4, 5] }),
+      newClinic({ id: 4, name: 'Зоовет', address: 'ул. Садовая, 21', phone: '+79993334455', opens_at: '08:00', closes_at: '22:00', work_days: [1, 2, 3, 4, 5, 6, 7] }),
+      newClinic({ id: 5, name: 'Айболит', address: 'ул. Чехова, 3', phone: '+79995556677', opens_at: '09:00', closes_at: '18:00', work_days: [1, 2, 3, 4, 5], archived_at: '2026-10-01T12:00:00+03:00' }),
     ],
     nextClinicId: 100,
     vets: [
       newVet({ id: 4, clinic_id: 2, full_name: 'Петров Павел Петрович', specialization: 'терапевт' }),
       newVet({ id: 5, clinic_id: 2, full_name: 'Соколова Мария Андреевна', specialization: 'хирург', on_vacation: true }),
       newVet({ id: 6, clinic_id: 2, full_name: 'Ким Елена Викторовна' }),
-      newVet({
-        id: 7,
-        clinic_id: 2,
-        full_name: 'Орлов Дмитрий Сергеевич',
-        specialization: 'дерматолог',
-        archived_at: '2026-09-15T12:00:00+03:00',
-      }),
+      newVet({ id: 7, clinic_id: 2, full_name: 'Орлов Дмитрий Сергеевич', specialization: 'дерматолог', archived_at: '2026-09-15T12:00:00+03:00' }),
       // Врач другой клиники: clinic@example.com его не видит и не меняет (404).
       newVet({ id: 8, clinic_id: 4, full_name: 'Белова Ольга Игоревна', specialization: 'терапевт' }),
     ],
