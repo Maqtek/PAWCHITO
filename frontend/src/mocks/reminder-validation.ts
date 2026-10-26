@@ -1,7 +1,7 @@
 import { reminderLimits } from '../api/limits'
 import type { EventCategory } from '../api/schema'
 import { addDays, moscowLocal } from '../lib/dates'
-import { textError } from './clinic-validation'
+import { textError } from './text-validation'
 
 const CATEGORIES: readonly EventCategory[] = ['treatment', 'routine', 'prevention']
 const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/

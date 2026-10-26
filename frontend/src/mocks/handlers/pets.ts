@@ -1,9 +1,10 @@
 import { http, HttpResponse } from 'msw'
 import type { Pet, PetCreate, PetUpdate } from '../../api/schema'
 import { authorizeAccount, notFound, readBody, validateBody } from '../http-utils'
-import { birthDateError, breedError, normalizeBreed, petNameError, sexError, speciesError } from '../pet-validation'
+import { birthDateError, breedError, petNameError, sexError, speciesError } from '../pet-validation'
 import { notifyAppointment } from '../notify'
 import { cancelFutureAppointments, newPet, readServer, updateServer, type MockServerState } from '../server-state'
+import { normalizeText } from '../text-validation'
 
 const petNotFound = () => notFound('Питомец не найден')
 
@@ -50,7 +51,7 @@ export const petHandlers = [
         owner_id: account.id,
         name: body.name.trim(),
         species: body.species,
-        breed: normalizeBreed(body.breed),
+        breed: normalizeText(body.breed),
         birth_date: body.birth_date ?? null,
         sex: body.sex ?? 'unknown',
       })
@@ -89,7 +90,7 @@ export const petHandlers = [
       const body = raw as PetUpdate
       if (body.name !== undefined) pet.name = body.name.trim()
       if (body.species !== undefined) pet.species = body.species
-      if (body.breed !== undefined) pet.breed = normalizeBreed(body.breed)
+      if (body.breed !== undefined) pet.breed = normalizeText(body.breed)
       if (body.birth_date !== undefined) pet.birth_date = body.birth_date
       if (body.sex !== undefined) pet.sex = body.sex
       return HttpResponse.json(pet)

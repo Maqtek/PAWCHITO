@@ -12,15 +12,7 @@ import type {
   VaccinationUpdate,
 } from '../../api/schema'
 import { isoDateError, pastDateError } from '../date-validation'
-import {
-  conditionKindError,
-  conditionTitleError,
-  levelError,
-  multilineTextError,
-  normalizeText,
-  vaccineNameError,
-  weightError,
-} from '../health-validation'
+import { conditionKindError, conditionTitleError, levelError, vaccineNameError, weightError } from '../health-validation'
 import {
   authorizeAccount,
   fieldError,
@@ -32,6 +24,7 @@ import {
   validateBody,
 } from '../http-utils'
 import { newObservation, readServer, updateServer, type MockServerState } from '../server-state'
+import { multilineTextError, normalizeText } from '../text-validation'
 import { findPet } from './pets'
 
 const recordNotFound = () => notFound('Запись не найдена')

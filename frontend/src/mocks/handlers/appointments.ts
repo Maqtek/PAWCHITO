@@ -4,7 +4,6 @@ import type { AppointmentCreate, AppointmentReason, AppointmentStatus, Slot, Vet
 import { addDays, isoWeekday, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
 import { isoDateError } from '../date-validation'
-import { multilineTextError, normalizeText } from '../health-validation'
 import { authorizeAccount, conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
@@ -15,6 +14,7 @@ import {
   type MockClinic,
   type MockServerState,
 } from '../server-state'
+import { multilineTextError, normalizeText } from '../text-validation'
 import { findPet } from './pets'
 
 const REASONS: readonly AppointmentReason[] = ['checkup', 'vaccination', 'illness', 'follow_up', 'other']

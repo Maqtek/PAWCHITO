@@ -2,7 +2,8 @@ import { http, HttpResponse } from 'msw'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
 import { authorizeAccount, forbidden, notFound, readBody, validateBody } from '../http-utils'
 import { readServer, updateServer, type MockServerState } from '../server-state'
-import { normalizeSpecialization, specializationError, vacationError, vetNameError } from '../vet-validation'
+import { normalizeText } from '../text-validation'
+import { specializationError, vacationError, vetNameError } from '../vet-validation'
 
 const vetNotFound = () => notFound('Врач не найден')
 
@@ -48,7 +49,7 @@ export const vetHandlers = [
         id: state.nextVetId,
         clinic_id: clinicId,
         full_name: body.full_name.trim(),
-        specialization: normalizeSpecialization(body.specialization),
+        specialization: normalizeText(body.specialization),
         on_vacation: false,
         archived_at: null,
       }
@@ -75,7 +76,7 @@ export const vetHandlers = [
       if (!vet) return vetNotFound()
       const body = raw as VetUpdate
       if (body.full_name !== undefined) vet.full_name = body.full_name.trim()
-      if (body.specialization !== undefined) vet.specialization = normalizeSpecialization(body.specialization)
+      if (body.specialization !== undefined) vet.specialization = normalizeText(body.specialization)
       if (body.on_vacation !== undefined) vet.on_vacation = body.on_vacation
       return HttpResponse.json(vet)
     })

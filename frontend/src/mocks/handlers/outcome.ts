@@ -13,12 +13,13 @@ import type {
 import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
 import { pastDateError } from '../date-validation'
-import { conditionKindError, conditionTitleError, multilineTextError, normalizeText, weightError } from '../health-validation'
+import { conditionKindError, conditionTitleError, weightError } from '../health-validation'
 import { conflict, fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
 import { notifyOutcome, notifyPetUpdated } from '../notify'
 import { outcomeErrors } from '../outcome-validation'
-import { birthDateError, breedError, normalizeBreed, sexError } from '../pet-validation'
+import { birthDateError, breedError, sexError } from '../pet-validation'
 import { addCourseReminders, newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
+import { multilineTextError, normalizeText } from '../text-validation'
 import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
 import { authorizeClinic } from './vets'
 
@@ -144,8 +145,8 @@ export const outcomeHandlers = [
         state.nextObservationId += 1
         changes.push('вес')
       }
-      if (update.breed !== undefined && normalizeBreed(update.breed) !== pet.breed) {
-        pet.breed = normalizeBreed(update.breed)
+      if (update.breed !== undefined && normalizeText(update.breed) !== pet.breed) {
+        pet.breed = normalizeText(update.breed)
         changes.push('порода')
       }
       if (update.birth_date !== undefined && update.birth_date !== pet.birth_date) {
@@ -200,8 +201,8 @@ export const outcomeHandlers = [
       if (!pet) return notFound('Питомец не найден')
       const body = raw as ClinicPetUpdate
       const changes: string[] = []
-      if (body.breed !== undefined && normalizeBreed(body.breed) !== pet.breed) {
-        pet.breed = normalizeBreed(body.breed)
+      if (body.breed !== undefined && normalizeText(body.breed) !== pet.breed) {
+        pet.breed = normalizeText(body.breed)
         changes.push('порода')
       }
       if (body.birth_date !== undefined && body.birth_date !== pet.birth_date) {

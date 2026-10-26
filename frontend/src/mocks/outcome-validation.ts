@@ -2,17 +2,11 @@ import { healthLimits, outcomeLimits } from '../api/limits'
 import type { CareStatus } from '../api/schema'
 import { addDays } from '../lib/dates'
 import { moscowIsoDate } from '../lib/format'
-import { textError } from './clinic-validation'
 import { isoDateError } from './date-validation'
-import {
-  conditionKindError,
-  conditionTitleError,
-  multilineTextError,
-  vaccineNameError,
-  weightError,
-} from './health-validation'
+import { conditionKindError, conditionTitleError, vaccineNameError, weightError } from './health-validation'
 import { fieldError, isObject, type FieldError } from './http-utils'
 import { birthDateError, breedError, sexError } from './pet-validation'
+import { multilineTextError, textError } from './text-validation'
 
 const CARE_STATUSES: readonly CareStatus[] = ['routine', 'attention', 'treatment', 'recovery', 'prevention']
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/

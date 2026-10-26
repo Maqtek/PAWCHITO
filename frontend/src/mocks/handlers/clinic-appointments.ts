@@ -2,12 +2,11 @@ import { http, HttpResponse } from 'msw'
 import { appointmentLimits } from '../../api/limits'
 import type { AppointmentStatus, ClinicAppointmentCancel, ClinicPetCard } from '../../api/schema'
 import { moscowLocal } from '../../lib/dates'
-import { charCount } from '../auth-validation'
 import { isoDateError } from '../date-validation'
-import { normalizeText } from '../health-validation'
 import { conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import { readServer, toAppointment, updateServer, type MockAppointment, type MockServerState } from '../server-state'
+import { normalizeText, textError } from '../text-validation'
 import { newestFirst, observationsInPeriod, readPeriod } from './health'
 import { authorizeClinic } from './vets'
 
@@ -36,19 +35,8 @@ function readFlag(query: URLSearchParams, name: string): boolean | Response {
 
 /** Комментарий клиники владельцу: обязателен, 1–500 символов, переводы строк разрешены (Р-53). */
 function commentError(value: unknown): string | null {
-  if (typeof value !== 'string') return 'Комментарий: ожидается строка'
-  const text = value.trim()
-  if (text === '') return 'Напишите владельцу, почему запись отменена'
-  if (charCount(text) > appointmentLimits.reasonCommentMax) {
-    return `Комментарий — не длиннее ${appointmentLimits.reasonCommentMax} символов`
-  }
-  // Переводы строк разрешены, остальные управляющие символы — нет.
-  return [...text].some((char) => {
-    const code = char.codePointAt(0) ?? 0
-    return (code < 0x20 && code !== 0x0a) || code === 0x7f
-  })
-    ? 'Комментарий содержит недопустимые символы'
-    : null
+  if (typeof value === 'string' && value.trim() === '') return 'Напишите владельцу, почему запись отменена'
+  return textError(value, 'Комментарий', appointmentLimits.reasonCommentMax, { multiline: true })
 }
 
 /** Карточка доступна, если у питомца есть неотменённая запись в эту клинику (Р-54). */
