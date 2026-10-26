@@ -13,8 +13,8 @@ import {
 import { conflict, notFound, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
-  attemptsKey,
   cancelFutureAppointments,
+  clearFailures,
   findAccount,
   newAccount,
   newClinic,
@@ -206,7 +206,7 @@ export const adminHandlers = [
       clinicAccount.must_change_password = true
       revokeUserTokens(state, clinicAccount.id)
       // Пауза после неудачных попыток снимается: клиника войдёт с новым временным паролем сразу.
-      delete state.attempts[attemptsKey(clinicAccount.email)]
+      clearFailures(state, clinicAccount.email)
       return HttpResponse.json({ temporary_password: temporaryPassword })
     }),
   ),

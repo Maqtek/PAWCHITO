@@ -574,12 +574,37 @@ export function writeMockCookie(token: string | null): void {
   }
 }
 
-/** Ключ счётчика неудачных попыток: один для входа, восстановления и сброса пароля администратором. */
-export const attemptsKey = (email: string) => email.trim().toLowerCase()
+/** Email без пробелов по краям и регистра: по нему ищется аккаунт и ведётся счётчик неудачных попыток. */
+const emailKey = (email: string) => email.trim().toLowerCase()
 
 export function findAccount(state: MockServerState, email: string): MockAccount | undefined {
-  const wanted = email.trim().toLowerCase()
+  const wanted = emailKey(email)
   return state.accounts.find((account) => account.email.toLowerCase() === wanted)
+}
+
+const MAX_FAILURES = 5
+const LOCK_MS = 15 * 60_000
+
+/**
+ * Секунды до конца паузы после пяти неудач или null. Счётчик один на аккаунт: неверный пароль при входе,
+ * неверный код восстановления и неверный текущий пароль при смене пароля и новом коде считаются вместе.
+ */
+export function lockedFor(state: MockServerState, email: string): number | null {
+  const lockedUntil = state.attempts[emailKey(email)]?.lockedUntil ?? null
+  if (lockedUntil === null || lockedUntil <= Date.now()) return null
+  return Math.ceil((lockedUntil - Date.now()) / 1000)
+}
+
+export function registerFailure(state: MockServerState, email: string): void {
+  const key = emailKey(email)
+  const failures = (state.attempts[key]?.failures ?? 0) + 1
+  state.attempts[key] =
+    failures >= MAX_FAILURES ? { failures: 0, lockedUntil: Date.now() + LOCK_MS } : { failures, lockedUntil: null }
+}
+
+/** Сброс счётчика и паузы: после удачной попытки и при сбросе пароля клиники администратором. */
+export function clearFailures(state: MockServerState, email: string): void {
+  delete state.attempts[emailKey(email)]
 }
 
 /** Ответ AdminClinic: аккаунт — по clinic_id, число будущих записей — из клиники. */
@@ -695,6 +720,11 @@ export function issueRefreshToken(state: MockServerState, userId: number): strin
   return token
 }
 
+/** Запись refresh-токена из cookie; без cookie и с неизвестным токеном — undefined. */
+export function findRefreshRecord(state: MockServerState, token: string | null) {
+  return token === null ? undefined : state.refreshTokens[token]
+}
+
 export function revokeUserTokens(state: MockServerState, userId: number): void {
   for (const record of Object.values(state.refreshTokens)) {
     if (record.userId === userId) record.revoked = true
@@ -716,16 +746,14 @@ export function accountFromAuthorization(state: MockServerState, header: string 
   return state.accounts.find((account) => account.id === Number(match[1])) ?? null
 }
 
-/** Код восстановления: 16 символов A–Z0–9 в формате XXXX-XXXX-XXXX-XXXX. */
-export function newRecoveryCode(): string {
-  const group = () =>
-    Array.from({ length: 4 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('')
-  return [group(), group(), group(), group()].join('-')
+/** Группы по четыре случайных символа алфавита через дефис. */
+function randomGroups(alphabet: string, groups: number): string {
+  const group = () => Array.from({ length: 4 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('')
+  return Array.from({ length: groups }, group).join('-')
 }
 
+/** Код восстановления: 16 символов A–Z0–9 в формате XXXX-XXXX-XXXX-XXXX. */
+export const newRecoveryCode = () => randomGroups(CODE_ALPHABET, 4)
+
 /** Временный пароль клиники xxxx-xxxx-xxxx: без похожих символов (0/O, 1/l/I), чтобы его можно было продиктовать. */
-export function newTemporaryPassword(): string {
-  const group = () =>
-    Array.from({ length: 4 }, () => PASSWORD_ALPHABET[Math.floor(Math.random() * PASSWORD_ALPHABET.length)]).join('')
-  return [group(), group(), group()].join('-')
-}
+export const newTemporaryPassword = () => randomGroups(PASSWORD_ALPHABET, 3)
