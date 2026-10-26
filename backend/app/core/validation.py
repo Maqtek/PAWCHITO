@@ -10,6 +10,7 @@ from fastapi import Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import TypeAdapter, ValidationError
 
 FIELD_NAMES = {
     "email": "Email",
@@ -52,3 +53,14 @@ def validation_exception_handler(request: Request, exc: Exception) -> JSONRespon
         for e in exc.errors()
     ]
     return JSONResponse(status_code=422, content={"detail": jsonable_encoder(detail)})
+
+
+def validate_value(field_type: Any, value: object, field: str) -> Any:
+    """Проверка значения по типу поля вне HTTP — в сиде и CLI.
+
+    Те же правила, что у API (schemas/fields.py); ошибка — ValueError с русским текстом.
+    """
+    try:
+        return TypeAdapter(field_type).validate_python(value)
+    except ValidationError as exc:
+        raise ValueError(_message({**exc.errors()[0], "loc": (field,)})) from None

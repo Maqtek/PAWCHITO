@@ -38,3 +38,19 @@ DATABASE_URL=postgresql+psycopg2://ПОЛЬЗОВАТЕЛЬ:ПАРОЛЬ@db:5432
 `REDIS_URL` в `.env` (по умолчанию `redis://localhost:6379/0`). Смотреть логи:
 
     docker compose exec redis redis-cli XREVRANGE logs + - COUNT 50
+
+## Администратор
+
+Создаётся сидом из `ADMIN_EMAIL` и `ADMIN_PASSWORD` в `.env` — в Docker при каждом старте бэкенда, локально вручную после миграций:
+
+```bash
+python -m app.seed
+```
+
+Если пользователь с таким email уже есть, сид ничего не меняет. Сменить пароль администратора можно только на сервере, через API нельзя:
+
+```bash
+python -m app.cli reset-admin-password admin@example.com
+```
+
+В Docker — `docker compose exec backend python -m app.cli reset-admin-password admin@example.com`. Пароль спрашивается дважды; для скриптов — `--password-stdin`. Все сессии администратора завершаются, пауза после неудачных попыток снимается.
