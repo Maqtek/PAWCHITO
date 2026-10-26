@@ -164,7 +164,17 @@ function OutcomeDetails({ outcome }: { outcome: AppointmentOutcome }) {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs text-ink-muted">Дела курса по рецептам появятся в разделе «Дела».</p>
+          <p className="mt-2 text-xs text-ink-muted">
+            Дозы курса — в разделах{' '}
+            <Link to="/tasks" className={linkClass}>
+              «Дела»
+            </Link>{' '}
+            и{' '}
+            <Link to="/course" className={linkClass}>
+              «Курс лечения»
+            </Link>
+            .
+          </p>
         </>
       )}
       {outcome.vaccinations.length > 0 && (

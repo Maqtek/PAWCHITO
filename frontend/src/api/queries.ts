@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { api } from './client'
 import { ApiError } from './errors'
-import type { AppointmentStatus } from './schema'
+import type { AppointmentStatus, ReminderStatus } from './schema'
 
 interface ApiResult<T> {
   data?: T
@@ -41,6 +41,10 @@ export const queryKeys = {
   clinicAppointmentsFiltered: (filters: ClinicAppointmentFilters) => ['clinic', 'appointments', filters] as const,
   clinicPet: (petId: number) => ['clinic', 'pets', petId] as const,
   clinicPetObservations: (petId: number) => ['clinic', 'pets', petId, 'observations'] as const,
+  // Под общим ['reminders']: отметка, новое дело или удаление перечитывает «Дела», «Курс лечения» и прогресс курсов.
+  reminders: ['reminders'] as const,
+  remindersFiltered: (filters: ReminderFilters) => ['reminders', filters] as const,
+  prescriptionProgress: (prescriptionId: number) => ['reminders', 'progress', prescriptionId] as const,
 }
 
 /** Фильтры записей клиники (Р-52): пустые не передаются. */
@@ -51,6 +55,15 @@ export interface ClinicAppointmentFilters {
   vet_id?: number
   awaiting_outcome?: boolean
   requires_decision?: boolean
+}
+
+/** Фильтры дел (Р-60): пустые не передаются, даты — по плановой дате включительно. */
+export interface ReminderFilters {
+  pet_id?: number
+  date_from?: string
+  date_to?: string
+  status?: ReminderStatus
+  prescription_id?: number
 }
 
 export const meQuery = queryOptions({
@@ -171,4 +184,18 @@ export const clinicPetObservationsQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.clinicPetObservations(petId),
     queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}/observations', { params: { path: { pet_id: petId } } })),
+  })
+
+/** Дела по плановому времени, от ранних к поздним (Р-60). */
+export const remindersQuery = (filters: ReminderFilters) =>
+  queryOptions({
+    queryKey: queryKeys.remindersFiltered(filters),
+    queryFn: () => unwrap(api.GET('/reminders', { params: { query: filters } })),
+  })
+
+/** Прогресс курса: просроченные дела входят в pending (Р-63). */
+export const prescriptionProgressQuery = (prescriptionId: number) =>
+  queryOptions({
+    queryKey: queryKeys.prescriptionProgress(prescriptionId),
+    queryFn: () => unwrap(api.GET('/prescriptions/{id}/progress', { params: { path: { id: prescriptionId } } })),
   })
