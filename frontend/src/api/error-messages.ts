@@ -11,6 +11,7 @@ export type ErrorContext =
   | 'profile'
   | 'clinic'
   | 'clinic-account'
+  | 'vet'
   | 'default'
 
 const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
@@ -25,6 +26,7 @@ const byContext: Partial<Record<ErrorContext, Partial<Record<number, string>>>> 
   'change-password': { 400: 'Неверный текущий пароль.' },
   'recovery-code': { 400: 'Неверный текущий пароль.' },
   'clinic-account': { 409: 'У клиники уже есть аккаунт или email занят.' },
+  vet: { 404: 'Врач не найден. Список врачей обновлён.' },
 }
 
 /** Текст ошибки запроса для пользователя. Ошибки полей 422 — в ApiError.fieldErrors. */

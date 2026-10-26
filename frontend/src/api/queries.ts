@@ -21,6 +21,7 @@ export const queryKeys = {
   unreadCount: ['notifications', 'unread-count'] as const,
   adminClinics: ['admin', 'clinics'] as const,
   adminClinic: (id: number) => ['admin', 'clinics', id] as const,
+  clinicVets: ['clinic', 'vets'] as const,
 }
 
 export const meQuery = queryOptions({
@@ -50,3 +51,9 @@ export const adminClinicQuery = (id: number) =>
     queryKey: queryKeys.adminClinic(id),
     queryFn: () => unwrap(api.GET('/admin/clinics/{id}', { params: { path: { id } } })),
   })
+
+/** Врачи своей клиники вместе с архивными: страница делит их на вкладки сама. */
+export const clinicVetsQuery = queryOptions({
+  queryKey: queryKeys.clinicVets,
+  queryFn: () => unwrap(api.GET('/clinic/vets', { params: { query: { include_archived: true } } })),
+})
