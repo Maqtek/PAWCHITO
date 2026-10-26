@@ -1,12 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Pencil } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { conditionsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Condition } from '../../api/schema'
 import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button } from '../../components/ui'
 import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { ConditionFormModal } from './ConditionFormModal'
 import { ConfirmActionModal } from './ConfirmActionModal'
 import { refetchAfterFailure, storeRecord } from './health-cache'
@@ -28,15 +29,8 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
   const queryClient = useQueryClient()
   const list = useQuery(conditionsQuery(petId))
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Запись ушла в архив вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
   const dialogCondition = dialog.condition && (list.data?.find((item) => item.id === dialog.condition?.id) ?? dialog.condition)
@@ -48,7 +42,7 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
   }
 
   function closeDialog({ gone = false } = {}) {
-    if (dialog.condition && (gone || !list.data?.some((item) => item.id === dialog.condition?.id))) focusList.current = true
+    if (dialog.condition && (gone || !list.data?.some((item) => item.id === dialog.condition?.id))) focusListLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 

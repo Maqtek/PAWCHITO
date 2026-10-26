@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Stethoscope } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { clinicVetsQuery } from '../../api/queries'
 import type { Vet } from '../../api/schema'
 import { Button, EmptyState, LoadError, PageStatus, Spinner, Tabs } from '../../components/ui'
@@ -8,6 +8,7 @@ import { VetArchiveModal, type ArchiveAction } from '../../features/vets/VetArch
 import { VetCard } from '../../features/vets/VetCard'
 import { VetFormModal } from '../../features/vets/VetFormModal'
 import { PageHeader } from '../../layouts/PageHeader'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 type View = 'active' | 'archived'
 
@@ -27,16 +28,10 @@ export function ClinicVetsPage() {
   const [view, setView] = useState<View>('active')
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const [status, setStatus] = useState('')
-  const tabsRef = useRef<HTMLDivElement>(null)
-  const focusTabs = useRef(false)
-
   // Врач ушёл в другую вкладку вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, вкладка получает его последней.
-  useEffect(() => {
-    if (!focusTabs.current) return
-    focusTabs.current = false
-    tabsRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()
-  })
+  const [tabsRef, focusTabsLater] = useFocusAfterRender<HTMLDivElement>((tabs) =>
+    tabs.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'),
+  )
 
   const sorted = vets ? [...vets].sort(byName) : []
   const active = sorted.filter((vet) => vet.archived_at === null)
@@ -53,7 +48,7 @@ export function ClinicVetsPage() {
 
   function closeDialog({ vetMoved = false } = {}) {
     // Врача нет в этой вкладке: ушёл после подтверждения или после ошибки, когда изменение всё же применилось.
-    if (dialog.vet && (vetMoved || !shown.some((vet) => vet.id === dialog.vet?.id))) focusTabs.current = true
+    if (dialog.vet && (vetMoved || !shown.some((vet) => vet.id === dialog.vet?.id))) focusTabsLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 

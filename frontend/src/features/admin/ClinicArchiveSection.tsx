@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { EyeOff, RotateCcw } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { adminClinicQuery, unwrap } from '../../api/queries'
@@ -8,6 +8,7 @@ import type { AdminClinic } from '../../api/schema'
 import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, Card, FormAlert, Modal } from '../../components/ui'
 import { pluralize } from '../../lib/format'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { useForm } from '../../lib/use-form'
 import { refetchAfterFailure, storeClinic } from './clinic-cache'
 
@@ -22,21 +23,13 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
   const [busy, setBusy] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
-  const headingRef = useRef<HTMLHeadingElement>(null)
-  const focusHeading = useRef(false)
-  const archived = clinic.archived_at !== null
-
   // Кнопка, с которой начали, исчезает — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, заголовок получает его последним.
-  useEffect(() => {
-    if (!focusHeading.current) return
-    focusHeading.current = false
-    headingRef.current?.focus()
-  })
+  const [headingRef, focusHeadingLater] = useFocusAfterRender<HTMLHeadingElement>()
+  const archived = clinic.archived_at !== null
 
   function closeConfirm() {
     // Клиника успела скрыться (ответ не дошёл, страница перечитана) — кнопки «Скрыть клинику» уже нет.
-    if (archived) focusHeading.current = true
+    if (archived) focusHeadingLater()
     setConfirming(false)
   }
 
@@ -52,7 +45,7 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
-      focusHeading.current = true
+      focusHeadingLater()
       storeClinic(queryClient, saved)
       onStatus('Клиника возвращена.')
     } catch (error) {
@@ -107,7 +100,7 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
             onBusyChange={setBusy}
             onCancel={closeConfirm}
             onArchived={(cancelled) => {
-              focusHeading.current = true
+              focusHeadingLater()
               setConfirming(false)
               onStatus(`Клиника скрыта. Отменено записей: ${cancelled}.`)
             }}

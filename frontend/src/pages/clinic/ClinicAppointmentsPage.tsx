@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardList } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { validationMessages } from '../../api/error-messages'
 import { clinicAppointmentsQuery, clinicVetsQuery, type ClinicAppointmentFilters } from '../../api/queries'
@@ -13,6 +13,7 @@ import { PageHeader } from '../../layouts/PageHeader'
 import { addDays } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
 import { appointmentStatusLabel, careStatusLabel } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 type View = 'schedule' | 'awaiting' | 'decision'
 
@@ -63,15 +64,8 @@ export function ClinicAppointmentsPage() {
 
   const [notice, setNotice] = useState('')
   const [dialog, setDialog] = useState<Dialog>({ kind: 'cancel', open: false })
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отменённая запись уходит из вкладки вместе с кнопкой, открывшей окно, — фокус переходит на список.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   const current = view === 'schedule' ? schedule : view === 'awaiting' ? awaiting : decision
   const vetAvailability = new Map<number, VetAvailability>()
@@ -179,7 +173,7 @@ export function ClinicAppointmentsPage() {
         onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
         onDone={(cancelled) => {
           setNotice(`Запись отменена: ${cancelled.pet.name}. Владелец получит уведомление с вашим комментарием.`)
-          focusList.current = true
+          focusListLater()
           setDialog((currentDialog) => ({ ...currentDialog, open: false }))
         }}
       />
@@ -195,7 +189,7 @@ export function ClinicAppointmentsPage() {
               ' Владелец получит уведомление.',
           )
           // Запись ушла из «Ждут итога» вместе с кнопкой, открывшей окно.
-          focusList.current = true
+          focusListLater()
           setDialog((currentDialog) => ({ ...currentDialog, open: false }))
         }}
       />

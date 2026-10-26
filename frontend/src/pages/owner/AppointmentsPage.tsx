@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, ClipboardList, PawPrint } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
@@ -10,6 +10,7 @@ import { AppointmentCard } from '../../features/appointments/AppointmentCard'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 interface Dialog {
   appointment?: Appointment
@@ -66,15 +67,8 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
   const [status, setStatus] = useState('')
   const [dialog, setDialog] = useState<Dialog>({ open: false })
   const [now] = useState(() => new Date())
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отменённая запись уходит в «Прошедшие» вместе с кнопкой, открывшей окно, — фокус переходит на список.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   const upcoming = (appointments ?? [])
     .filter((item) => isCancellable(item, now))
@@ -152,7 +146,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
         onClose={() => setDialog((current) => ({ ...current, open: false }))}
         onDone={() => {
           setStatus('Запись отменена. Клиника получит уведомление.')
-          focusList.current = true
+          focusListLater()
           setDialog((current) => ({ ...current, open: false }))
         }}
       />

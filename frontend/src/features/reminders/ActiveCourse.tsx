@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { remindersQuery } from '../../api/queries'
 import type { Reminder } from '../../api/schema'
 import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from '../../components/ui'
 import { formatDayDate, formatShortDate, formatTime, NBSP, pluralize } from '../../lib/format'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { progressText, type Course } from './course'
 import { MarkActions } from './MarkActions'
 import { canMark, dueDay, formatDue, markedMessage } from './reminder-actions'
@@ -37,15 +38,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
   const reminders = useQuery(remindersQuery({ prescription_id: prescription.id }))
   const [showPast, setShowPast] = useState(false)
   const [skipping, setSkipping] = useState<{ reminder?: Reminder; open: boolean }>({ open: false })
-  const daysRef = useRef<HTMLDivElement>(null)
-  const focusDays = useRef(false)
-
   // После отметки кнопки дозы пропадают — фокус переходит на дни курса, а не на body.
-  useEffect(() => {
-    if (!focusDays.current) return
-    focusDays.current = false
-    daysRef.current?.focus()
-  })
+  const [daysRef, focusDaysLater] = useFocusAfterRender<HTMLDivElement>()
 
   const title = `${prescription.drug}, ${prescription.dosage}`
 
@@ -89,7 +83,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
                         onStatus={onStatus}
                         onDone={(result) => {
                           onStatus(markedMessage(result, today))
-                          focusDays.current = true
+                          focusDaysLater()
                         }}
                         onSkip={() => {
                           onStatus('')
@@ -140,7 +134,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
         onClose={() => setSkipping((current) => ({ ...current, open: false }))}
         onSkipped={(result) => {
           onStatus(markedMessage(result, today))
-          focusDays.current = true
+          focusDaysLater()
           setSkipping((current) => ({ ...current, open: false }))
         }}
       />

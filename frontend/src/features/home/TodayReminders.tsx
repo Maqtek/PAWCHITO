@@ -1,9 +1,10 @@
 import { CalendarCheck } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Reminder, ReminderMarked } from '../../api/schema'
 import { Badge, Card, EmptyState, linkClass } from '../../components/ui'
 import { eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { MarkActions } from '../reminders/MarkActions'
 import { formatDue, markedMessage, scheduleLabel } from '../reminders/reminder-actions'
 import { ReminderConfirmModal } from '../reminders/ReminderConfirmModal'
@@ -20,19 +21,12 @@ interface TodayRemindersProps {
 export function TodayReminders({ reminders, today, onStatus }: TodayRemindersProps) {
   const headingId = useId()
   const [skipping, setSkipping] = useState<{ reminder?: Reminder; open: boolean }>({ open: false })
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отмеченное дело пропадает из списка вместе со своими кнопками — без этого фокус упадёт на body.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   function marked(result: ReminderMarked) {
     onStatus(markedMessage(result, today))
-    focusList.current = true
+    focusListLater()
   }
 
   return (

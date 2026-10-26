@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { queryKeys, unwrap, vaccinationsQuery } from '../../api/queries'
 import type { Vaccination } from '../../api/schema'
@@ -8,6 +8,7 @@ import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button } from '../../components/ui'
 import { formatLongDate, moscowIsoDate } from '../../lib/format'
 import { dataSourceLabel } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { ConfirmActionModal } from './ConfirmActionModal'
 import { refetchAfterFailure, storeRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
@@ -30,15 +31,8 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
   const list = useQuery(vaccinationsQuery(petId))
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const [today] = useState(() => moscowIsoDate(new Date()))
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Прививка удалена вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
   const dialogVaccination =
@@ -52,7 +46,7 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
 
   function closeDialog({ gone = false } = {}) {
     if (dialog.vaccination && (gone || !list.data?.some((item) => item.id === dialog.vaccination?.id))) {
-      focusList.current = true
+      focusListLater()
     }
     setDialog((current) => ({ ...current, open: false }))
   }

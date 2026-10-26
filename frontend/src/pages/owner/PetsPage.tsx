@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { PawPrint, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { petsQuery } from '../../api/queries'
 import type { Pet, PetArchived } from '../../api/schema'
 import { Button, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
@@ -10,6 +10,7 @@ import { PetListItem } from '../../features/pets/PetListItem'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { NBSP, pluralize } from '../../lib/format'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 interface Dialog {
   kind: 'add' | 'edit' | 'archive'
@@ -36,16 +37,8 @@ export function PetsPage() {
   const [now] = useState(() => new Date())
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const [status, setStatus] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Питомец ушёл в архив вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, список получает его последним.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   // Данные питомца в окне — из свежего списка; пропал из списка — последние известные.
   const dialogPet = dialog.pet && (pets?.find((pet) => pet.id === dialog.pet?.id) ?? dialog.pet)
@@ -58,7 +51,7 @@ export function PetsPage() {
 
   function closeDialog({ petGone = false } = {}) {
     // Питомца нет в списке: ушёл в архив после подтверждения или после ошибки, когда архивирование всё же применилось.
-    if (dialog.pet && (petGone || !pets?.some((pet) => pet.id === dialog.pet?.id))) focusList.current = true
+    if (dialog.pet && (petGone || !pets?.some((pet) => pet.id === dialog.pet?.id))) focusListLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 

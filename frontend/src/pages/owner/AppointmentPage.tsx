@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
 import { ApiError } from '../../api/errors'
@@ -18,6 +18,7 @@ import {
   cancelledByLabel,
   careStatusLabel,
 } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 /** Запись владельца: сюда ведут мастер записи и уведомления (`link: /appointments/20`). */
 export function AppointmentPage() {
@@ -27,15 +28,8 @@ export function AppointmentPage() {
   const [status, setStatus] = useState(() => (location.state as { status?: string } | null)?.status ?? '')
   const [cancelOpen, setCancelOpen] = useState(false)
   const [now] = useState(() => new Date())
-  const cardRef = useRef<HTMLDivElement>(null)
-  const focusCard = useRef(false)
-
   // После отмены кнопки «Отменить запись» больше нет — фокус переходит на карточку, а не на body.
-  useEffect(() => {
-    if (!focusCard.current) return
-    focusCard.current = false
-    cardRef.current?.focus()
-  })
+  const [cardRef, focusCardLater] = useFocusAfterRender<HTMLDivElement>()
 
   const back = (
     <Link to="/appointments" className={linkClass}>
@@ -116,7 +110,7 @@ export function AppointmentPage() {
         onClose={() => setCancelOpen(false)}
         onDone={() => {
           setStatus('Запись отменена. Клиника получит уведомление.')
-          focusCard.current = true
+          focusCardLater()
           setCancelOpen(false)
         }}
       />
