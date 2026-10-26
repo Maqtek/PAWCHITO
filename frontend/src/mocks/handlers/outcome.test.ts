@@ -128,6 +128,18 @@ describe('итог приёма: поля', () => {
       'body.prescriptions',
     ])
   })
+
+  it('заключение null — 422, как и без заключения, а не 500', async () => {
+    afterVisit()
+    const response = await call('POST', '/clinic/appointments/20/outcome', {
+      token: await clinic(),
+      body: { ...FULL_OUTCOME, conclusion: null },
+    })
+    expect(response.status).toBe(422)
+    expect(await response.json()).toEqual({
+      detail: [{ loc: ['body', 'conclusion'], msg: 'Напишите заключение', type: 'value_error' }],
+    })
+  })
 })
 
 describe('итог приёма: сохранение', () => {

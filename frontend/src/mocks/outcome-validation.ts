@@ -39,7 +39,8 @@ export function outcomeErrors(raw: Raw, appointmentDay: string | null, now = new
   // Поля самого итога — только на первом проходе, иначе ошибки повторятся.
   if (appointmentDay === null) {
     const conclusion = typeof raw.conclusion === 'string' ? raw.conclusion.trim() : raw.conclusion
-    add(['conclusion'], conclusion === '' || conclusion === undefined ? 'Напишите заключение' : multilineTextError(raw.conclusion, 'Заключение', outcomeLimits.textMax))
+    // null — тоже «нет заключения»: поле обязательное, multilineTextError пропустил бы его как необязательное.
+    add(['conclusion'], conclusion === '' || conclusion == null ? 'Напишите заключение' : multilineTextError(raw.conclusion, 'Заключение', outcomeLimits.textMax))
     add(['recommendations'], 'recommendations' in raw ? multilineTextError(raw.recommendations, 'Рекомендации', outcomeLimits.textMax) : null)
     add(['care_status'], CARE_STATUSES.includes(raw.care_status as CareStatus) ? null : 'Выберите статус ухода')
   }
