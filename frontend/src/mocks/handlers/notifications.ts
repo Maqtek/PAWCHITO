@@ -38,7 +38,7 @@ export const notificationHandlers = [
     if (!Number.isInteger(limit) || limit < 1 || limit > LIMIT_MAX) return queryError('limit', `limit — от 1 до ${LIMIT_MAX}`)
     const own = ownNotifications(state, account.id)
     // От новых к старым; в одну секунду — от последнего созданного (Р-55).
-    const items = [...own].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).slice(0, limit)
+    const items = own.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).slice(0, limit)
     return HttpResponse.json({ unread_count: unread(own), items: items.map(toNotification) })
   }),
 
