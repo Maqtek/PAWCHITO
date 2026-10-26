@@ -1,7 +1,7 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { setSeedClock } from '../../test/clock'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 beforeEach(() => setSeedClock('clinic'))
 

@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { MemoryRouter, parsePath } from 'react-router-dom'
 import { createQueryClient } from '../app/queryClient'
-import { AppRoutes } from '../app/routes'
 import { SessionEvents } from '../features/session/SessionEvents'
 
 const renderedClients = new Set<QueryClient>()
@@ -39,6 +38,3 @@ export function renderWithProviders(ui: ReactElement, { route = '/', state }: { 
   )
   return { ...result, user, queryClient }
 }
-
-/** Всё приложение на адресе route — как его откроет пользователь. */
-export const renderRoute = (route: string) => renderWithProviders(<AppRoutes />, { route })

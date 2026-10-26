@@ -7,8 +7,8 @@ import { loginMockAs } from '../../mocks/session'
 import { createGate } from '../../test/gate'
 import { addZoovetAccount } from '../../test/mock-state'
 import { articleTitles, findStatus } from '../../test/queries'
-import { renderRoute } from '../../test/render'
 import { recordRequests } from '../../test/requests'
+import { renderRoute } from '../../test/route'
 import { NETWORK, SERVER_UNAVAILABLE } from '../../test/texts'
 
 beforeEach(() => {

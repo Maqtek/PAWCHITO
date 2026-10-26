@@ -8,8 +8,8 @@ import { readServer, SEED_PASSWORD } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { createGate } from '../../test/gate'
 import { call } from '../../test/mock-api'
-import { renderRoute } from '../../test/render'
 import { stubRequestTimeout } from '../../test/requests'
+import { renderRoute } from '../../test/route'
 import { NETWORK, TOO_MANY_ATTEMPTS } from '../../test/texts'
 
 const owner = () => readServer().accounts.find((item) => item.email === 'owner@example.com')

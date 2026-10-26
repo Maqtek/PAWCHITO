@@ -5,7 +5,7 @@ import { NBSP } from '../../lib/format'
 import { server } from '../../mocks/node'
 import { readServer, updateServer } from '../../mocks/server-state'
 import { articleTitles, findStatus } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 const renderPets = () => renderRoute('/pets')
 

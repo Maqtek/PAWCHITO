@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
 import { loginMockAs } from '../../mocks/session'
 import { updateServer } from '../../mocks/server-state'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 beforeEach(() => {
   loginMockAs('admin')

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
 import { readServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 const renderWizard = () => renderRoute('/appointments/new')
 const times = () => within(screen.getByRole('list', { name: 'Свободное время' })).getAllByRole('button').map((button) => button.textContent)

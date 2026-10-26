@@ -3,8 +3,8 @@ import type { UserEvent } from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { readServer, SEED_PASSWORD, updateServer } from '../../mocks/server-state'
 import { loginMockAs, logoutMock } from '../../mocks/session'
-import { renderRoute } from '../../test/render'
 import { recordRequests, settle } from '../../test/requests'
+import { renderRoute } from '../../test/route'
 import { TOO_MANY_ATTEMPTS } from '../../test/texts'
 
 async function submit(user: UserEvent, { current, next, repeat = next }: { current: string; next: string; repeat?: string }) {

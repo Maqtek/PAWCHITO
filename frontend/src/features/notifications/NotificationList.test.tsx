@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { readServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
 import { setSeedClock } from '../../test/clock'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 beforeEach(() => setSeedClock('owner'))
 

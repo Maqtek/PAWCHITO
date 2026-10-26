@@ -4,7 +4,7 @@ import { readServer, updateServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { addReminder } from '../../test/mock-state'
 import { articleTitles, findStatus, region } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 import { SELECTED_PET_KEY } from '../../test/storage-keys'
 
 const renderTasks = () => renderRoute('/tasks')

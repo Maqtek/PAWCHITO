@@ -9,8 +9,9 @@ import { loginMockAs } from '../../mocks/session'
 import { createGate } from '../../test/gate'
 import { addZoovetAccount } from '../../test/mock-state'
 import { findStatus } from '../../test/queries'
-import { renderRoute, renderWithProviders } from '../../test/render'
+import { renderWithProviders } from '../../test/render'
 import { stubRequestTimeout } from '../../test/requests'
+import { renderRoute } from '../../test/route'
 import { NETWORK, SERVER_UNAVAILABLE } from '../../test/texts'
 
 beforeEach(() => {

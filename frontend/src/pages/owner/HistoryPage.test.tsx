@@ -5,7 +5,7 @@ import { server } from '../../mocks/node'
 import { newObservation, readServer, updateServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { articleTitles, findStatus, region } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 const renderHistory = () => renderRoute('/history')
 

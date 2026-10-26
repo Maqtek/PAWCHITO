@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { findStatus, region } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 import { SELECTED_PET_KEY } from '../../test/storage-keys'
 
 const renderCourse = () => renderRoute('/course')

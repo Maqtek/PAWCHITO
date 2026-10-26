@@ -5,7 +5,7 @@ import { server } from '../../mocks/node'
 import { readServer, updateServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { articleTitles, findStatus, region } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 import { SELECTED_PET_KEY } from '../../test/storage-keys'
 
 // Среда, 28 октября 2026, 09:00 по Москве; seed записей пересчитан от этой даты.

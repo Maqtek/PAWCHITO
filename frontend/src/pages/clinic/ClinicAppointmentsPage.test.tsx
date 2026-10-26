@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { readServer, updateServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { articleTitles, findStatus } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 const renderPage = (route = '/clinic/appointments') => renderRoute(route)
 

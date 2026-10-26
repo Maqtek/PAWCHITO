@@ -1,7 +1,7 @@
 import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { endMockSessions, loginMockAs, logoutMock } from '../mocks/session'
-import { renderRoute } from '../test/render'
+import { renderRoute } from '../test/route'
 
 describe('маршруты', () => {
   it('владелец на главной: приветствие и карточка питомца', async () => {

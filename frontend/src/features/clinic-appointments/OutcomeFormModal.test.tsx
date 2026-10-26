@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readServer } from '../../mocks/server-state'
 import { setSeedClock } from '../../test/clock'
 import { findStatus } from '../../test/queries'
-import { renderRoute } from '../../test/render'
+import { renderRoute } from '../../test/route'
 
 // Seed пересчитан от среды 28 октября 2026; затем часы — на пятницу 30.10, 10:30: приём №20 Майло (10:00) и №25 Рекса
 // (10:30) подтверждены и ждут итога.
