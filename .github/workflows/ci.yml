@@ -72,6 +72,10 @@ jobs:
       - name: mypy
         run: mypy app
 
+      - name: openapi.json актуален
+        # Из схемы фронт генерирует типы: изменили API и не перевыгрузили файл — шаг красный.
+        run: python -m app.export_openapi --check
+
       - name: pytest
         run: pytest
 
