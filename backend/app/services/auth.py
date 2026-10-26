@@ -22,17 +22,18 @@ from app.core.security import (
 from app.models import User, UserRole
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
+from app.services.rate_limit import AttemptLimiter, FailedAttempt
 
 
 class EmailTakenError(Exception):
     pass
 
 
-class InvalidCredentialsError(Exception):
+class InvalidCredentialsError(FailedAttempt):
     pass
 
 
-class InvalidCurrentPasswordError(Exception):
+class InvalidCurrentPasswordError(FailedAttempt):
     pass
 
 
@@ -44,7 +45,7 @@ class InvalidRefreshTokenError(Exception):
     """Токена нет, он истёк или отозван, либо пользователь заблокирован — нужен новый вход."""
 
 
-class InvalidRecoveryCodeError(Exception):
+class InvalidRecoveryCodeError(FailedAttempt):
     """Неверная пара email и код — без уточнения, что именно не так."""
 
 
@@ -59,8 +60,9 @@ class IssuedTokens:
 
 
 class AuthService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, limiter: AttemptLimiter) -> None:
         self.users = UserRepository(session)
+        self.limiter = limiter
         self.refresh_tokens = RefreshTokenRepository(session)
 
     def register(self, email: str, password: str, full_name: str) -> tuple[User, str, IssuedTokens]:
@@ -81,12 +83,13 @@ class AuthService:
         return user, recovery_code, self._issue_tokens(user)
 
     def login(self, email: str, password: str) -> IssuedTokens:
-        user = self.users.get_by_email(email)
-        if user is None:
-            verify_password(password, DUMMY_PASSWORD_HASH)
-            raise InvalidCredentialsError
-        if not verify_password(password, user.password_hash):
-            raise InvalidCredentialsError
+        with self.limiter.attempt(email):
+            user = self.users.get_by_email(email)
+            if user is None:
+                verify_password(password, DUMMY_PASSWORD_HASH)
+                raise InvalidCredentialsError
+            if not verify_password(password, user.password_hash):
+                raise InvalidCredentialsError
         # Блокировку проверяем после пароля: без пароля статус аккаунта не раскрываем
         if not user.is_active:
             raise UserBlockedError
@@ -138,14 +141,15 @@ class AuthService:
 
         Все сессии завершаются, токены не выдаём — дальше обычный вход с новым паролем.
         """
-        user = self.users.get_by_email(email)
-        # Код есть только у владельца; для чужого email и для клиники тратим то же время
-        # на Argon2, чтобы по скорости ответа не узнать, какие email зарегистрированы
-        if user is None or user.recovery_code_hash is None:
-            verify_password(recovery_code, DUMMY_PASSWORD_HASH)
-            raise InvalidRecoveryCodeError
-        if not verify_password(recovery_code, user.recovery_code_hash):
-            raise InvalidRecoveryCodeError
+        with self.limiter.attempt(email):
+            user = self.users.get_by_email(email)
+            # Код есть только у владельца; для чужого email и для клиники тратим то же время
+            # на Argon2, чтобы по скорости ответа не узнать, какие email зарегистрированы
+            if user is None or user.recovery_code_hash is None:
+                verify_password(recovery_code, DUMMY_PASSWORD_HASH)
+                raise InvalidRecoveryCodeError
+            if not verify_password(recovery_code, user.recovery_code_hash):
+                raise InvalidRecoveryCodeError
         new_code = generate_recovery_code()
         self.users.update(
             user,
@@ -163,8 +167,12 @@ class AuthService:
         return new_code
 
     def _check_current_password(self, user: User, password: str) -> None:
-        if not verify_password(password, user.password_hash):
-            raise InvalidCurrentPasswordError
+        """Смена пароля и новый код: тот же счётчик, что у входа (Р-31) -
+        иначе из захваченной сессии можно подбирать пароль без ограничений.
+        """
+        with self.limiter.attempt(user.email):
+            if not verify_password(password, user.password_hash):
+                raise InvalidCurrentPasswordError
 
     def _issue_tokens(self, user: User) -> IssuedTokens:
         refresh_token = generate_refresh_token()
