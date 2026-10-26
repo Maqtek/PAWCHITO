@@ -22,6 +22,7 @@ from app.core.security import (
 from app.models import User, UserRole
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
+from app.services.rate_limit import AttemptLimiter
 
 
 class EmailTakenError(Exception):
@@ -59,8 +60,9 @@ class IssuedTokens:
 
 
 class AuthService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, limiter: AttemptLimiter) -> None:
         self.users = UserRepository(session)
+        self.limiter = limiter
         self.refresh_tokens = RefreshTokenRepository(session)
 
     def register(self, email: str, password: str, full_name: str) -> tuple[User, str, IssuedTokens]:
@@ -84,9 +86,12 @@ class AuthService:
         user = self.users.get_by_email(email)
         if user is None:
             verify_password(password, DUMMY_PASSWORD_HASH)
+            self.limiter.register_failure(email)
             raise InvalidCredentialsError
         if not verify_password(password, user.password_hash):
+            self.limiter.register_failure(email)
             raise InvalidCredentialsError
+        self.limiter.reset(email)
         # Блокировку проверяем после пароля: без пароля статус аккаунта не раскрываем
         if not user.is_active:
             raise UserBlockedError
@@ -138,14 +143,18 @@ class AuthService:
 
         Все сессии завершаются, токены не выдаём — дальше обычный вход с новым паролем.
         """
+        self.limiter.check(email)
         user = self.users.get_by_email(email)
         # Код есть только у владельца; для чужого email и для клиники тратим то же время
         # на Argon2, чтобы по скорости ответа не узнать, какие email зарегистрированы
         if user is None or user.recovery_code_hash is None:
             verify_password(recovery_code, DUMMY_PASSWORD_HASH)
+            self.limiter.register_failure(email)
             raise InvalidRecoveryCodeError
         if not verify_password(recovery_code, user.recovery_code_hash):
+            self.limiter.register_failure(email)
             raise InvalidRecoveryCodeError
+        self.limiter.reset(email)
         new_code = generate_recovery_code()
         self.users.update(
             user,
@@ -163,8 +172,14 @@ class AuthService:
         return new_code
 
     def _check_current_password(self, user: User, password: str) -> None:
+        """Смена пароля и новый код: тот же счётчик, что у входа (Р-31) -
+        иначе из захваченной сессии можно подбирать пароль без ограничений.
+        """
+        self.limiter.check(user.email)
         if not verify_password(password, user.password_hash):
+            self.limiter.register_failure(user.email)
             raise InvalidCurrentPasswordError
+        self.limiter.reset(user.email)
 
     def _issue_tokens(self, user: User) -> IssuedTokens:
         refresh_token = generate_refresh_token()

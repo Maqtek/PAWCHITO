@@ -8,18 +8,27 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.cookies import REFRESH_COOKIE_NAME
+from app.core.redis import redis_client
 from app.core.security import InvalidTokenError, decode_access_token
 from app.db.session import get_db
 from app.models import User, UserRole
 from app.repositories.user import UserRepository
 from app.services.auth import AuthService
+from app.services.rate_limit import AttemptLimiter
 from app.services.users import UserService
 
 DbSession = Annotated[Session, Depends(get_db, scope="function")]
 
 
-def get_auth_service(db: DbSession) -> AuthService:
-    return AuthService(db)
+def get_attempt_limiter() -> AttemptLimiter:
+    return AttemptLimiter(redis_client)
+
+
+AttemptLimiterDep = Annotated[AttemptLimiter, Depends(get_attempt_limiter)]
+
+
+def get_auth_service(db: DbSession, limiter: AttemptLimiterDep) -> AuthService:
+    return AuthService(db, limiter)
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

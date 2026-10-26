@@ -8,8 +8,10 @@ from app.core.logging import setup_logging
 from app.core.middleware import RequestLogMiddleware
 from app.core.validation import validation_exception_handler
 from app.routers.auth import router as auth_router
+from app.routers.errors import too_many_attempts_handler
 from app.routers.health import router as health_router
 from app.routers.users import router as users_router
+from app.services.rate_limit import TooManyAttemptsError
 
 
 @asynccontextmanager
@@ -22,6 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="PAWCHITO", lifespan=lifespan)
 app.add_middleware(RequestLogMiddleware)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(TooManyAttemptsError, too_many_attempts_handler)
 
 app.include_router(health_router)
 # Префикс /api: прокси фронта шлёт запросы как есть, cookie выставлена на /api/auth

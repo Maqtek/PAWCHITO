@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
 
+    # Лимит неудачных попыток входа, восстановления и смены пароля
+    auth_max_failures: int = 5
+    auth_lock_minutes: int = 15
+
     # True — cookie только по HTTPS. http://localhost браузеры считают безопасным
     cookie_secure: bool = True
 
