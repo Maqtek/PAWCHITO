@@ -5,7 +5,7 @@ import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import { Button, FormAlert, Modal, TextField } from '../../components/ui'
+import { FormActions, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { emailError } from '../auth/checks'
 import { RevealOnceScreen } from '../auth/RevealOnceScreen'
@@ -75,31 +75,22 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
     initial: { email: '' },
     validate: (values) => ({ email: emailError(values.email) }),
     context: 'clinic-account',
+    onBusyChange,
     onSubmit: async ({ email }) => {
-      onBusyChange(true)
-      try {
-        const result = await unwrap(
-          api.POST('/admin/clinics/{id}/account', {
-            params: { path: { id: clinicId } },
-            body: { email: email.trim() },
-          }),
-        )
-        onIssued(result.temporary_password)
-      } finally {
-        // Перечитываем и после ошибки: при 409 аккаунт уже есть, после таймаута он мог создаться.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
-        onBusyChange(false)
-      }
+      // Перечитываем и после ошибки: при 409 аккаунт уже есть, после таймаута он мог создаться.
+      const result = await unwrap(
+        api.POST('/admin/clinics/{id}/account', {
+          params: { path: { id: clinicId } },
+          body: { email: email.trim() },
+        }),
+      ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
+      onIssued(result.temporary_password)
     },
     onError: (error) =>
       error instanceof ApiError && error.status === 409
         ? { fields: { email: errorMessage(error, 'clinic-account') } }
         : undefined,
   })
-
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -114,16 +105,13 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
         maxLength={authLimits.emailMax}
         {...form.field('email')}
       />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Создаём…' : 'Создать аккаунт'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel="Создать аккаунт"
+        submittingLabel="Создаём…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }
@@ -134,39 +122,28 @@ function ResetPasswordForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
     initial: {},
     validate: () => ({}),
     context: 'clinic-account',
+    onBusyChange,
     onSubmit: async () => {
-      onBusyChange(true)
-      try {
-        const result = await unwrap(
-          api.POST('/admin/clinics/{id}/account/reset-password', {
-            params: { path: { id: clinicId } },
-          }),
-        )
-        onIssued(result.temporary_password)
-      } finally {
-        // Перечитываем и после ошибки: карточка покажет, что с аккаунтом на самом деле (например, 404 — его нет).
-        void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics })
-        onBusyChange(false)
-      }
+      // Перечитываем и после ошибки: карточка покажет, что с аккаунтом на самом деле (например, 404 — его нет).
+      const result = await unwrap(
+        api.POST('/admin/clinics/{id}/account/reset-password', {
+          params: { path: { id: clinicId } },
+        }),
+      ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
+      onIssued(result.temporary_password)
     },
   })
-
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
       <p className="text-sm text-ink-muted">Клиника выйдет на всех устройствах и при входе задаст новый пароль.</p>
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сбрасываем…' : 'Сбросить пароль'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel="Сбросить пароль"
+        submittingLabel="Сбрасываем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

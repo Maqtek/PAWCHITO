@@ -5,7 +5,7 @@ import { validationMessages } from '../../api/error-messages'
 import { clinicLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
-import { Button, CheckboxField, FormAlert, Modal, SelectField, TextField } from '../../components/ui'
+import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchAfterFailure, storeClinic } from './clinic-cache'
 import {
@@ -104,6 +104,7 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
       }
     },
     context: 'clinic',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -111,28 +112,18 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const request =
-          baseline && update
-            ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update }))
-            : unwrap(api.POST('/admin/clinics', { body: payload }))
-        const saved = await request.catch((error: unknown) => {
-          refetchAfterFailure(queryClient, baseline?.id)
-          throw error
-        })
-        storeClinic(queryClient, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update }))
+          : unwrap(api.POST('/admin/clinics', { body: payload }))
+      const saved = await request.catch((error: unknown) => {
+        refetchAfterFailure(queryClient, baseline?.id)
+        throw error
+      })
+      storeClinic(queryClient, saved)
+      onSaved(saved)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -158,16 +149,13 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
       {baseline && (
         <p className="text-sm text-ink-muted">Существующие записи не меняются, новые слоты считаются по новым часам.</p>
       )}
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить клинику'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить клинику'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

@@ -5,7 +5,7 @@ import { validationMessages } from '../../api/error-messages'
 import { vetLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { Button, FormAlert, Modal, TextField } from '../../components/ui'
+import { FormActions, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchVetsAfterFailure, storeVet } from './vet-cache'
 
@@ -64,6 +64,7 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
     initial: initialValues(baseline),
     validate: (values) => ({ full_name: values.full_name.trim() ? undefined : validationMessages.required }),
     context: 'vet',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -71,28 +72,18 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const request =
-          baseline && update
-            ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update }))
-            : unwrap(api.POST('/clinic/vets', { body: payload }))
-        const saved = await request.catch((error: unknown) => {
-          refetchVetsAfterFailure(queryClient)
-          throw error
-        })
-        storeVet(queryClient, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update }))
+          : unwrap(api.POST('/clinic/vets', { body: payload }))
+      const saved = await request.catch((error: unknown) => {
+        refetchVetsAfterFailure(queryClient)
+        throw error
+      })
+      storeVet(queryClient, saved)
+      onSaved(saved)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -104,16 +95,13 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
         maxLength={vetLimits.specializationMax}
         {...form.field('specialization')}
       />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить врача'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить врача'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }
