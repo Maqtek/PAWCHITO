@@ -1,5 +1,6 @@
 import { HttpResponse } from 'msw'
 import type { Role } from '../api/schema'
+import { isoDateError } from './date-validation'
 import { accountFromAuthorization, type MockAccount, type MockServerState } from './server-state'
 
 export const unauthorized = () => HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
@@ -40,6 +41,24 @@ export const validateBody = (checks: Record<string, string | null>) => fieldErro
 /** 422 одного параметра запроса. */
 export const queryError = (field: string, msg: string, type?: string) =>
   unprocessable([fieldError(['query', field], msg, type)])
+
+/** Фильтр status из параметров: null — без фильтра, неизвестный статус — 422 со списком допустимых. */
+export function readStatus<T extends string>(query: URLSearchParams, allowed: readonly T[]): T | null | Response {
+  const status = query.get('status')
+  if (status === null || allowed.includes(status as T)) return status as T | null
+  return queryError('status', `Статус: ${allowed.slice(0, -1).join(', ')} или ${allowed[allowed.length - 1]}`)
+}
+
+/** Фильтр date_from / date_to из параметров: даты ГГГГ-ММ-ДД, ошибка первой неверной — 422. */
+export function readDateRange(query: URLSearchParams): { from: string | null; to: string | null } | Response {
+  const from = query.get('date_from')
+  const to = query.get('date_to')
+  for (const [field, value] of [['date_from', from], ['date_to', to]] as const) {
+    const error = value === null ? null : isoDateError(value, 'Дата')
+    if (error) return queryError(field, error)
+  }
+  return { from, to }
+}
 
 /** Тело запроса как объект; не JSON или не объект — пустой объект, и поля получат ошибки. */
 export async function readBody(request: Request): Promise<Record<string, unknown>> {

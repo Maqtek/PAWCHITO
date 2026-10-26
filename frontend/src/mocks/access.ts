@@ -1,7 +1,7 @@
-import type { Condition, Observation, Pet, Vaccination } from '../api/schema'
+import type { AppointmentStatus, Condition, Observation, Pet, ReminderStatus, Vaccination } from '../api/schema'
 import { isoDateError } from './date-validation'
 import { authorizeAccount, fieldErrors, forbidden, notFound } from './http-utils'
-import type { MockAccount, MockAppointment, MockServerState } from './server-state'
+import type { MockAccount, MockAppointment, MockReminder, MockServerState } from './server-state'
 
 // Доступ к данным и общие выборки обработчиков.
 
@@ -47,6 +47,21 @@ export function canReadCard(state: MockServerState, clinicId: number, petId: num
   return state.appointments.some(
     (item) => item.pet_id === petId && item.status !== 'cancelled' && clinicOf(state, item) === clinicId,
   )
+}
+
+export const APPOINTMENT_STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'completed', 'cancelled']
+
+/** Записи по времени слота, от ранних к поздним; при равном времени порядок не меняется. */
+export const bySlotStart = (a: MockAppointment, b: MockAppointment) => Date.parse(a.slot_start) - Date.parse(b.slot_start)
+
+/** Дела по времени, при равном — по порядку создания. */
+export const byDueAt = (a: MockReminder, b: MockReminder) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.id - b.id
+
+/** Прогресс курса по его делам; дела, удалённые при архивировании питомца, не считаются. */
+export function courseProgress(state: MockServerState, prescriptionId: number) {
+  const course = state.reminders.filter((item) => item.prescription_id === prescriptionId)
+  const count = (status: ReminderStatus) => course.filter((item) => item.status === status).length
+  return { total: course.length, done: count('done'), skipped: count('skipped'), pending: count('pending') }
 }
 
 /** Новые даты сверху; в один день — последняя добавленная (Р-45, Р-46). */

@@ -1,15 +1,18 @@
 import { http, HttpResponse } from 'msw'
 import { appointmentLimits } from '../../api/limits'
-import type { AppointmentCreate, AppointmentReason, AppointmentStatus, Slot, Vet } from '../../api/schema'
+import type { AppointmentCreate, AppointmentReason, Slot, Vet } from '../../api/schema'
 import { addDays, isoWeekday, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { authorizeOwner, findPet, petNotFound } from '../access'
-import { isoDateError } from '../date-validation'
-import { conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
+import { APPOINTMENT_STATUSES, authorizeOwner, bySlotStart, findPet, petNotFound } from '../access'
+import { isIsoDateTime, isoDateError } from '../date-validation'
+import { conflict, notFound, queryError, readBody, readStatus, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
+  hasStarted,
+  isActiveAppointment,
   newAppointment,
   readServer,
+  slotEnd,
   toAppointment,
   updateServer,
   type MockAppointment,
@@ -19,11 +22,6 @@ import {
 import { multilineTextError, normalizeText } from '../text-validation'
 
 const REASONS: readonly AppointmentReason[] = ['checkup', 'vaccination', 'illness', 'follow_up', 'other']
-const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'completed', 'cancelled']
-/** Записи, которые держат слот (БП §5: частичный индекс по «Заявка» и «Подтверждена»). */
-const ACTIVE: readonly AppointmentStatus[] = ['requested', 'confirmed']
-const SLOT_MS = appointmentLimits.slotMinutes * 60 * 1000
-const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 
 const collator = new Intl.Collator('ru')
 
@@ -49,17 +47,18 @@ function gridStarts(clinic: MockClinic, date: string): string[] {
   if (!clinic.work_days.includes(isoWeekday(date))) return []
   const toMinutes = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
   const starts: string[] = []
-  for (let minute = toMinutes(clinic.opens_at); minute + appointmentLimits.slotMinutes <= toMinutes(clinic.closes_at); minute += 30) {
+  const step = appointmentLimits.slotMinutes
+  for (let minute = toMinutes(clinic.opens_at); minute + step <= toMinutes(clinic.closes_at); minute += step) {
     const time = `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`
     starts.push(moscowDateTime(date, time))
   }
   return starts
 }
 
-/** Слот занят записью «Заявка» или «Подтверждена» этого врача. */
+/** Слот занят активной записью этого врача (БП §5: частичный индекс по «Заявка» и «Подтверждена»). */
 function isTaken(state: MockServerState, vetId: number, start: Date): boolean {
   return state.appointments.some(
-    (item) => item.vet_id === vetId && ACTIVE.includes(item.status) && new Date(item.slot_start).getTime() === start.getTime(),
+    (item) => item.vet_id === vetId && isActiveAppointment(item) && Date.parse(item.slot_start) === start.getTime(),
   )
 }
 
@@ -72,9 +71,7 @@ const ownAppointment = (state: MockServerState, ownerId: number, rawId: unknown)
 
 /** Ошибка slot_start: формат, сетка клиники врача, «ещё не наступило», окно 30 дней (Р-50). */
 function slotStartError(value: unknown, clinic: MockClinic | undefined, now: Date): string | null {
-  if (typeof value !== 'string' || !ISO_DATE_TIME.test(value) || Number.isNaN(Date.parse(value))) {
-    return 'Время записи — дата и время со смещением'
-  }
+  if (!isIsoDateTime(value)) return 'Время записи — дата и время со смещением'
   // Сетку проверить не по чему: врач недоступен — ошибка уже у vet_id.
   if (!clinic) return null
   const start = new Date(value)
@@ -141,7 +138,7 @@ export const appointmentHandlers = [
     const slots: Slot[] = gridStarts(bookable.clinic, date)
       .map((start) => new Date(start))
       .filter((start) => start.getTime() > now.getTime() && !isTaken(state, bookable.vet.id, start))
-      .map((start) => ({ slot_start: toMoscowString(start), slot_end: toMoscowString(new Date(start.getTime() + SLOT_MS)) }))
+      .map((start) => ({ slot_start: toMoscowString(start), slot_end: slotEnd(start) }))
     return HttpResponse.json(slots)
   }),
 
@@ -200,9 +197,9 @@ export const appointmentHandlers = [
       if (account instanceof Response) return account
       const appointment = ownAppointment(state, account.id, params.id)
       if (!appointment) return notFound('Запись не найдена')
-      if (!ACTIVE.includes(appointment.status)) return conflict('Запись уже завершена или отменена')
+      if (!isActiveAppointment(appointment)) return conflict('Запись уже завершена или отменена')
       // До начала приёма (Р-48): в момент начала отменить уже нельзя.
-      if (new Date(appointment.slot_start).getTime() <= Date.now()) return conflict('Приём уже начался')
+      if (hasStarted(appointment)) return conflict('Приём уже начался')
       appointment.status = 'cancelled'
       appointment.cancelled_by = 'owner'
       notifyAppointment(state, appointment, 'cancelledByOwner')
@@ -214,17 +211,16 @@ export const appointmentHandlers = [
     const state = readServer()
     const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
-    const status = new URL(request.url).searchParams.get('status')
-    if (status !== null && !STATUSES.includes(status as AppointmentStatus)) {
-      return queryError('status', 'Статус: requested, confirmed, completed или cancelled')
-    }
+    const status = readStatus(new URL(request.url).searchParams, APPOINTMENT_STATUSES)
+    if (status instanceof Response) return status
     // Архивный питомец — как обычно (Р-51).
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
     return HttpResponse.json(
       state.appointments
         .filter((item) => item.pet_id === pet.id && (status === null || item.status === status))
-        .sort((a, b) => new Date(b.slot_start).getTime() - new Date(a.slot_start).getTime())
+        // Новые сверху.
+        .sort((a, b) => bySlotStart(b, a))
         .map((item) => toAppointment(state, item)),
     )
   }),

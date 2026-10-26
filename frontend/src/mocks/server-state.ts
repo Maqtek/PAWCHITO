@@ -1,3 +1,4 @@
+import { appointmentLimits } from '../api/limits'
 import type {
   AdminClinic,
   Appointment,
@@ -618,6 +619,17 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
   }
 }
 
+/** Активная запись — «Заявка» или «Подтверждена»: держит слот и ждёт приёма (БП §5). */
+export const isActiveAppointment = (appointment: MockAppointment) =>
+  appointment.status === 'requested' || appointment.status === 'confirmed'
+
+/** Приём начался: время слота наступило. */
+export const hasStarted = (appointment: MockAppointment, now = new Date()) =>
+  Date.parse(appointment.slot_start) <= now.getTime()
+
+/** Конец слота — через длину слота после начала, в том же виде со смещением +03:00. */
+export const slotEnd = (start: Date) => toMoscowString(new Date(start.getTime() + appointmentLimits.slotMinutes * 60_000))
+
 /**
  * Отмена системой (БП §5): записи «Заявка» и «Подтверждена», которые ещё не начались, — при архиве питомца и скрытии
  * клиники (Р-51). Возвращает отменённые записи: по ним уходят уведомления.
@@ -627,12 +639,7 @@ export function cancelFutureAppointments(
   matches: (appointment: MockAppointment) => boolean,
   now = new Date(),
 ): MockAppointment[] {
-  const future = state.appointments.filter(
-    (item) =>
-      (item.status === 'requested' || item.status === 'confirmed') &&
-      new Date(item.slot_start).getTime() > now.getTime() &&
-      matches(item),
-  )
+  const future = state.appointments.filter((item) => isActiveAppointment(item) && !hasStarted(item, now) && matches(item))
   for (const appointment of future) {
     appointment.status = 'cancelled'
     appointment.cancelled_by = 'system'
@@ -688,19 +695,13 @@ export function toAppointment(state: MockServerState, appointment: MockAppointme
   const pet = state.pets.find((item) => item.id === pet_id)
   const vet = state.vets.find((item) => item.id === vet_id)
   const clinic = state.clinics.find((item) => item.id === vet?.clinic_id)
-  const start = new Date(appointment.slot_start)
   return {
     ...fields,
     pet: { id: pet_id, name: pet?.name ?? '' },
     clinic: { id: clinic?.id ?? 0, name: clinic?.name ?? '' },
     vet: { id: vet_id, full_name: vet?.full_name ?? '' },
-    slot_end: moscowSlotEnd(start),
+    slot_end: slotEnd(new Date(appointment.slot_start)),
   }
-}
-
-/** Конец слота — через 30 минут, в том же виде со смещением +03:00. */
-function moscowSlotEnd(start: Date): string {
-  return toMoscowString(new Date(start.getTime() + 30 * 60 * 1000))
 }
 
 /** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */

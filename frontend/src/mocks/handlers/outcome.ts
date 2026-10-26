@@ -15,6 +15,7 @@ import {
   addCourseReminders,
   addObservation,
   addVaccination,
+  hasStarted,
   toAppointment,
   updateServer,
   type MockServerState,
@@ -102,7 +103,7 @@ export const outcomeHandlers = [
       if (!appointment) return notFound('Запись не найдена')
       if (appointment.status === 'completed') return conflict('Итог уже внесён')
       if (appointment.status !== 'confirmed') return conflict('Итог вносится только у подтверждённой записи')
-      if (new Date(appointment.slot_start).getTime() > now.getTime()) return conflict('Время приёма ещё не наступило')
+      if (!hasStarted(appointment, now)) return conflict('Время приёма ещё не наступило')
       // Даты рецептов и прививок — относительно дня приёма, поэтому после поиска записи (Р-56).
       const day = moscowLocal(new Date(appointment.slot_start)).date
       const dateErrors = outcomeErrors(raw, day, now)

@@ -1,18 +1,16 @@
 import { reminderLimits } from '../api/limits'
 import type { EventCategory } from '../api/schema'
 import { addDays, moscowLocal } from '../lib/dates'
+import { isIsoDateTime } from './date-validation'
 import { textError } from './text-validation'
 
 const CATEGORIES: readonly EventCategory[] = ['treatment', 'routine', 'prevention']
-const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
 
 export const reminderTitleError = (value: unknown) => textError(value, 'Название', reminderLimits.titleMax)
 
 /** Время своего дела: со смещением, с точностью до минуты, от текущей минуты до года вперёд по Москве (Р-59). */
 export function dueAtError(value: unknown, now: Date): string | null {
-  if (typeof value !== 'string' || !ISO_DATE_TIME.test(value) || Number.isNaN(Date.parse(value))) {
-    return 'Дата и время — со смещением, например 2026-10-20T08:00:00+03:00'
-  }
+  if (!isIsoDateTime(value)) return 'Дата и время — со смещением, например 2026-10-20T08:00:00+03:00'
   const due = new Date(value)
   if (due.getUTCSeconds() !== 0 || due.getUTCMilliseconds() !== 0) return 'Время — с точностью до минуты'
   const currentMinute = Math.floor(now.getTime() / 60_000) * 60_000

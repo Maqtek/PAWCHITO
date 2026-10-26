@@ -1,16 +1,13 @@
 import { http, HttpResponse } from 'msw'
-import type { AppointmentReason, AppointmentStatus, Calendar, CalendarEvent, EventCategory } from '../../api/schema'
+import type { AppointmentReason, Calendar, CalendarEvent, EventCategory } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal } from '../../lib/dates'
 import { appointmentReasonLabel } from '../../lib/labels'
 import { authorizeOwner, findPet, petNotFound } from '../access'
 import { queryError } from '../http-utils'
-import { readServer, toAppointment, toReminder } from '../server-state'
+import { isActiveAppointment, readServer, toAppointment, toReminder } from '../server-state'
 
 /** Сколько дней вперёд от сегодня показывает календарь (Р-65). */
 const DAYS_AHEAD = 30
-
-/** Записи, которые ещё ждут приёма: «Заявка» и «Подтверждена». */
-const ACTIVE: readonly AppointmentStatus[] = ['requested', 'confirmed']
 
 /** Тип события записи — по причине обращения (БП §5, «Причина обращения»). */
 const REASON_CATEGORY: Record<AppointmentReason, EventCategory> = {
@@ -66,7 +63,7 @@ export const calendarHandlers = [
     }
 
     for (const item of state.appointments) {
-      if (item.pet_id !== pet.id || !ACTIVE.includes(item.status)) continue
+      if (item.pet_id !== pet.id || !isActiveAppointment(item)) continue
       const day = dayOf(item.slot_start)
       // Запись на сегодня остаётся до конца дня, даже если время прошло, — она ждёт итога или отмены.
       if (day < today || day > lastDay) continue

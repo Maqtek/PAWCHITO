@@ -1,9 +1,17 @@
 import { http, HttpResponse } from 'msw'
 import type { Prescription, ReminderCreate, ReminderStatus } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
-import { authorizeOwner, findPet } from '../access'
-import { isoDateError } from '../date-validation'
-import { conflict, forbidden, notFound, queryError, readBody, validateBody } from '../http-utils'
+import { authorizeOwner, byDueAt, courseProgress, findPet } from '../access'
+import {
+  conflict,
+  forbidden,
+  notFound,
+  queryError,
+  readBody,
+  readDateRange,
+  readStatus,
+  validateBody,
+} from '../http-utils'
 import { categoryError, dueAtError, reminderTitleError, repeatError } from '../reminder-validation'
 import {
   newCustomReminder,
@@ -32,8 +40,6 @@ function ownReminder(state: MockServerState, ownerId: number, rawId: unknown): M
   const reminder = state.reminders.find((item) => item.id === id)
   return reminder && findPet(state, ownerId, reminder.pet_id) ? reminder : undefined
 }
-
-const byDueAt = (a: MockReminder, b: MockReminder) => Date.parse(a.due_at) - Date.parse(b.due_at) || a.id - b.id
 
 /**
  * Отметка дела (Р-61): только «Запланировано» и только наступившего дня по Москве. Следующее дело серии — на плановую
@@ -83,16 +89,11 @@ export const reminderHandlers = [
     const rawPrescription = query.get('prescription_id')
     const prescription = rawPrescription === null ? null : ownPrescription(state, account.id, rawPrescription)
     if (prescription === undefined) return queryError('prescription_id', 'Рецепт не найден')
-    const status = query.get('status')
-    if (status !== null && !STATUSES.includes(status as ReminderStatus)) {
-      return queryError('status', 'Статус: pending, done или skipped')
-    }
-    const from = query.get('date_from')
-    const to = query.get('date_to')
-    for (const [field, value] of [['date_from', from], ['date_to', to]] as const) {
-      const error = value === null ? null : isoDateError(value, 'Дата')
-      if (error) return queryError(field, error)
-    }
+    const status = readStatus(query, STATUSES)
+    if (status instanceof Response) return status
+    const period = readDateRange(query)
+    if (period instanceof Response) return period
+    const { from, to } = period
     if (from !== null && to !== null && to < from) return queryError('date_to', 'Дата «по» раньше даты «с»')
 
     const now = new Date()
@@ -173,14 +174,6 @@ export const reminderHandlers = [
     if (account instanceof Response) return account
     const prescription = ownPrescription(state, account.id, params.id)
     if (!prescription) return notFound('Рецепт не найден')
-    const course = state.reminders.filter((item) => item.prescription_id === prescription.id)
-    const count = (status: ReminderStatus) => course.filter((item) => item.status === status).length
-    return HttpResponse.json({
-      prescription_id: prescription.id,
-      total: course.length,
-      done: count('done'),
-      skipped: count('skipped'),
-      pending: count('pending'),
-    })
+    return HttpResponse.json({ prescription_id: prescription.id, ...courseProgress(state, prescription.id) })
   }),
 ]
