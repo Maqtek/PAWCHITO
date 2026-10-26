@@ -6,6 +6,9 @@ import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { refetchAppointments, storeAppointment } from './appointment-cache'
 import { formatSlot } from './format'
 
+/** Статус страницы после отмены. */
+export const CANCELLED_STATUS = 'Запись отменена. Клиника получит уведомление.'
+
 interface CancelAppointmentModalProps {
   open: boolean
   appointment?: Appointment

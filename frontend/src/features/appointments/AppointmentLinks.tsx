@@ -1,5 +1,6 @@
+import { ArrowLeft } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { buttonClass } from '../../components/ui'
+import { buttonClass, linkClass } from '../../components/ui'
 import { cn } from '../../lib/cn'
 
 interface AppointmentDetailsLinkProps {
@@ -15,6 +16,16 @@ export function AppointmentDetailsLink({ id, when, className }: AppointmentDetai
     <Link to={`/appointments/${id}`} className={cn(buttonClass({ variant: 'secondary', size: 'sm' }), className)}>
       Подробнее
       <span className="sr-only">, запись на {when}</span>
+    </Link>
+  )
+}
+
+/** «← Все записи» — над страницей записи и мастером записи. */
+export function AllAppointmentsLink() {
+  return (
+    <Link to="/appointments" className={linkClass}>
+      <ArrowLeft aria-hidden className="mr-1 inline size-4" />
+      Все записи
     </Link>
   )
 }

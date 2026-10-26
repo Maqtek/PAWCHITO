@@ -7,7 +7,7 @@ import type { Appointment } from '../../api/schema'
 import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { AppointmentCard } from '../../features/appointments/AppointmentCard'
-import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
+import { CancelAppointmentModal, CANCELLED_STATUS } from '../../features/appointments/CancelAppointmentModal'
 import { PetRequired } from '../../features/pets/PetRequired'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -128,7 +128,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
         appointment={dialogAppointment}
         onClose={() => setDialog((current) => ({ ...current, open: false }))}
         onDone={() => {
-          setStatus('Запись отменена. Клиника получит уведомление.')
+          setStatus(CANCELLED_STATUS)
           focusListLater()
           setDialog((current) => ({ ...current, open: false }))
         }}

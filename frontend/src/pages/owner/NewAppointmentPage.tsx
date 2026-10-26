@@ -1,6 +1,5 @@
-import { ArrowLeft } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
-import { linkClass } from '../../components/ui'
+import { useNavigate } from 'react-router-dom'
+import { AllAppointmentsLink } from '../../features/appointments/AppointmentLinks'
 import { BookingWizard } from '../../features/appointments/BookingWizard'
 import { PetRequired } from '../../features/pets/PetRequired'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
@@ -14,10 +13,7 @@ export function NewAppointmentPage() {
     <>
       <PageHeader eyebrow="Ветеринар" title="Запись к врачу" description="Клиника, врач, свободное время и причина." />
       <div className="mb-4">
-        <Link to="/appointments" className={linkClass}>
-          <ArrowLeft aria-hidden className="mr-1 inline size-4" />
-          Все записи
-        </Link>
+        <AllAppointmentsLink />
       </div>
       <PetRequired description="Запись к врачу делается для конкретного питомца.">
         {(pet) => (

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
@@ -7,10 +7,11 @@ import { ApiError } from '../../api/errors'
 import type { AppointmentOutcome } from '../../api/schema'
 import { Badge, Button, Card, EmptyState, LoadError, PageStatus, Spinner, linkClass } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
-import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
+import { AllAppointmentsLink } from '../../features/appointments/AppointmentLinks'
+import { CancelAppointmentModal, CANCELLED_STATUS } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
-import { PageHeader } from '../../layouts/PageHeader'
 import { courseTitle } from '../../features/reminders/course'
+import { PageHeader } from '../../layouts/PageHeader'
 import { formatDays, formatLongDate, formatTime } from '../../lib/format'
 import {
   appointmentReasonLabel,
@@ -32,16 +33,9 @@ export function AppointmentPage() {
   // После отмены кнопки «Отменить запись» больше нет — фокус переходит на карточку, а не на body.
   const [cardRef, focusCardLater] = useFocusAfterRender<HTMLDivElement>()
 
-  const back = (
-    <Link to="/appointments" className={linkClass}>
-      <ArrowLeft aria-hidden className="mr-1 inline size-4" />
-      Все записи
-    </Link>
-  )
-
   function content() {
     if (!Number.isInteger(id) || (error instanceof ApiError && error.status === 404)) {
-      return <EmptyState title="Запись не найдена" description="Возможно, ссылка устарела." action={back} />
+      return <EmptyState title="Запись не найдена" description="Возможно, ссылка устарела." action={<AllAppointmentsLink />} />
     }
     if (isPending) return <Spinner label="Загружаем запись" />
     if (!appointment) return <LoadError title="Не удалось загрузить запись" onRetry={() => void refetch()} />
@@ -99,7 +93,9 @@ export function AppointmentPage() {
   return (
     <>
       <PageHeader eyebrow="Ветеринар" title="Запись к врачу" description="Когда, куда и к кому, и что с записью сейчас." />
-      <div className="mb-4">{back}</div>
+      <div className="mb-4">
+        <AllAppointmentsLink />
+      </div>
       <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда кнопка отмены пропала вместе с возможностью отменить. */}
       <div ref={cardRef} tabIndex={-1} className="max-w-2xl outline-none">
@@ -110,7 +106,7 @@ export function AppointmentPage() {
         appointment={appointment}
         onClose={() => setCancelOpen(false)}
         onDone={() => {
-          setStatus('Запись отменена. Клиника получит уведомление.')
+          setStatus(CANCELLED_STATUS)
           focusCardLater()
           setCancelOpen(false)
         }}
