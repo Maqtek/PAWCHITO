@@ -1,6 +1,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { api } from './client'
 import { ApiError } from './errors'
+import type { AppointmentStatus } from './schema'
 
 interface ApiResult<T> {
   data?: T
@@ -33,6 +34,23 @@ export const queryKeys = {
   appointments: ['appointments'] as const,
   petAppointments: (petId: number) => ['appointments', 'pet', petId] as const,
   appointment: (id: number) => ['appointments', id] as const,
+  // Под общим ['notifications']: отметка прочитанным перечитывает и список, и счётчик в шапке.
+  notifications: ['notifications', 'list'] as const,
+  // Под общим ['clinic', 'appointments']: подтверждение или отмена перечитывает все вкладки.
+  clinicAppointments: ['clinic', 'appointments'] as const,
+  clinicAppointmentsFiltered: (filters: ClinicAppointmentFilters) => ['clinic', 'appointments', filters] as const,
+  clinicPet: (petId: number) => ['clinic', 'pets', petId] as const,
+  clinicPetObservations: (petId: number) => ['clinic', 'pets', petId, 'observations'] as const,
+}
+
+/** Фильтры записей клиники (Р-52): пустые не передаются. */
+export interface ClinicAppointmentFilters {
+  status?: AppointmentStatus
+  date_from?: string
+  date_to?: string
+  vet_id?: number
+  awaiting_outcome?: boolean
+  requires_decision?: boolean
 }
 
 export const meQuery = queryOptions({
@@ -128,4 +146,29 @@ export const appointmentQuery = (id: number) =>
   queryOptions({
     queryKey: queryKeys.appointment(id),
     queryFn: () => unwrap(api.GET('/appointments/{id}', { params: { path: { id } } })),
+  })
+
+/** Последние 50 уведомлений — запрашиваются, когда открыт список (БП §9). */
+export const notificationsQuery = queryOptions({
+  queryKey: queryKeys.notifications,
+  queryFn: () => unwrap(api.GET('/notifications')),
+})
+
+export const clinicAppointmentsQuery = (filters: ClinicAppointmentFilters) =>
+  queryOptions({
+    queryKey: queryKeys.clinicAppointmentsFiltered(filters),
+    queryFn: () => unwrap(api.GET('/clinic/appointments', { params: { query: filters } })),
+  })
+
+/** Карточка питомца для клиники: доступна при неотменённой записи в эту клинику (Р-54). */
+export const clinicPetQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.clinicPet(petId),
+    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}', { params: { path: { pet_id: petId } } })),
+  })
+
+export const clinicPetObservationsQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.clinicPetObservations(petId),
+    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}/observations', { params: { path: { pet_id: petId } } })),
   })

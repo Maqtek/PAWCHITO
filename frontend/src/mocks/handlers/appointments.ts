@@ -7,6 +7,7 @@ import { readBody, validateBody } from '../auth-validation'
 import { isoDateError } from '../date-validation'
 import { multilineTextError, normalizeText } from '../health-validation'
 import { authorizeAccount } from '../http-utils'
+import { notifyAppointment } from '../notify'
 import {
   readServer,
   toAppointment,
@@ -189,7 +190,7 @@ export const appointmentHandlers = [
       }
       state.nextAppointmentId += 1
       state.appointments.push(appointment)
-      // Уведомление клиники — этап 8.
+      notifyAppointment(state, appointment, 'requested')
       return HttpResponse.json(toAppointment(state, appointment), { status: 201 })
     })
   }),
@@ -213,6 +214,7 @@ export const appointmentHandlers = [
       if (new Date(appointment.slot_start).getTime() <= Date.now()) return conflict('Приём уже начался')
       appointment.status = 'cancelled'
       appointment.cancelled_by = 'owner'
+      notifyAppointment(state, appointment, 'cancelledByOwner')
       return HttpResponse.json(toAppointment(state, appointment))
     }),
   ),

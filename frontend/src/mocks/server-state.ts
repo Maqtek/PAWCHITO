@@ -6,6 +6,7 @@ import type {
   AppointmentStatus,
   CancelledBy,
   Condition,
+  NotificationType,
   Observation,
   Pet,
   Role,
@@ -15,6 +16,8 @@ import type {
 } from '../api/schema'
 import { addDays, isoWeekday, moscowDateTime, toMoscowString } from '../lib/dates'
 import { moscowIsoDate } from '../lib/format'
+import { careStatusLabel } from '../lib/labels'
+import { clinicDayLink, noticeText } from './notification-texts'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -67,6 +70,17 @@ export interface MockAppointment {
   outcome: AppointmentOutcome | null
 }
 
+/** Уведомление аккаунта: владельца или клиники (БП §9). */
+export interface MockNotification {
+  id: number
+  user_id: number
+  type: NotificationType
+  text: string
+  link: string
+  created_at: string
+  read_at: string | null
+}
+
 export interface MockServerState {
   accounts: MockAccount[]
   nextUserId: number
@@ -88,6 +102,8 @@ export interface MockServerState {
   /** Записи к врачу всех владельцев; владелец видит только записи своих питомцев. */
   appointments: MockAppointment[]
   nextAppointmentId: number
+  notifications: MockNotification[]
+  nextNotificationId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -215,7 +231,67 @@ function seedAppointment(
   }
 }
 
+/** Записи к врачам «ВетДоктора» (клиника 2): Петров (4), Соколова (5, в отпуске), Ким (6). */
+function seedAppointments(): MockAppointment[] {
+  return [
+    seedAppointment(20, 10, 4, seedDay(2), '10:00', 'vaccination', {
+      status: 'confirmed',
+      reason_comment: 'Плановая от бешенства',
+    }),
+    seedAppointment(21, 10, 6, seedDay(5), '15:30', 'follow_up'),
+    seedAppointment(22, 10, 4, seedDay(-16), '11:00', 'illness', {
+      status: 'completed',
+      reason_comment: 'Хромает на заднюю лапу',
+      outcome: {
+        conclusion: 'Растяжение связок задней лапы',
+        recommendations: 'Покой две недели, повторный приём через месяц',
+        care_status: 'treatment',
+        completed_at: moscowDateTime(seedDay(-16), '11:40'),
+        prescriptions: [],
+        vaccinations: [],
+      },
+    }),
+    seedAppointment(23, 10, 5, seedDay(-5), '12:00', 'checkup', {
+      status: 'cancelled',
+      cancelled_by: 'clinic',
+      clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
+    }),
+    seedAppointment(24, 11, 6, seedDay(1), '09:00', 'checkup'),
+    // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
+    seedAppointment(25, 13, 4, seedDay(2), '10:30', 'checkup', { status: 'confirmed' }),
+  ]
+}
+
+/**
+ * Уведомления по seed-записям: у владельца три непрочитанных и два прочитанных, у «ВетДоктора» — две заявки
+ * непрочитанные и одна прочитанная. Время — часы назад от сегодня, как и сами записи.
+ */
+function seedNotifications(appointments: MockAppointment[]): MockNotification[] {
+  const slot = (id: number) => appointments.find((item) => item.id === id)?.slot_start ?? ''
+  const hoursAgo = (hours: number) => toMoscowString(new Date(Date.now() - hours * 60 * 60 * 1000))
+  const notice = (
+    id: number,
+    userId: number,
+    type: NotificationType,
+    text: string,
+    link: string,
+    hours: number,
+    read = false,
+  ): MockNotification => ({ id, user_id: userId, type, text, link, created_at: hoursAgo(hours), read_at: read ? hoursAgo(hours / 2) : null })
+  return [
+    notice(1, 1, 'appointment_cancelled_by_clinic', noticeText.cancelledByClinic('ВетДоктор', 'Майло', slot(23), 'Врач заболела, перезапишитесь, пожалуйста'), '/appointments/23', 30),
+    notice(2, 1, 'outcome_added', noticeText.outcomeAdded('Майло', careStatusLabel.treatment), '/appointments/22', 20, true),
+    notice(3, 1, 'appointment_confirmed', noticeText.confirmed('ВетДоктор', 'Майло', slot(20), 'Петров Павел Петрович'), '/appointments/20', 5),
+    notice(4, 1, 'appointment_confirmed', noticeText.confirmed('ВетДоктор', 'Майло', slot(22), 'Петров Павел Петрович'), '/appointments/22', 400, true),
+    notice(5, 1, 'outcome_added', noticeText.outcomeAdded('Майло', careStatusLabel.treatment), '/appointments/22', 2),
+    notice(6, 6, 'appointment_requested', noticeText.requested('Майло', slot(20), 'Петров Павел Петрович'), clinicDayLink(slot(20)), 50, true),
+    notice(7, 6, 'appointment_requested', noticeText.requested('Майло', slot(21), 'Ким Елена Викторовна'), clinicDayLink(slot(21)), 4),
+    notice(8, 6, 'appointment_requested', noticeText.requested('Барсик', slot(24), 'Ким Елена Викторовна'), clinicDayLink(slot(24)), 1),
+  ]
+}
+
 export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refreshDelayMs?: number } = {}): MockServerState {
+  const appointments = seedAppointments()
   return {
     accounts: [
       seedAccount(1, 'owner@example.com', 'owner', 'Анна Смирнова', { recovery_code: 'K7QM-2XPA-9RTD-4WNB' }),
@@ -298,35 +374,10 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       { id: 4, pet_id: 13, name: 'Нобивак Rabies', date: '2026-03-01', next_date: null, source: 'owner', appointment_id: null },
     ],
     nextVaccinationId: 100,
-    // Записи к врачам «ВетДоктора» (клиника 2): Петров (4), Соколова (5, в отпуске), Ким (6).
-    appointments: [
-      seedAppointment(20, 10, 4, seedDay(2), '10:00', 'vaccination', {
-        status: 'confirmed',
-        reason_comment: 'Плановая от бешенства',
-      }),
-      seedAppointment(21, 10, 6, seedDay(5), '15:30', 'follow_up'),
-      seedAppointment(22, 10, 4, seedDay(-16), '11:00', 'illness', {
-        status: 'completed',
-        reason_comment: 'Хромает на заднюю лапу',
-        outcome: {
-          conclusion: 'Растяжение связок задней лапы',
-          recommendations: 'Покой две недели, повторный приём через месяц',
-          care_status: 'treatment',
-          completed_at: moscowDateTime(seedDay(-16), '11:40'),
-          prescriptions: [],
-          vaccinations: [],
-        },
-      }),
-      seedAppointment(23, 10, 5, seedDay(-5), '12:00', 'checkup', {
-        status: 'cancelled',
-        cancelled_by: 'clinic',
-        clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
-      }),
-      seedAppointment(24, 11, 6, seedDay(1), '09:00', 'checkup'),
-      // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
-      seedAppointment(25, 13, 4, seedDay(2), '10:30', 'checkup', { status: 'confirmed' }),
-    ],
+    appointments,
     nextAppointmentId: 100,
+    notifications: seedNotifications(appointments),
+    nextNotificationId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,
@@ -409,13 +460,13 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
 /** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
 /**
  * Отмена системой (БП §5): записи «Заявка» и «Подтверждена», которые ещё не начались, — при архиве питомца и скрытии
- * клиники (Р-51). Возвращает число отменённых.
+ * клиники (Р-51). Возвращает отменённые записи: по ним уходят уведомления.
  */
 export function cancelFutureAppointments(
   state: MockServerState,
   matches: (appointment: MockAppointment) => boolean,
   now = new Date(),
-): number {
+): MockAppointment[] {
   const future = state.appointments.filter(
     (item) =>
       (item.status === 'requested' || item.status === 'confirmed') &&
@@ -426,7 +477,7 @@ export function cancelFutureAppointments(
     appointment.status = 'cancelled'
     appointment.cancelled_by = 'system'
   }
-  return future.length
+  return future
 }
 
 /** Ответ Appointment: клиника — по врачу, клички и имена — текущие (Р-50). */

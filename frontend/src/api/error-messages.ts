@@ -16,6 +16,7 @@ export type ErrorContext =
   | 'health'
   | 'booking'
   | 'appointment'
+  | 'clinic-appointment'
   | 'default'
 
 const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
@@ -43,6 +44,10 @@ const byContext: Partial<Record<ErrorContext, Partial<Record<number, string>>>> 
   appointment: {
     404: 'Запись не найдена.',
     409: 'Запись уже нельзя отменить: приём начался, либо она завершена или отменена.',
+  },
+  'clinic-appointment': {
+    404: 'Запись не найдена. Список обновлён.',
+    409: 'Запись уже изменилась: её подтвердили, отменили или время приёма прошло. Список обновлён.',
   },
 }
 
@@ -84,6 +89,8 @@ export const validationMessages = {
   reason: 'Выберите причину обращения',
   pet: 'Выберите питомца',
   slotTaken: 'Это время только что заняли. Выберите другое.',
+  clinicComment: 'Напишите владельцу, почему запись отменена',
+  dateRange: '«По» — не раньше «С»',
 } as const
 
 /** Почему пользователь оказался на экране входа. */
