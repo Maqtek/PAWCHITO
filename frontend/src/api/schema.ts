@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.7).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.8).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -33,6 +33,17 @@ export interface components {
     /** Причина обращения: задаёт тип события в календаре (БП §5). */
     AppointmentReason: 'checkup' | 'vaccination' | 'illness' | 'follow_up' | 'other'
     CancelledBy: 'owner' | 'clinic' | 'system'
+    /** События из БП §9; перенос (расш.) и итог с изменением данных — этапы 9 и 13. */
+    NotificationType:
+      | 'appointment_requested'
+      | 'appointment_cancelled_by_owner'
+      | 'appointment_cancelled_pet_archived'
+      | 'appointment_confirmed'
+      | 'appointment_cancelled_by_clinic'
+      | 'appointment_cancelled_clinic_unavailable'
+      | 'outcome_added'
+      | 'pet_updated_by_clinic'
+      | 'appointment_rescheduled'
     User: {
       id: number
       email: string
@@ -218,6 +229,24 @@ export interface components {
     /** null в specialization убирает специализацию, в full_name и on_vacation — 422 (Р-38). */
     VetUpdate: { full_name?: string; specialization?: string | null; on_vacation?: boolean }
     UnreadCount: { unread_count: number }
+    /** Текст собирает сервер, link — путь во фронте (Р-55). */
+    Notification: {
+      id: number
+      type: components['schemas']['NotificationType']
+      text: string
+      link: string
+      created_at: string
+      read_at: string | null
+    }
+    NotificationList: { unread_count: number; items: components['schemas']['Notification'][] }
+    ClinicAppointmentCancel: { comment: string }
+    /** Карточка питомца для клиники (Р-54). */
+    ClinicPetCard: {
+      pet: components['schemas']['Pet']
+      conditions: components['schemas']['Condition'][]
+      vaccinations: components['schemas']['Vaccination'][]
+      appointments: components['schemas']['Appointment'][]
+    }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
     ValidationError: { loc: (string | number)[]; msg: string; type: string }
@@ -629,6 +658,121 @@ export interface paths {
       responses: { 200: Json<Schemas['UnreadCount']>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
     }
   }
+  '/notifications': {
+    parameters: NoParams
+    get: {
+      parameters: { query?: { limit?: number }; header?: never; path?: never; cookie?: never }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['NotificationList']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/notifications/{id}/read': {
+    parameters: AppointmentPath
+    post: {
+      parameters: AppointmentPath
+      requestBody?: never
+      responses: { 204: NoContent; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']>; 404: Json<Schemas['Error']> }
+    }
+  }
+  '/notifications/read-all': {
+    parameters: NoParams
+    post: {
+      parameters: NoParams
+      requestBody?: never
+      responses: { 204: NoContent; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
+    }
+  }
+  '/clinic/appointments': {
+    parameters: NoParams
+    get: {
+      parameters: {
+        query?: {
+          status?: Schemas['AppointmentStatus']
+          date_from?: string
+          date_to?: string
+          vet_id?: number
+          awaiting_outcome?: boolean
+          requires_decision?: boolean
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Appointment'][]>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/appointments/{id}/confirm': {
+    parameters: AppointmentPath
+    post: {
+      parameters: AppointmentPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Appointment']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/clinic/appointments/{id}/cancel': {
+    parameters: AppointmentPath
+    post: {
+      parameters: AppointmentPath
+      requestBody: Body<Schemas['ClinicAppointmentCancel']>
+      responses: {
+        200: Json<Schemas['Appointment']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/pets/{pet_id}': {
+    parameters: PetPath
+    get: {
+      parameters: PetPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['ClinicPetCard']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/clinic/pets/{pet_id}/observations': {
+    parameters: PetPath
+    get: {
+      parameters: {
+        query?: { date_from?: string; date_to?: string }
+        header?: never
+        path: { pet_id: number }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Observation'][]>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
   '/admin/clinics': {
     parameters: NoParams
     get: {
@@ -818,6 +962,11 @@ export type AppointmentOutcome = Schemas['AppointmentOutcome']
 export type Appointment = Schemas['Appointment']
 export type AppointmentCreate = Schemas['AppointmentCreate']
 export type UnreadCount = Schemas['UnreadCount']
+export type NotificationType = Schemas['NotificationType']
+export type Notification = Schemas['Notification']
+export type NotificationList = Schemas['NotificationList']
+export type ClinicAppointmentCancel = Schemas['ClinicAppointmentCancel']
+export type ClinicPetCard = Schemas['ClinicPetCard']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']
 export type RegisterRequest = Schemas['RegisterRequest']
