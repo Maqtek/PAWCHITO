@@ -6,7 +6,7 @@ import { conditionsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Condition } from '../../api/schema'
 import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { Badge, Button } from '../../components/ui'
-import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
+import { conditionKindLabel, conditionKindTone, dataSourceLabel } from '../../lib/labels'
 import { ConditionFormModal } from './ConditionFormModal'
 import { saveRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
@@ -111,7 +111,7 @@ function ConditionItem({ condition, onEdit, onArchive }: ConditionItemProps) {
   return (
     <article aria-labelledby={titleId} className="rounded-xl border border-line p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={condition.kind === 'allergy' ? 'coral' : 'lilac'}>{conditionKindLabel[condition.kind]}</Badge>
+        <Badge tone={conditionKindTone[condition.kind]}>{conditionKindLabel[condition.kind]}</Badge>
         {fromClinic && <Badge tone="sky">{dataSourceLabel.clinic}</Badge>}
       </div>
       <h3 id={titleId} className="mt-2 font-extrabold break-words">

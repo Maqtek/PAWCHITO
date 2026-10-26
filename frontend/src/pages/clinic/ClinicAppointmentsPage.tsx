@@ -12,7 +12,7 @@ import { OutcomeFormModal } from '../../features/clinic-appointments/OutcomeForm
 import { PageHeader } from '../../layouts/PageHeader'
 import { addDays } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { appointmentStatusLabel, careStatusLabel } from '../../lib/labels'
+import { appointmentStatusLabel, careStatusLabel, labelOptions } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 type View = 'schedule' | 'awaiting' | 'decision'
@@ -22,7 +22,7 @@ const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'compl
 
 const statusOptions: SelectOption[] = [
   { value: '', label: 'Все статусы' },
-  ...STATUSES.map((value) => ({ value, label: appointmentStatusLabel[value] })),
+  ...labelOptions(appointmentStatusLabel, STATUSES),
 ]
 
 interface Dialog {

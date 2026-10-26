@@ -8,7 +8,7 @@ import type { Level, Observation, ObservationCreate } from '../../api/schema'
 import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
-import { levelLabel } from '../../lib/labels'
+import { labelOptions, levelLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
 import { dateError } from './date-error'
 import { saveRecord } from './health-cache'
@@ -16,7 +16,7 @@ import { parseWeight, weightText } from './weight'
 
 const levelOptions: SelectOption[] = [
   { value: '', label: 'Не отмечено' },
-  ...(['low', 'normal', 'high'] as const).map((value) => ({ value, label: levelLabel[value] })),
+  ...labelOptions(levelLabel, ['low', 'normal', 'high']),
 ]
 
 interface ObservationFormModalProps {

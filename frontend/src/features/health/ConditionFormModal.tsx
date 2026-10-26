@@ -5,16 +5,11 @@ import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Condition, ConditionCreate, ConditionKind } from '../../api/schema'
-import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import { FormActions, Modal, SelectField, TextareaField, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
-import { conditionKindLabel } from '../../lib/labels'
+import { conditionKindOptions } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
 import { saveRecord } from './health-cache'
-
-const kindOptions: SelectOption[] = (['allergy', 'chronic'] as const).map((value) => ({
-  value,
-  label: conditionKindLabel[value],
-}))
 
 interface ConditionFormModalProps {
   open: boolean
@@ -99,7 +94,7 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
-      <SelectField label="Тип" options={kindOptions} placeholder="Выберите тип" {...form.field('kind')} />
+      <SelectField label="Тип" options={conditionKindOptions} placeholder="Выберите тип" {...form.field('kind')} />
       <TextField
         label="Название"
         hint="Например, «Аллергия на курицу»"

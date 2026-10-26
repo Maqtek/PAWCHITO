@@ -15,6 +15,7 @@ import {
   appointmentStatusLabel,
   appointmentStatusTone,
   conditionKindLabel,
+  conditionKindTone,
   dataSourceLabel,
   levelLabel,
 } from '../../lib/labels'
@@ -76,7 +77,7 @@ export function ClinicPetPage() {
           {conditions.map((condition) => (
             <li key={condition.id} className="rounded-xl border border-line p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={condition.kind === 'allergy' ? 'coral' : 'lilac'}>{conditionKindLabel[condition.kind]}</Badge>
+                <Badge tone={conditionKindTone[condition.kind]}>{conditionKindLabel[condition.kind]}</Badge>
                 <span className="text-xs text-ink-muted">
                   {condition.source === 'clinic' ? dataSourceLabel.clinic : ownerSource}
                 </span>
