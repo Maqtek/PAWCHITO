@@ -46,7 +46,7 @@ class Clinic(IdMixin, ArchivedMixin, CreatedAtMixin, Base):
         ForeignKey("users.id", ondelete="RESTRICT"), unique=True
     )
 
-    account: Mapped["User | None"] = relationship()
+    account: Mapped["User | None"] = relationship(back_populates="clinic")
 
     def works_on(self, iso_weekday: int) -> bool:
         """Работает ли клиника в этот день недели (date.isoweekday())."""
