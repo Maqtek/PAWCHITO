@@ -650,6 +650,63 @@
           }
         }
       }
+    },
+    "/admin/clinics/{clinic_id}/account": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Clinic Account",
+        "operationId": "create_clinic_account_api_admin_clinics__clinic_id__account_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clinic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Clinic Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClinicAccountIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicAccountCreatedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -750,6 +807,38 @@
           "new_password"
         ],
         "title": "ChangePasswordIn"
+      },
+      "ClinicAccountCreatedOut": {
+        "properties": {
+          "user": {
+            "$ref": "#/components/schemas/UserOut"
+          },
+          "temporary_password": {
+            "type": "string",
+            "title": "Temporary Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user",
+          "temporary_password"
+        ],
+        "title": "ClinicAccountCreatedOut"
+      },
+      "ClinicAccountIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 254,
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "ClinicAccountIn",
+        "description": "POST /admin/clinics/{id}/account — правила email как при регистрации (Р-32)."
       },
       "ClinicAccountOut": {
         "properties": {
@@ -1105,14 +1194,7 @@
             "$ref": "#/components/schemas/UserRole"
           },
           "full_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Full Name"
           },
           "must_change_password": {

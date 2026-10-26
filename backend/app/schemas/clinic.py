@@ -10,11 +10,13 @@ from app.schemas.fields import (
     ClinicAddress,
     ClinicName,
     HalfHour,
+    NewEmail,
     NotNull,
     Phone,
     TimeOut,
     WorkDays,
 )
+from app.schemas.user import UserOut
 
 
 class ClinicIn(BaseModel):
@@ -79,3 +81,14 @@ class AdminClinicOut(BaseModel):
 class ClinicArchivedOut(BaseModel):
     clinic: AdminClinicOut
     cancelled_appointments: int
+
+
+class ClinicAccountIn(BaseModel):
+    """POST /admin/clinics/{id}/account — правила email как при регистрации (Р-32)."""
+
+    email: NewEmail
+
+
+class ClinicAccountCreatedOut(BaseModel):
+    user: UserOut
+    temporary_password: str  # показывается один раз

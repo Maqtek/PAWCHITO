@@ -41,14 +41,16 @@ class User(IdMixin, CreatedAtMixin, Base):
     clinic: Mapped["Clinic | None"] = relationship(back_populates="account")
 
     @property
-    def display_name(self) -> str | None:
+    def display_name(self) -> str:
         """Имя в ответах API (Р-35): у клиники — название клиники, у остальных — full_name.
 
         Роль проверяется первой: у владельца и админа запроса к clinics нет.
+        Запасной вариант — email: аккаунт клиники без клиники (созданный вручную в базе)
+        не должен ронять ответ, а контракт обещает строку.
         """
         if self.role == UserRole.clinic and self.clinic is not None:
             return self.clinic.name
-        return self.full_name
+        return self.full_name or self.email
 
     def __repr__(self) -> str:
         return f"<User {self.id} {self.email} {self.role.value}>"

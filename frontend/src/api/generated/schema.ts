@@ -211,6 +211,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/clinics/{clinic_id}/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Clinic Account */
+        post: operations["create_clinic_account_api_admin_clinics__clinic_id__account_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -249,6 +266,20 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** ClinicAccountCreatedOut */
+        ClinicAccountCreatedOut: {
+            user: components["schemas"]["UserOut"];
+            /** Temporary Password */
+            temporary_password: string;
+        };
+        /**
+         * ClinicAccountIn
+         * @description POST /admin/clinics/{id}/account — правила email как при регистрации (Р-32).
+         */
+        ClinicAccountIn: {
+            /** Email */
+            email: string;
         };
         /** ClinicAccountOut */
         ClinicAccountOut: {
@@ -388,7 +419,7 @@ export interface components {
             email: string;
             role: components["schemas"]["UserRole"];
             /** Full Name */
-            full_name: string | null;
+            full_name: string;
             /** Must Change Password */
             must_change_password: boolean;
         };
@@ -873,6 +904,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminClinicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_clinic_account_api_admin_clinics__clinic_id__account_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicAccountIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicAccountCreatedOut"];
                 };
             };
             /** @description Validation Error */
