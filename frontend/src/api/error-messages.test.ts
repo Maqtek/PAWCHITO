@@ -14,7 +14,7 @@ describe('errorMessage', () => {
     ['change-password', 400, 'Неверный текущий пароль.'],
     ['recovery-code', 400, 'Неверный текущий пароль.'],
     ['register', 422, 'Проверьте поля формы.'],
-    ['profile', 404, 'Что-то пошло не так. Попробуйте ещё раз.'],
+    ['register', 404, 'Что-то пошло не так. Попробуйте ещё раз.'],
   ] as const)('%s · %i → %s', (context, status, text) => {
     expect(errorMessage(failed(status), context)).toBe(text)
   })

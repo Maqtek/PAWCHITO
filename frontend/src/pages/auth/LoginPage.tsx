@@ -2,12 +2,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
-import { sessionReasonMessage, validationMessages } from '../../api/error-messages'
+import { sessionReasonMessage } from '../../api/error-messages'
 import { authLimits } from '../../api/limits'
 import { meQuery, unwrap } from '../../api/queries'
 import { signInWith } from '../../api/session'
 import { homePathFor } from '../../app/navigation'
-import { Button, FormAlert, linkClass, PasswordField, Spinner, TextField } from '../../components/ui'
+import { Button, FormAlert, linkClass, PasswordField } from '../../components/ui'
+import { EmailField } from '../../features/auth/AuthFields'
+import { requiredError } from '../../lib/checks'
 import { useRedirectSignedIn } from '../../features/session/useRedirectSignedIn'
 import { AuthLayout } from '../../layouts/AuthLayout'
 import { useForm } from '../../lib/use-form'
@@ -48,8 +50,8 @@ export function LoginPage() {
   const form = useForm({
     initial: { email: arrival.email, password: '' },
     validate: ({ email, password }) => ({
-      email: email.trim() ? undefined : validationMessages.required,
-      password: password ? undefined : validationMessages.required,
+      email: requiredError(email),
+      password: requiredError(password, { trim: false }),
     }),
     context: 'login',
     onSubmit: async ({ email, password }) => {
@@ -69,59 +71,44 @@ export function LoginPage() {
   }, [showChecking, arrival.reason])
 
   return (
-    <AuthLayout title="Вход">
-      {showChecking ? (
-        <div className="mt-6">
-          <Spinner label="Проверяем вход" />
-        </div>
-      ) : (
-        <>
-          {arrival.reason && (
-            <p
-              ref={reasonRef}
-              role="status"
-              tabIndex={-1}
-              className="mt-4 rounded-xl bg-sand p-3 text-sm text-sand-ink outline-none"
-            >
-              {arrival.reason}
-            </p>
-          )}
-          <form noValidate onSubmit={form.handleSubmit} className="mt-6 flex flex-col gap-4">
-            <TextField
-              label="Email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              maxLength={authLimits.emailMax}
-              {...form.field('email')}
-            />
-            <PasswordField
-              label="Пароль"
-              autoComplete="current-password"
-              maxLength={authLimits.passwordMax}
-              {...form.field('password')}
-            />
-            <Link to="/recover" className={`${linkClass} self-start text-sm`}>
-              Забыли пароль?
-            </Link>
-            <FormAlert message={form.formError} />
-            {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-            <Button type="submit" fullWidth aria-disabled={form.submitting}>
-              {form.submitting ? 'Входим…' : 'Войти'}
-            </Button>
-          </form>
-          <p className="mt-6 text-sm text-ink-muted">
-            Нет аккаунта?{' '}
-            <Link to="/register" className={linkClass}>
-              Зарегистрироваться
-            </Link>
-          </p>
-          {MockLogin && (
-            <Suspense fallback={null}>
-              <MockLogin />
-            </Suspense>
-          )}
-        </>
+    <AuthLayout title="Вход" checking={showChecking}>
+      {arrival.reason && (
+        <p
+          ref={reasonRef}
+          role="status"
+          tabIndex={-1}
+          className="mt-4 rounded-xl bg-sand p-3 text-sm text-sand-ink outline-none"
+        >
+          {arrival.reason}
+        </p>
+      )}
+      <form noValidate onSubmit={form.handleSubmit} className="mt-6 flex flex-col gap-4">
+        <EmailField {...form.field('email')} />
+        <PasswordField
+          label="Пароль"
+          autoComplete="current-password"
+          maxLength={authLimits.passwordMax}
+          {...form.field('password')}
+        />
+        <Link to="/recover" className={`${linkClass} self-start text-sm`}>
+          Забыли пароль?
+        </Link>
+        <FormAlert message={form.formError} />
+        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
+        <Button type="submit" fullWidth aria-disabled={form.submitting}>
+          {form.submitting ? 'Входим…' : 'Войти'}
+        </Button>
+      </form>
+      <p className="mt-6 text-sm text-ink-muted">
+        Нет аккаунта?{' '}
+        <Link to="/register" className={linkClass}>
+          Зарегистрироваться
+        </Link>
+      </p>
+      {MockLogin && (
+        <Suspense fallback={null}>
+          <MockLogin />
+        </Suspense>
       )}
     </AuthLayout>
   )

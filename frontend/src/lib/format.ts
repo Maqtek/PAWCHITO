@@ -1,3 +1,5 @@
+import { moscowLocal } from './dates'
+
 const TIME_ZONE = 'Europe/Moscow'
 const LOCALE = 'ru-RU'
 
@@ -27,18 +29,17 @@ function moscowParts(date: Date) {
 
 /** Дата «YYYY-MM-DD» по московскому времени: сервер сверяет даты без времени с сегодняшним днём в Москве. */
 export function moscowIsoDate(date: Date): string {
-  const { year, month, day } = moscowParts(date)
-  return [String(year).padStart(4, '0'), String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-')
+  return moscowLocal(date).date
 }
 
-/** «среда, 17 июня» по московскому времени. */
-export function formatDayDate(date: Date): string {
+/** «среда, 17 июня» по московскому времени: момент или дата «YYYY-MM-DD». */
+export function formatDayDate(value: string | Date): string {
   return new Intl.DateTimeFormat(LOCALE, {
     timeZone: TIME_ZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  }).format(date)
+  }).format(new Date(value))
 }
 
 /** «10 октября» по московскому времени. */
@@ -87,6 +88,11 @@ export function greeting(date: Date): string {
 
 /** Неразрывный пробел: число не отрывается от слова при переносе. */
 export const NBSP = '\u00A0'
+
+/** «21 день», «3 дня»: длительность курса, интервал повтора. Число не отрывается от слова. */
+export function formatDays(days: number): string {
+  return `${days}${NBSP}${pluralize(days, ['день', 'дня', 'дней'])}`
+}
 
 /** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». Число не отрывается от слова. */
 export function formatAge(birthDate: string, today: Date): string {

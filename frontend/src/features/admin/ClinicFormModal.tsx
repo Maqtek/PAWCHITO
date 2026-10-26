@@ -4,11 +4,12 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { clinicLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, CheckboxField, FormAlert, Modal, SelectField, TextField } from '../../components/ui'
+import type { AdminClinic, ClinicCreate } from '../../api/schema'
+import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeClinic } from './clinic-cache'
+import { requiredError } from '../../lib/checks'
+import { saveClinic } from './clinic-cache'
 import {
   halfHourOptions,
   normalizePhone,
@@ -53,6 +54,9 @@ function initialValues(clinic?: AdminClinic) {
 
 type ClinicValues = ReturnType<typeof initialValues>
 
+// Рабочие дни — набор: порядок и повторы в массиве не важны.
+const sameWorkDays = (a: number[], b: number[]) => serializeWorkDays(a) === serializeWorkDays(b)
+
 function toPayload(values: ClinicValues): ClinicCreate {
   return {
     name: values.name.trim(),
@@ -62,18 +66,6 @@ function toPayload(values: ClinicValues): ClinicCreate {
     closes_at: values.closes_at,
     work_days: parseWorkDays(values.work_days),
   }
-}
-
-/** Только изменённые поля: PATCH не перезаписывает то, что администратор не трогал. */
-function changedFields(next: ClinicCreate, clinic: AdminClinic): ClinicUpdate {
-  const update: ClinicUpdate = {}
-  if (next.name !== clinic.name) update.name = next.name
-  if (next.address !== clinic.address) update.address = next.address
-  if (next.phone !== clinic.phone) update.phone = next.phone
-  if (next.opens_at !== clinic.opens_at) update.opens_at = next.opens_at
-  if (next.closes_at !== clinic.closes_at) update.closes_at = next.closes_at
-  if (serializeWorkDays(next.work_days) !== serializeWorkDays(clinic.work_days)) update.work_days = next.work_days
-  return update
 }
 
 interface ClinicFormProps {
@@ -91,50 +83,29 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
   const [baseline] = useState(clinic)
   const form = useForm({
     initial: initialValues(baseline),
-    validate: (values) => {
-      const phone = normalizePhone(values.phone)
-      let phoneError: string | undefined
-      if (values.phone.trim() === '') phoneError = validationMessages.required
-      else if (!PHONE.test(phone)) phoneError = validationMessages.phone
-      return {
-        name: values.name.trim() ? undefined : validationMessages.required,
-        address: values.address.trim() ? undefined : validationMessages.required,
-        phone: phoneError,
-        closes_at: values.opens_at < values.closes_at ? undefined : validationMessages.closesAfterOpens,
-        work_days: parseWorkDays(values.work_days).length > 0 ? undefined : validationMessages.workDays,
-      }
-    },
-    context: 'clinic',
+    validate: (values) => ({
+      name: requiredError(values.name),
+      address: requiredError(values.address),
+      phone:
+        requiredError(values.phone) ?? (PHONE.test(normalizePhone(values.phone)) ? undefined : validationMessages.phone),
+      closes_at: values.opens_at < values.closes_at ? undefined : validationMessages.closesAfterOpens,
+      work_days: parseWorkDays(values.work_days).length > 0 ? undefined : validationMessages.workDays,
+    }),
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
-      const update = baseline && changedFields(payload, baseline)
+      const update = baseline && changedFields(payload, baseline, { work_days: sameWorkDays })
       if (update && Object.keys(update).length === 0) {
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        const request =
-          baseline && update
-            ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
-            : unwrap(api.POST('/admin/clinics', { body: payload, signal }))
-        const saved = await request.catch((error: unknown) => {
-          refetchAfterFailure(queryClient, baseline?.id)
-          throw error
-        })
-        storeClinic(queryClient, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update }))
+          : unwrap(api.POST('/admin/clinics', { body: payload }))
+      onSaved(await saveClinic(queryClient, request, baseline?.id))
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -160,16 +131,13 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
       {baseline && (
         <p className="text-sm text-ink-muted">Существующие записи не меняются, новые слоты считаются по новым часам.</p>
       )}
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить клинику'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить клинику'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

@@ -16,6 +16,17 @@ import type {
 /** Цветовая пара из токенов макета. */
 export type Tone = 'mint' | 'butter' | 'blush' | 'sky' | 'lilac' | 'coral' | 'neutral'
 
+/**
+ * Варианты выпадающего списка из подписей — подходят как SelectOption. Порядок задаётся явно:
+ * у части подписей он не совпадает с порядком ключей (пол: «Не указан» — первым).
+ */
+export function labelOptions<K extends string>(
+  labels: Record<K, string>,
+  order: readonly K[],
+): { value: K; label: string }[] {
+  return order.map((value) => ({ value, label: labels[value] }))
+}
+
 export const roleLabel: Record<Role, string> = {
   owner: 'Владелец',
   clinic: 'Клиника',
@@ -39,6 +50,15 @@ export const conditionKindLabel: Record<ConditionKind, string> = {
   chronic: 'Хроническое заболевание',
 }
 
+export const conditionKindOptions = labelOptions(conditionKindLabel, ['allergy', 'chronic'])
+/** «Не указан» первым: это значение по умолчанию (Р-41). */
+export const sexOptions = labelOptions(sexLabel, ['unknown', 'male', 'female'])
+
+export const conditionKindTone: Record<ConditionKind, Tone> = {
+  allergy: 'coral',
+  chronic: 'lilac',
+}
+
 /** Аппетит и энергия в дневнике (БП §3: снижен / норма / повышен): одна подпись подходит к обоим словам. */
 export const levelLabel: Record<Level, string> = {
   low: 'Ниже обычного',
@@ -60,6 +80,8 @@ export const careStatusLabel: Record<CareStatus, string> = {
   recovery: 'Восстанавливается',
   prevention: 'На профилактике',
 }
+
+export const careStatusOptions = labelOptions(careStatusLabel, careStatusOrder)
 
 export const careStatusTone: Record<CareStatus, Tone> = {
   routine: 'mint',

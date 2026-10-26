@@ -23,7 +23,7 @@ type TabMessage = { type: 'signed-in' } | { type: 'signed-out' }
 const LOGOUT_PENDING_KEY = 'pawchito:logout-pending'
 const REFRESH_LOCK = 'pawchito:refresh'
 const CHANNEL_NAME = 'pawchito:session'
-/** Запросы, которые экран не даёт бросить (сессия, окно кода, правка имени), на зависшей сети иначе ждут вечно. */
+/** Запросы, которые экран не даёт бросить (сессия, изменения в окнах и формах), на зависшей сети иначе ждут вечно. */
 export const REQUEST_TIMEOUT_MS = 10_000
 
 let restoring: Promise<void> | null = null

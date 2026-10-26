@@ -1,13 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { calendarQuery } from '../../api/queries'
 import type { CalendarEvent, Pet, Reminder } from '../../api/schema'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { Button, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { AppointmentEventItem } from '../calendar/AppointmentEventItem'
-import { calendarGroups, eventReminder, formatDueWithYear, groupPeriod } from '../calendar/calendar-event'
+import { calendarGroups, eventReminder, groupPeriod } from '../calendar/calendar-event'
 import { CalendarGroup } from '../calendar/CalendarGroup'
+import { formatDueWithYear } from '../calendar/due'
 import { VaccinationDueItem } from '../calendar/VaccinationDueItem'
 import { FarReminders } from './FarReminders'
 import { markedMessage } from './reminder-actions'
@@ -35,15 +37,8 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
   const [today] = useState(() => moscowIsoDate(new Date()))
   const calendar = useQuery(calendarQuery(pet.id))
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отмеченное или удалённое дело пропало вместе со своей кнопкой — без этого фокус упадёт на body.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   function openDialog(kind: Dialog['kind'], reminder?: Reminder) {
     // Старое сообщение не висит над открытым окном, а тот же текст после следующего действия озвучится заново.
@@ -52,7 +47,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
   }
 
   function closeDialog({ gone = false } = {}) {
-    if (gone) focusList.current = true
+    if (gone) focusListLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 
@@ -64,7 +59,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
         onStatus={onStatus}
         onDone={(result) => {
           onStatus(markedMessage(result, today))
-          focusList.current = true
+          focusListLater()
         }}
         onSkip={() => openDialog('skip', reminder)}
         onDelete={() => openDialog('delete', reminder)}
@@ -85,15 +80,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
 
   function groups() {
     if (calendar.isPending) return <Spinner label="Загружаем дела" />
-    if (!calendar.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить дела"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void calendar.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!calendar.data) return <LoadError title="Не удалось загрузить дела" onRetry={() => void calendar.refetch()} />
     const { data } = calendar
     if (calendarGroups.every(({ key }) => data[key].length === 0)) {
       return (
@@ -132,7 +119,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
         }}
       />
       <ReminderConfirmModal
-        open={dialog.open && (dialog.kind === 'skip' || dialog.kind === 'delete')}
+        open={dialog.open && dialog.kind !== 'add'}
         kind={dialog.kind === 'delete' ? 'delete' : 'skip'}
         reminder={dialog.reminder}
         today={today}

@@ -5,9 +5,16 @@ import { addDays } from '../../lib/dates'
 export interface Course {
   prescription: Prescription
   appointment: Appointment
-  /** Последний день курса: дата начала + длительность − 1. */
+  /** Последний день курса, «YYYY-MM-DD». */
   lastDay: string
 }
+
+/** Название курса — как у его дел: «препарат, дозировка» (Р-63). */
+export const courseTitle = ({ drug, dosage }: Pick<Prescription, 'drug' | 'dosage'>) => `${drug}, ${dosage}`
+
+/** Последний день курса, «YYYY-MM-DD»: дата начала + длительность − 1. */
+export const courseLastDay = ({ start_date, duration_days }: Pick<Prescription, 'start_date' | 'duration_days'>) =>
+  addDays(start_date, duration_days - 1)
 
 /** Курсы питомца из итогов его приёмов, новые сверху. */
 export function petCourses(appointments: Appointment[]): Course[] {
@@ -16,7 +23,7 @@ export function petCourses(appointments: Appointment[]): Course[] {
       (appointment.outcome?.prescriptions ?? []).map((prescription) => ({
         prescription,
         appointment,
-        lastDay: addDays(prescription.start_date, prescription.duration_days - 1),
+        lastDay: courseLastDay(prescription),
       })),
     )
     .sort((a, b) => b.prescription.start_date.localeCompare(a.prescription.start_date) || b.prescription.id - a.prescription.id)

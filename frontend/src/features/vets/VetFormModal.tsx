@@ -1,14 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../../api/client'
-import { validationMessages } from '../../api/error-messages'
 import { vetLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, FormAlert, Modal, TextField } from '../../components/ui'
+import type { Vet, VetCreate } from '../../api/schema'
+import { FormActions, Modal, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
-import { refetchVetsAfterFailure, storeVet } from './vet-cache'
+import { requiredError } from '../../lib/checks'
+import { saveVet } from './vet-cache'
 
 interface VetFormModalProps {
   open: boolean
@@ -40,14 +40,6 @@ function toPayload(values: VetValues): VetCreate {
   return { full_name: values.full_name.trim(), specialization: specialization === '' ? null : specialization }
 }
 
-/** Только изменённые поля: PATCH не перезаписывает то, что клиника не трогала. */
-function changedFields(next: VetCreate, vet: Vet): VetUpdate {
-  const update: VetUpdate = {}
-  if (next.full_name !== vet.full_name) update.full_name = next.full_name
-  if (next.specialization !== vet.specialization) update.specialization = next.specialization
-  return update
-}
-
 interface VetFormProps {
   vet?: Vet
   onSaved: (vet: Vet) => void
@@ -63,8 +55,9 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
   const [baseline] = useState(vet)
   const form = useForm({
     initial: initialValues(baseline),
-    validate: (values) => ({ full_name: values.full_name.trim() ? undefined : validationMessages.required }),
+    validate: (values) => ({ full_name: requiredError(values.full_name) }),
     context: 'vet',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -72,29 +65,13 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        const request =
-          baseline && update
-            ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
-            : unwrap(api.POST('/clinic/vets', { body: payload, signal }))
-        const saved = await request.catch((error: unknown) => {
-          refetchVetsAfterFailure(queryClient)
-          throw error
-        })
-        storeVet(queryClient, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update }))
+          : unwrap(api.POST('/clinic/vets', { body: payload }))
+      onSaved(await saveVet(queryClient, request))
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -106,16 +83,13 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
         maxLength={vetLimits.specializationMax}
         {...form.field('specialization')}
       />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить врача'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить врача'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

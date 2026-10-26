@@ -7,9 +7,17 @@ import { ApiError } from '../../api/errors'
 import { appointmentLimits } from '../../api/limits'
 import { bookingClinicsQuery, bookingVetsQuery, slotsQuery, unwrap } from '../../api/queries'
 import type { Appointment, AppointmentReason, Clinic, Pet, Slot, Vet } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, EmptyState, FormAlert, SelectField, Spinner, TextareaField, TextField, type SelectOption } from '../../components/ui'
-import { cn } from '../../lib/cn'
+import {
+  Button,
+  EmptyState,
+  FormAlert,
+  LoadError,
+  SelectField,
+  Spinner,
+  TextareaField,
+  TextField,
+  type SelectOption,
+} from '../../components/ui'
 import { addDays, isoWeekday } from '../../lib/dates'
 import { formatTime, moscowIsoDate } from '../../lib/format'
 import { appointmentReasonLabel } from '../../lib/labels'
@@ -83,7 +91,7 @@ export function BookingWizard({ pets, selectedPetId, onBooked }: BookingWizardPr
           <li
             key={item.id}
             aria-current={item.id === step ? 'step' : undefined}
-            className={cn(position === index ? 'font-extrabold text-ink' : 'text-ink-muted')}
+            className={position === index ? 'font-extrabold text-ink' : 'text-ink-muted'}
           >
             {position + 1}. {item.title}
           </li>
@@ -182,16 +190,6 @@ function BackButton({ onBack, children }: { onBack: () => void; children: ReactN
   )
 }
 
-function LoadError({ title, onRetry }: { title: string; onRetry: () => void }) {
-  return (
-    <EmptyState
-      title={title}
-      description="Проверьте соединение и попробуйте ещё раз."
-      action={<Button onClick={onRetry}>Повторить</Button>}
-    />
-  )
-}
-
 function ClinicStep({ onPick }: { onPick: (clinic: Clinic) => void }) {
   const { data: clinics, isPending, refetch } = useQuery(bookingClinicsQuery)
   if (isPending) return <Spinner label="Загружаем клиники" />
@@ -213,7 +211,6 @@ function ClinicStep({ onPick }: { onPick: (clinic: Clinic) => void }) {
 
 function VetStep({ clinic, onBack, onPick }: { clinic: Clinic; onBack: () => void; onPick: (vet: Vet) => void }) {
   const { data: vets, isPending, error, refetch } = useQuery(bookingVetsQuery(clinic.id))
-  const back = <BackButton onBack={onBack}>Другая клиника</BackButton>
 
   function content() {
     if (isPending) return <Spinner label="Загружаем врачей" />
@@ -244,7 +241,7 @@ function VetStep({ clinic, onBack, onPick }: { clinic: Clinic; onBack: () => voi
         {clinic.name} · {formatSchedule(clinic)}
       </p>
       {content()}
-      {back}
+      <BackButton onBack={onBack}>Другая клиника</BackButton>
     </>
   )
 }
@@ -355,7 +352,6 @@ function DetailsStep({ clinic, vet, slot, pets, selectedPetId, onBack, onConflic
               reason: values.reason as AppointmentReason,
               reason_comment: comment === '' ? null : comment,
             },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
         storeAppointment(queryClient, created)

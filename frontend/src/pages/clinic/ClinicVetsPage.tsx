@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Stethoscope } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { clinicVetsQuery } from '../../api/queries'
 import type { Vet } from '../../api/schema'
-import { Button, EmptyState, Spinner, Tabs } from '../../components/ui'
+import { Button, EmptyState, LoadError, PageStatus, Spinner, Tabs } from '../../components/ui'
 import { VetArchiveModal, type ArchiveAction } from '../../features/vets/VetArchiveModal'
 import { VetCard } from '../../features/vets/VetCard'
 import { VetFormModal } from '../../features/vets/VetFormModal'
 import { PageHeader } from '../../layouts/PageHeader'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 type View = 'active' | 'archived'
 
@@ -27,16 +28,10 @@ export function ClinicVetsPage() {
   const [view, setView] = useState<View>('active')
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const [status, setStatus] = useState('')
-  const tabsRef = useRef<HTMLDivElement>(null)
-  const focusTabs = useRef(false)
-
   // Врач ушёл в другую вкладку вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, вкладка получает его последней.
-  useEffect(() => {
-    if (!focusTabs.current) return
-    focusTabs.current = false
-    tabsRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus()
-  })
+  const [tabsRef, focusTabsLater] = useFocusAfterRender<HTMLDivElement>((tabs) =>
+    tabs.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'),
+  )
 
   const sorted = vets ? [...vets].sort(byName) : []
   const active = sorted.filter((vet) => vet.archived_at === null)
@@ -53,7 +48,7 @@ export function ClinicVetsPage() {
 
   function closeDialog({ vetMoved = false } = {}) {
     // Врача нет в этой вкладке: ушёл после подтверждения или после ошибки, когда изменение всё же применилось.
-    if (dialog.vet && (vetMoved || !shown.some((vet) => vet.id === dialog.vet?.id))) focusTabs.current = true
+    if (dialog.vet && (vetMoved || !shown.some((vet) => vet.id === dialog.vet?.id))) focusTabsLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 
@@ -75,15 +70,7 @@ export function ClinicVetsPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем врачей" />
-    if (!vets) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить врачей"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!vets) return <LoadError title="Не удалось загрузить врачей" onRetry={() => void refetch()} />
     return (
       <div className="flex flex-col gap-4">
         <div ref={tabsRef}>
@@ -129,10 +116,7 @@ export function ClinicVetsPage() {
           </Button>
         }
       />
-      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       <div className="max-w-2xl">{content()}</div>
       <VetFormModal
         open={dialog.open && (dialog.kind === 'add' || dialog.kind === 'edit')}

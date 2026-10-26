@@ -1,11 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Route } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { petAppointmentsQuery, prescriptionProgressQuery } from '../../api/queries'
-import { Button, Card, EmptyState, Spinner } from '../../components/ui'
+import { EmptyState, LoadError, SectionCard, Spinner } from '../../components/ui'
 import { formatShortDate, moscowIsoDate } from '../../lib/format'
 import { ActiveCourse } from './ActiveCourse'
-import { petCourses, progressText, type Course } from './course'
+import { courseTitle, petCourses, progressText, type Course } from './course'
 
 interface PetCoursesProps {
   petId: number
@@ -16,17 +16,10 @@ interface PetCoursesProps {
 export function PetCourses({ petId, onStatus }: PetCoursesProps) {
   const appointments = useQuery(petAppointmentsQuery(petId))
   const [today] = useState(() => moscowIsoDate(new Date()))
-  const completedId = useId()
 
   if (appointments.isPending) return <Spinner label="Загружаем курсы лечения" />
   if (!appointments.data) {
-    return (
-      <EmptyState
-        title="Не удалось загрузить курсы лечения"
-        description="Проверьте соединение и попробуйте ещё раз."
-        action={<Button onClick={() => void appointments.refetch()}>Повторить</Button>}
-      />
-    )
+    return <LoadError title="Не удалось загрузить курсы лечения" onRetry={() => void appointments.refetch()} />
   }
   const courses = petCourses(appointments.data)
   if (courses.length === 0) {
@@ -47,20 +40,15 @@ export function PetCourses({ petId, onStatus }: PetCoursesProps) {
         <ActiveCourse key={course.prescription.id} course={course} today={today} onStatus={onStatus} />
       ))}
       {completed.length > 0 && (
-        <section aria-labelledby={completedId}>
-          <Card className="p-5 sm:p-6">
-            <h2 id={completedId} className="text-lg font-extrabold">
-              Завершённые курсы
-            </h2>
-            <ul className="mt-4 flex flex-col gap-3">
-              {completed.map((course) => (
-                <li key={course.prescription.id}>
-                  <CompletedCourse course={course} />
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </section>
+        <SectionCard title="Завершённые курсы">
+          <ul className="mt-4 flex flex-col gap-3">
+            {completed.map((course) => (
+              <li key={course.prescription.id}>
+                <CompletedCourse course={course} />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
       )}
     </div>
   )
@@ -71,9 +59,7 @@ function CompletedCourse({ course }: { course: Course }) {
   const progress = useQuery(prescriptionProgressQuery(prescription.id))
   return (
     <div className="rounded-xl border border-line p-4 text-sm">
-      <p className="font-extrabold break-words">
-        {prescription.drug}, {prescription.dosage}
-      </p>
+      <p className="font-extrabold break-words">{courseTitle(prescription)}</p>
       <p className="text-ink-muted">
         С {formatShortDate(prescription.start_date)} по {formatShortDate(lastDay)} · {appointment.clinic.name}
       </p>

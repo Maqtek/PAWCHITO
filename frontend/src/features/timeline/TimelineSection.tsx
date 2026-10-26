@@ -3,9 +3,10 @@ import { HistoryIcon } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import { timelineQuery } from '../../api/queries'
 import type { TimelineItem } from '../../api/schema'
-import { Button, Card, EmptyState, FormAlert, Spinner } from '../../components/ui'
+import { Button, EmptyState, FormAlert, LoadError, SectionCard, Spinner } from '../../components/ui'
 import { formatLongDate } from '../../lib/format'
-import { groupByDate, timelineItemKey } from './timeline'
+import { groupBy } from '../../lib/group-by'
+import { timelineItemKey } from './timeline'
 import { TimelineEntry } from './TimelineEntry'
 
 /**
@@ -13,7 +14,6 @@ import { TimelineEntry } from './TimelineEntry'
  * «Показать ещё» подгружает следующую страницу; фокус переходит на первый новый элемент.
  */
 export function TimelineSection({ petId }: { petId: number }) {
-  const headingId = useId()
   const timeline = useInfiniteQuery(timelineQuery(petId))
   const listRef = useRef<HTMLOListElement>(null)
   const endRef = useRef<HTMLParagraphElement>(null)
@@ -38,15 +38,7 @@ export function TimelineSection({ petId }: { petId: number }) {
 
   function content() {
     if (timeline.isPending) return <Spinner label="Загружаем ленту" />
-    if (!timeline.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить ленту"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void timeline.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!timeline.data) return <LoadError title="Не удалось загрузить ленту" onRetry={() => void timeline.refetch()} />
     const items = timeline.data.pages.flat()
     if (items.length === 0) {
       return (
@@ -60,7 +52,8 @@ export function TimelineSection({ petId }: { petId: number }) {
     return (
       <>
         <ol ref={listRef} className="flex flex-col gap-5">
-          {groupByDate(items).map(([date, dayItems]) => (
+          {/* Дни ленты — в порядке сервера. */}
+          {groupBy(items, (item) => item.date).map(([date, dayItems]) => (
             <TimelineDay key={date} date={date} items={dayItems} />
           ))}
         </ol>
@@ -86,15 +79,10 @@ export function TimelineSection({ petId }: { petId: number }) {
   }
 
   return (
-    <section aria-labelledby={headingId}>
-      <Card className="p-5 sm:p-6">
-        <h2 id={headingId} className="text-lg font-extrabold">
-          Лента истории
-        </h2>
-        <p className="mt-1 text-sm text-ink-muted">Наблюдения, прививки, приёмы с итогом и курсы лечения — от новых к старым.</p>
-        <div className="mt-4">{content()}</div>
-      </Card>
-    </section>
+    <SectionCard title="Лента истории">
+      <p className="mt-1 text-sm text-ink-muted">Наблюдения, прививки, приёмы с итогом и курсы лечения — от новых к старым.</p>
+      <div className="mt-4">{content()}</div>
+    </SectionCard>
   )
 }
 

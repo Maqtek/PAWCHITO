@@ -1,7 +1,7 @@
 import { Archive, Check, Pencil } from 'lucide-react'
 import { useId } from 'react'
 import type { Pet } from '../../api/schema'
-import { PetIllustration } from '../../components/illustrations/PetIllustration'
+import { PetImage } from '../../components/pet/PetImage'
 import { Badge, Button } from '../../components/ui'
 import { formatAge } from '../../lib/format'
 import { sexLabel, speciesLabel } from '../../lib/labels'
@@ -34,11 +34,7 @@ export function PetListItem({ pet, today, selected, onSelect, onEdit, onArchive 
   return (
     <article aria-labelledby={nameId} className="rounded-card border border-line bg-surface p-4 shadow-card">
       <div className="flex items-start gap-4">
-        {pet.photo_url ? (
-          <img src={pet.photo_url} alt={pet.name} className="size-16 shrink-0 rounded-2xl object-cover" />
-        ) : (
-          <PetIllustration species={pet.species} name={pet.name} size="md" />
-        )}
+        <PetImage pet={pet} size="md" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 id={nameId} className="text-lg font-extrabold break-words">
