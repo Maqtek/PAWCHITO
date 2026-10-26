@@ -1,16 +1,25 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2 } from 'lucide-react'
-import { useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { api } from '../../api/client'
 import { errorMessage, validationMessages } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { healthLimits, outcomeLimits, petLimits } from '../../api/limits'
 import { clinicPetQuery, unwrap } from '../../api/queries'
 import type { Appointment, CareStatus, ConditionKind, OutcomeCreate, OutcomeResult, Pet, Sex } from '../../api/schema'
-import { Button, FormAlert, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import {
+  Button,
+  FormActions,
+  Modal,
+  SelectField,
+  TextareaField,
+  TextField,
+  type SelectOption,
+} from '../../components/ui'
 import { addDays, moscowLocal } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
 import { careStatusLabel, careStatusOrder, conditionKindLabel, sexLabel } from '../../lib/labels'
+import { focusField } from '../../lib/use-form'
 import { formatSlot } from '../appointments/format'
 import { parseWeight } from '../health/weight'
 import { refetchClinicAppointments } from './clinic-appointment-cache'
@@ -39,34 +48,43 @@ export function OutcomeFormModal({ open, appointment, onClose, onDone }: Outcome
   )
 }
 
-interface PrescriptionDraft {
-  key: number
-  drug: string
-  dosage: string
-  /** «09:00, 21:00» — через запятую. */
-  times: string
-  days: string
-  start: string
-}
-interface VaccinationDraft {
-  key: number
-  name: string
-  date: string
-  next: string
-}
-interface ConditionDraft {
-  key: number
-  kind: string
-  title: string
-  description: string
+// Черновик — значения полей ввода под именами полей OutcomeCreate: путь поля («prescriptions.0.times») — это и его имя,
+// и путь ошибки сервера (Р-56).
+type RowList = 'prescriptions' | 'vaccinations' | 'conditions'
+type RowField<L extends RowList> = keyof NonNullable<OutcomeCreate[L]>[number] & string
+type Row<L extends RowList> = { key: number } & Record<RowField<L>, string>
+type PetField = keyof NonNullable<OutcomeCreate['pet_update']>
+interface Draft extends Record<'conclusion' | 'recommendations' | 'care_status', string> {
+  prescriptions: Row<'prescriptions'>[]
+  vaccinations: Row<'vaccinations'>[]
+  conditions: Row<'conditions'>[]
+  /** Только правки: нетронутое поле подхватит значение из карточки, даже если она загрузилась после начала ввода. */
+  pet_update: Partial<Record<PetField, string>>
 }
 
-/** Фокус на первое неверное поле: имя поля — его путь, как у сервера. */
-function focusField(form: HTMLFormElement, path: string): void {
-  const element = form.elements.namedItem(path)
-  if (element instanceof HTMLElement) element.focus()
+const emptyDraft: Draft = {
+  conclusion: '',
+  recommendations: '',
+  care_status: '',
+  prescriptions: [],
+  vaccinations: [],
+  conditions: [],
+  pet_update: {},
 }
 
+/** Значение по пути: «prescriptions.0.times». */
+const getIn = (tree: object, path: string) =>
+  path.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], tree) as string
+
+/** Копия дерева с новым значением по пути; соседние ветви не копируются. */
+function setIn(node: unknown, [part, ...rest]: string[], value: string): unknown {
+  if (part === undefined) return value
+  if (Array.isArray(node)) return node.with(Number(part), setIn(node[Number(part)], rest, value))
+  const record = node as Record<string, unknown>
+  return { ...record, [part]: setIn(record[part], rest, value) }
+}
+
+/** Время приёма в поле — «09:00, 21:00», через запятую. */
 const parseTimes = (text: string) =>
   text
     .split(/[,;\s]+/)
@@ -74,15 +92,9 @@ const parseTimes = (text: string) =>
     .filter(Boolean)
 
 /** Пустое — не передаётся; иначе «как есть», а проверка поля — на клиенте и на сервере (Р-56). */
-function toPayload(
-  values: { conclusion: string; recommendations: string; careStatus: string },
-  prescriptions: PrescriptionDraft[],
-  vaccinations: VaccinationDraft[],
-  conditions: ConditionDraft[],
-  pet: { weight: string; breed: string; birthDate: string; sex: string },
-  current: Pet | undefined,
-): OutcomeCreate {
-  const recommendations = values.recommendations.trim()
+function toPayload(draft: Draft, pet: Record<PetField, string>, current: Pet | undefined): OutcomeCreate {
+  const { prescriptions, vaccinations, conditions } = draft
+  const recommendations = draft.recommendations.trim()
   const update: OutcomeCreate['pet_update'] = {}
   const weight = parseWeight(pet.weight)
   if (typeof weight === 'number') update.weight = weight
@@ -90,25 +102,29 @@ function toPayload(
   if (current) {
     const breed = pet.breed.trim() === '' ? null : pet.breed.trim()
     if (breed !== current.breed) update.breed = breed
-    const birthDate = pet.birthDate === '' ? null : pet.birthDate
+    const birthDate = pet.birth_date === '' ? null : pet.birth_date
     if (birthDate !== current.birth_date) update.birth_date = birthDate
     if (pet.sex !== current.sex) update.sex = pet.sex as Sex
   }
   return {
-    conclusion: values.conclusion.trim(),
+    conclusion: draft.conclusion.trim(),
     recommendations: recommendations === '' ? null : recommendations,
-    care_status: values.careStatus as CareStatus,
+    care_status: draft.care_status as CareStatus,
     ...(prescriptions.length > 0 && {
       prescriptions: prescriptions.map((item) => ({
         drug: item.drug.trim(),
         dosage: item.dosage.trim(),
         times: parseTimes(item.times),
-        duration_days: Number(item.days),
-        start_date: item.start,
+        duration_days: Number(item.duration_days),
+        start_date: item.start_date,
       })),
     }),
     ...(vaccinations.length > 0 && {
-      vaccinations: vaccinations.map((item) => ({ name: item.name.trim(), date: item.date, next_date: item.next || null })),
+      vaccinations: vaccinations.map((item) => ({
+        name: item.name.trim(),
+        date: item.date,
+        next_date: item.next_date || null,
+      })),
     }),
     ...(conditions.length > 0 && {
       conditions: conditions.map((item) => ({
@@ -135,20 +151,15 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
   const [today] = useState(() => moscowIsoDate(new Date()))
   const day = moscowLocal(new Date(appointment.slot_start)).date
   const nextKey = useRef(1)
-  const key = () => nextKey.current++
 
-  const [values, setValues] = useState({ conclusion: '', recommendations: '', careStatus: '' })
-  const [prescriptions, setPrescriptions] = useState<PrescriptionDraft[]>([])
-  const [vaccinations, setVaccinations] = useState<VaccinationDraft[]>([])
-  const [conditions, setConditions] = useState<ConditionDraft[]>([])
-  // Данные питомца — из карточки: поля заполнены текущими значениями, уходят только изменённые. Храним только правки:
-  // поле, которое не трогали, подхватит значение из карточки, даже если она загрузилась после начала ввода.
-  const [petEdits, setPetEdits] = useState<Partial<Record<'weight' | 'breed' | 'birthDate' | 'sex', string>>>({})
-  const petValues = {
-    weight: petEdits.weight ?? '',
-    breed: petEdits.breed ?? card?.pet.breed ?? '',
-    birthDate: petEdits.birthDate ?? card?.pet.birth_date ?? '',
-    sex: petEdits.sex ?? card?.pet.sex ?? 'unknown',
+  const [draft, setDraft] = useState(emptyDraft)
+  // Данные питомца — из карточки: поля заполнены текущими значениями, уходят только изменённые.
+  const { pet_update: edits } = draft
+  const pet = {
+    weight: edits.weight ?? '',
+    breed: edits.breed ?? card?.pet.breed ?? '',
+    birth_date: edits.birth_date ?? card?.pet.birth_date ?? '',
+    sex: edits.sex ?? card?.pet.sex ?? 'unknown',
   }
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitted, setSubmitted] = useState(false)
@@ -158,10 +169,10 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
   /** Ошибки по путям, как у сервера: «prescriptions.0.times» (Р-56). */
   function validate(): Record<string, string> {
     const found: Record<string, string> = {}
-    if (!values.conclusion.trim()) found.conclusion = 'Напишите заключение'
-    if (!values.careStatus) found.care_status = 'Выберите статус ухода'
-    prescriptions.forEach((item, index) => {
-      const at = (field: string) => `prescriptions.${index}.${field}`
+    if (!draft.conclusion.trim()) found.conclusion = 'Напишите заключение'
+    if (!draft.care_status) found.care_status = 'Выберите статус ухода'
+    draft.prescriptions.forEach((item, index) => {
+      const at = (field: RowField<'prescriptions'>) => `prescriptions.${index}.${field}`
       if (!item.drug.trim()) found[at('drug')] = validationMessages.required
       if (!item.dosage.trim()) found[at('dosage')] = validationMessages.required
       const times = parseTimes(item.times)
@@ -170,42 +181,63 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
       } else if (new Set(times).size !== times.length) {
         found[at('times')] = 'Время приёма не должно повторяться'
       }
-      const days = Number(item.days)
+      const days = Number(item.duration_days)
       if (!Number.isInteger(days) || days < 1 || days > outcomeLimits.durationMax) {
         found[at('duration_days')] = `От 1 до ${outcomeLimits.durationMax} дней`
       }
-      if (!item.start || item.start < day || item.start > addDays(day, outcomeLimits.startDaysMax)) {
+      if (!item.start_date || item.start_date < day || item.start_date > addDays(day, outcomeLimits.startDaysMax)) {
         found[at('start_date')] = 'От дня приёма до 30 дней после'
       }
     })
-    vaccinations.forEach((item, index) => {
-      const at = (field: string) => `vaccinations.${index}.${field}`
+    draft.vaccinations.forEach((item, index) => {
+      const at = (field: RowField<'vaccinations'>) => `vaccinations.${index}.${field}`
       if (!item.name.trim()) found[at('name')] = validationMessages.required
       if (!item.date || item.date < day || item.date > today) found[at('date')] = 'От дня приёма до сегодня'
-      else if (item.next && item.next <= item.date) found[at('next_date')] = validationMessages.nextDateAfter
+      else if (item.next_date && item.next_date <= item.date) found[at('next_date')] = validationMessages.nextDateAfter
     })
-    conditions.forEach((item, index) => {
+    draft.conditions.forEach((item, index) => {
       if (!item.kind) found[`conditions.${index}.kind`] = validationMessages.conditionKind
       if (!item.title.trim()) found[`conditions.${index}.title`] = validationMessages.required
     })
-    if (petValues.weight.trim() !== '' && parseWeight(petValues.weight) === undefined) {
+    if (pet.weight.trim() !== '' && parseWeight(pet.weight) === undefined) {
       found['pet_update.weight'] = validationMessages.weight
     }
-    if (petValues.birthDate && petValues.birthDate > today) found['pet_update.birth_date'] = validationMessages.birthDateFuture
+    if (pet.birth_date && pet.birth_date > today) found['pet_update.birth_date'] = validationMessages.birthDateFuture
     return found
   }
 
   // После первой отправки ошибки пересчитываются при вводе — как в useForm.
   const shown = submitted ? { ...errors, ...validate() } : errors
+  const view = { ...draft, pet_update: pet }
 
-  /** Правка поля убирает его серверную ошибку. */
-  function touched(path: string) {
-    setErrors((current) => {
-      if (!(path in current)) return current
-      const next = { ...current }
-      delete next[path]
-      return next
-    })
+  /** Поле по пути, как form.field(): путь — имя поля для фокуса и ключ ошибки; правка снимает ошибку сервера. */
+  function bind(path: string) {
+    return {
+      name: path,
+      value: getIn(view, path),
+      onChange: (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+        const { value } = event.target
+        setDraft((current) => setIn(current, path.split('.'), value) as Draft)
+        setErrors((current) => {
+          if (!(path in current)) return current
+          const next = { ...current }
+          delete next[path]
+          return next
+        })
+      },
+      error: shown[path],
+    }
+  }
+
+  function addRow<L extends RowList>(list: L, blank: Omit<Row<L>, 'key'>) {
+    const row = { key: nextKey.current++, ...blank }
+    setDraft((current) => ({ ...current, [list]: [...current[list], row] }))
+  }
+
+  /** Строки после убранной сдвигаются, и серверные ошибки по индексам указали бы не туда — сбрасываем их. */
+  function removeRow(list: RowList, index: number) {
+    setDraft((current) => ({ ...current, [list]: current[list].filter((_, at) => at !== index) }))
+    setErrors({})
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -227,7 +259,7 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
       const result = await unwrap(
         api.POST('/clinic/appointments/{id}/outcome', {
           params: { path: { id: appointment.id } },
-          body: toPayload(values, prescriptions, vaccinations, conditions, petValues, card?.pet),
+          body: toPayload(draft, pet, card?.pet),
         }),
       )
       onDone(result)
@@ -247,18 +279,6 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
     }
   }
 
-  /** Строки после убранной сдвигаются, и серверные ошибки по индексам указали бы не туда — сбрасываем их. */
-  function removeRow(remove: () => void) {
-    remove()
-    setErrors({})
-  }
-
-  function cancel() {
-    if (!submitting) onCancel()
-  }
-
-  const field = (path: string) => ({ name: path, error: shown[path] })
-
   return (
     <form noValidate onSubmit={(event) => void submit(event)} className="flex flex-col gap-5">
       <p className="text-sm text-ink-muted">
@@ -268,241 +288,93 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
 
       <fieldset className="flex flex-col gap-4">
         <legend className="mb-2 font-extrabold">Заключение и статус ухода</legend>
-        <TextareaField
-          label="Заключение"
-          rows={3}
-          maxLength={outcomeLimits.textMax}
-          value={values.conclusion}
-          onChange={(event) => {
-            setValues({ ...values, conclusion: event.target.value })
-            touched('conclusion')
-          }}
-          {...field('conclusion')}
-        />
+        <TextareaField label="Заключение" rows={3} maxLength={outcomeLimits.textMax} {...bind('conclusion')} />
         <TextareaField
           label="Рекомендации"
           hint="Необязательно"
           rows={2}
           maxLength={outcomeLimits.textMax}
-          value={values.recommendations}
-          onChange={(event) => {
-            setValues({ ...values, recommendations: event.target.value })
-            touched('recommendations')
-          }}
-          {...field('recommendations')}
+          {...bind('recommendations')}
         />
         <SelectField
           label="Статус ухода"
           hint="Владелец увидит его на главной (БП §6.3)"
           options={careOptions}
           placeholder="Выберите статус"
-          value={values.careStatus}
-          onChange={(event) => {
-            setValues({ ...values, careStatus: event.target.value })
-            touched('care_status')
-          }}
-          {...field('care_status')}
+          {...bind('care_status')}
         />
       </fieldset>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-2 font-extrabold">Рецепты</legend>
-        <p className="text-sm text-ink-muted">По каждому рецепту владелец получит дела курса на каждый день и время.</p>
-        {prescriptions.map((item, index) => {
-          const at = (path: string) => `prescriptions.${index}.${path}`
-          const change = (patch: Partial<PrescriptionDraft>, path: string) => {
-            setPrescriptions(prescriptions.map((draft) => (draft.key === item.key ? { ...draft, ...patch } : draft)))
-            touched(at(path))
-          }
-          return (
-            <div key={item.key} className="grid grid-cols-1 gap-3 rounded-xl border border-line p-3 sm:grid-cols-2">
-              <TextField
-                label="Препарат"
-                maxLength={outcomeLimits.drugMax}
-                value={item.drug}
-                onChange={(event) => change({ drug: event.target.value }, 'drug')}
-                {...field(at('drug'))}
-              />
-              <TextField
-                label="Дозировка"
-                maxLength={outcomeLimits.dosageMax}
-                value={item.dosage}
-                onChange={(event) => change({ dosage: event.target.value }, 'dosage')}
-                {...field(at('dosage'))}
-              />
-              <TextField
-                label="Время приёма"
-                hint="Через запятую: 09:00, 21:00"
-                value={item.times}
-                onChange={(event) => change({ times: event.target.value }, 'times')}
-                {...field(at('times'))}
-              />
-              <TextField
-                label="Дней"
-                inputMode="numeric"
-                value={item.days}
-                onChange={(event) => change({ days: event.target.value }, 'duration_days')}
-                {...field(at('duration_days'))}
-              />
-              <TextField
-                label="Начало"
-                type="date"
-                min={day}
-                max={addDays(day, outcomeLimits.startDaysMax)}
-                value={item.start}
-                onChange={(event) => change({ start: event.target.value }, 'start_date')}
-                {...field(at('start_date'))}
-              />
-              <div className="flex items-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={Trash2}
-                  onClick={() => removeRow(() => setPrescriptions(prescriptions.filter((draft) => draft.key !== item.key)))}
-                >
-                  Убрать рецепт {index + 1}
-                </Button>
-              </div>
-            </div>
-          )
-        })}
-        {prescriptions.length < outcomeLimits.prescriptionsMax && (
-          <div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Plus}
-              onClick={() =>
-                setPrescriptions([...prescriptions, { key: key(), drug: '', dosage: '', times: '', days: '7', start: day }])
-              }
-            >
-              Добавить рецепт
-            </Button>
-          </div>
+      <DraftRows
+        name="prescriptions"
+        legend="Рецепты"
+        intro="По каждому рецепту владелец получит дела курса на каждый день и время."
+        item="рецепт"
+        rows={draft.prescriptions}
+        max={outcomeLimits.prescriptionsMax}
+        onAdd={() =>
+          addRow('prescriptions', { drug: '', dosage: '', times: '', duration_days: '7', start_date: day })
+        }
+        onRemove={(index) => removeRow('prescriptions', index)}
+      >
+        {(at) => (
+          <>
+            <TextField label="Препарат" maxLength={outcomeLimits.drugMax} {...bind(at('drug'))} />
+            <TextField label="Дозировка" maxLength={outcomeLimits.dosageMax} {...bind(at('dosage'))} />
+            <TextField label="Время приёма" hint="Через запятую: 09:00, 21:00" {...bind(at('times'))} />
+            <TextField label="Дней" inputMode="numeric" {...bind(at('duration_days'))} />
+            <TextField
+              label="Начало"
+              type="date"
+              min={day}
+              max={addDays(day, outcomeLimits.startDaysMax)}
+              {...bind(at('start_date'))}
+            />
+          </>
         )}
-      </fieldset>
+      </DraftRows>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-2 font-extrabold">Прививки</legend>
-        {vaccinations.map((item, index) => {
-          const at = (path: string) => `vaccinations.${index}.${path}`
-          const change = (patch: Partial<VaccinationDraft>, path: string) => {
-            setVaccinations(vaccinations.map((draft) => (draft.key === item.key ? { ...draft, ...patch } : draft)))
-            touched(at(path))
-          }
-          return (
-            <div key={item.key} className="grid grid-cols-1 gap-3 rounded-xl border border-line p-3 sm:grid-cols-2">
-              <TextField
-                label="Название прививки"
-                maxLength={healthLimits.vaccineNameMax}
-                value={item.name}
-                onChange={(event) => change({ name: event.target.value }, 'name')}
-                {...field(at('name'))}
-              />
-              <TextField
-                label="Дата прививки"
-                type="date"
-                min={day}
-                max={today}
-                value={item.date}
-                onChange={(event) => change({ date: event.target.value }, 'date')}
-                {...field(at('date'))}
-              />
-              <TextField
-                label="Следующая прививка"
-                hint="Необязательно"
-                type="date"
-                value={item.next}
-                onChange={(event) => change({ next: event.target.value }, 'next_date')}
-                {...field(at('next_date'))}
-              />
-              <div className="flex items-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={Trash2}
-                  onClick={() => removeRow(() => setVaccinations(vaccinations.filter((draft) => draft.key !== item.key)))}
-                >
-                  Убрать прививку {index + 1}
-                </Button>
-              </div>
-            </div>
-          )
-        })}
-        {vaccinations.length < outcomeLimits.vaccinationsMax && (
-          <div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Plus}
-              onClick={() => setVaccinations([...vaccinations, { key: key(), name: '', date: day, next: '' }])}
-            >
-              Добавить прививку
-            </Button>
-          </div>
+      <DraftRows
+        name="vaccinations"
+        legend="Прививки"
+        item="прививку"
+        rows={draft.vaccinations}
+        max={outcomeLimits.vaccinationsMax}
+        onAdd={() => addRow('vaccinations', { name: '', date: day, next_date: '' })}
+        onRemove={(index) => removeRow('vaccinations', index)}
+      >
+        {(at) => (
+          <>
+            <TextField label="Название прививки" maxLength={healthLimits.vaccineNameMax} {...bind(at('name'))} />
+            <TextField label="Дата прививки" type="date" min={day} max={today} {...bind(at('date'))} />
+            <TextField label="Следующая прививка" hint="Необязательно" type="date" {...bind(at('next_date'))} />
+          </>
         )}
-      </fieldset>
+      </DraftRows>
 
-      <fieldset className="flex flex-col gap-3">
-        <legend className="mb-2 font-extrabold">Особенности здоровья</legend>
-        {conditions.map((item, index) => {
-          const at = (path: string) => `conditions.${index}.${path}`
-          const change = (patch: Partial<ConditionDraft>, path: string) => {
-            setConditions(conditions.map((draft) => (draft.key === item.key ? { ...draft, ...patch } : draft)))
-            touched(at(path))
-          }
-          return (
-            <div key={item.key} className="grid grid-cols-1 gap-3 rounded-xl border border-line p-3 sm:grid-cols-2">
-              <SelectField
-                label="Тип"
-                options={kindOptions}
-                placeholder="Выберите тип"
-                value={item.kind}
-                onChange={(event) => change({ kind: event.target.value }, 'kind')}
-                {...field(at('kind'))}
-              />
-              <TextField
-                label="Название особенности"
-                maxLength={healthLimits.conditionTitleMax}
-                value={item.title}
-                onChange={(event) => change({ title: event.target.value }, 'title')}
-                {...field(at('title'))}
-              />
-              <TextareaField
-                label="Комментарий"
-                hint="Необязательно"
-                rows={2}
-                maxLength={healthLimits.conditionDescriptionMax}
-                value={item.description}
-                onChange={(event) => change({ description: event.target.value }, 'description')}
-                {...field(at('description'))}
-              />
-              <div className="flex items-end">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={Trash2}
-                  onClick={() => removeRow(() => setConditions(conditions.filter((draft) => draft.key !== item.key)))}
-                >
-                  Убрать особенность {index + 1}
-                </Button>
-              </div>
-            </div>
-          )
-        })}
-        {conditions.length < outcomeLimits.conditionsMax && (
-          <div>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon={Plus}
-              onClick={() => setConditions([...conditions, { key: key(), kind: '', title: '', description: '' }])}
-            >
-              Добавить особенность
-            </Button>
-          </div>
+      <DraftRows
+        name="conditions"
+        legend="Особенности здоровья"
+        item="особенность"
+        rows={draft.conditions}
+        max={outcomeLimits.conditionsMax}
+        onAdd={() => addRow('conditions', { kind: '', title: '', description: '' })}
+        onRemove={(index) => removeRow('conditions', index)}
+      >
+        {(at) => (
+          <>
+            <SelectField label="Тип" options={kindOptions} placeholder="Выберите тип" {...bind(at('kind'))} />
+            <TextField label="Название особенности" maxLength={healthLimits.conditionTitleMax} {...bind(at('title'))} />
+            <TextareaField
+              label="Комментарий"
+              hint="Необязательно"
+              rows={2}
+              maxLength={healthLimits.conditionDescriptionMax}
+              {...bind(at('description'))}
+            />
+          </>
         )}
-      </fieldset>
+      </DraftRows>
 
       <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <legend className="mb-2 font-extrabold">Данные питомца</legend>
@@ -510,57 +382,79 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
           label="Вес"
           hint="В килограммах, например 4,2 — запишется в дневник"
           inputMode="decimal"
-          value={petValues.weight}
-          onChange={(event) => {
-            setPetEdits({ ...petEdits, weight: event.target.value })
-            touched('pet_update.weight')
-          }}
-          {...field('pet_update.weight')}
+          {...bind('pet_update.weight')}
         />
-        <TextField
-          label="Порода"
-          maxLength={petLimits.breedMax}
-          value={petValues.breed}
-          onChange={(event) => {
-            setPetEdits({ ...petEdits, breed: event.target.value })
-            touched('pet_update.breed')
-          }}
-          {...field('pet_update.breed')}
-        />
+        <TextField label="Порода" maxLength={petLimits.breedMax} {...bind('pet_update.breed')} />
         <TextField
           label="Дата рождения"
           type="date"
           min={petLimits.birthDateMin}
           max={today}
-          value={petValues.birthDate}
-          onChange={(event) => {
-            setPetEdits({ ...petEdits, birthDate: event.target.value })
-            touched('pet_update.birth_date')
-          }}
-          {...field('pet_update.birth_date')}
+          {...bind('pet_update.birth_date')}
         />
-        <SelectField
-          label="Пол"
-          options={sexOptions}
-          value={petValues.sex}
-          onChange={(event) => {
-            setPetEdits({ ...petEdits, sex: event.target.value })
-            touched('pet_update.sex')
-          }}
-          {...field('pet_update.sex')}
-        />
+        <SelectField label="Пол" options={sexOptions} {...bind('pet_update.sex')} />
       </fieldset>
 
-      <FormAlert message={formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает submitting. */}
-        <Button type="submit" aria-disabled={submitting}>
-          {submitting ? 'Сохраняем…' : 'Сохранить итог'}
-        </Button>
-      </div>
+      <FormActions
+        error={formError}
+        submitting={submitting}
+        submitLabel="Сохранить итог"
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
+  )
+}
+
+interface DraftRowsProps<L extends RowList> {
+  /** Список в API: поля строки — «prescriptions.0.times», как в пути ошибки сервера. */
+  name: L
+  legend: string
+  /** Пояснение под заголовком. */
+  intro?: string
+  /** Что в строке, в винительном падеже: «Добавить рецепт», «Убрать рецепт 2». */
+  item: string
+  rows: Row<L>[]
+  max: number
+  onAdd: () => void
+  onRemove: (index: number) => void
+  /** Поля строки; at('times') — путь поля этой строки. */
+  children: (at: (field: RowField<L>) => string) => ReactNode
+}
+
+/** Строки черновика (рецепты, прививки, особенности): у каждой — кнопка «Убрать N», внизу — «Добавить» до лимита. */
+function DraftRows<L extends RowList>({
+  name,
+  legend,
+  intro,
+  item,
+  rows,
+  max,
+  onAdd,
+  onRemove,
+  children,
+}: DraftRowsProps<L>) {
+  return (
+    <fieldset className="flex flex-col gap-3">
+      <legend className="mb-2 font-extrabold">{legend}</legend>
+      {intro && <p className="text-sm text-ink-muted">{intro}</p>}
+      {rows.map((row, index) => (
+        <div key={row.key} className="grid grid-cols-1 gap-3 rounded-xl border border-line p-3 sm:grid-cols-2">
+          {children((field) => `${name}.${index}.${field}`)}
+          <div className="flex items-end">
+            <Button variant="secondary" size="sm" icon={Trash2} onClick={() => onRemove(index)}>
+              Убрать {item} {index + 1}
+            </Button>
+          </div>
+        </div>
+      ))}
+      {rows.length < max && (
+        <div>
+          <Button variant="secondary" size="sm" icon={Plus} onClick={onAdd}>
+            Добавить {item}
+          </Button>
+        </div>
+      )}
+    </fieldset>
   )
 }
