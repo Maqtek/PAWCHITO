@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { act, fireEvent, screen, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { UserEvent } from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,7 +8,10 @@ import type { AdminClinic } from '../../api/schema'
 import { server } from '../../mocks/node'
 import { readServer, toAdminClinic, updateServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
+import { createGate } from '../../test/gate'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests, settle } from '../../test/requests'
+import { NETWORK } from '../../test/texts'
 import { ClinicFormModal } from './ClinicFormModal'
 
 beforeEach(() => {
@@ -42,14 +45,7 @@ function CacheProbe({ id }: { id: number }) {
   )
 }
 
-/** Ворота: запрос держится, пока тест не вызовет release. */
-function createGate() {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { opened, release }
-}
+const recordPatches = () => recordRequests('patch', '*/api/admin/clinics/:id')
 
 /** Клиника приходит из кэша запроса, как на странице: обновление кэша меняет проп открытого окна. */
 function LiveClinicModal({ id, onSaved, onClose }: { id: number; onSaved: () => void; onClose: () => void }) {
@@ -59,19 +55,14 @@ function LiveClinicModal({ id, onSaved, onClose }: { id: number; onSaved: () => 
 
 describe('ClinicFormModal: добавление', () => {
   it('пустые поля — ошибки, фокус на названии, запроса нет', async () => {
-    let calls = 0
-    server.use(
-      http.post('*/api/admin/clinics', () => {
-        calls += 1
-      }),
-    )
+    const posts = recordRequests('post', '*/api/admin/clinics')
     const { user, dialog } = renderForm()
     expect(within(dialog).getByRole('heading', { name: 'Новая клиника' })).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
     expect(within(dialog).getAllByText('Заполните поле')).toHaveLength(3)
     expect(screen.getByLabelText('Название')).toHaveFocus()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(calls).toBe(0)
+    await settle()
+    expect(posts.count).toBe(0)
   })
 
   it('закрытие не позже открытия и ни одного дня — ошибки у полей', async () => {
@@ -113,7 +104,7 @@ describe('ClinicFormModal: добавление', () => {
     await fillRequired(user)
     await user.click(screen.getByRole('checkbox', { name: 'Сб' }))
     await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
     expect(onSaved.mock.calls[0][0]).toMatchObject({
       name: 'Лапа',
       phone: '+79997778899',
@@ -167,7 +158,7 @@ describe('ClinicFormModal: добавление', () => {
     expect(onClose).not.toHaveBeenCalled()
 
     gate.release()
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
     expect(onSaved.mock.calls[0][0]).toMatchObject({ name: 'Лапа' })
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -189,26 +180,19 @@ describe('ClinicFormModal: добавление', () => {
         <ClinicFormModal open onClose={vi.fn()} onSaved={onSaved} />
       </>,
     )
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор'))
     const dialog = screen.getByRole('dialog')
     await fillRequired(user)
     await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
-    )
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('|Лапа'))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(NETWORK)
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('|Лапа'))
     expect(onSaved).not.toHaveBeenCalled()
   })
 })
 
 describe('ClinicFormModal: изменение', () => {
   it('поля заполнены, подсказка про записи; уходят только изменённые поля', async () => {
-    const bodies: unknown[] = []
-    server.use(
-      http.patch('*/api/admin/clinics/:id', async ({ request }) => {
-        bodies.push(await request.clone().json())
-      }),
-    )
+    const patches = recordPatches()
     const { user, dialog, onSaved } = renderForm(vetDoctor())
     expect(within(dialog).getByRole('heading', { name: 'Изменить клинику' })).toBeInTheDocument()
     expect(screen.getByLabelText('Название')).toHaveValue('ВетДоктор')
@@ -216,21 +200,16 @@ describe('ClinicFormModal: изменение', () => {
     await user.clear(screen.getByLabelText('Телефон'))
     await user.type(screen.getByLabelText('Телефон'), '+7 999 123-45-67')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ phone: '+79991234567' }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(patches.bodies).toEqual([{ phone: '+79991234567' }])
   })
 
   it('без изменений — закрывается без запроса', async () => {
-    let calls = 0
-    server.use(
-      http.patch('*/api/admin/clinics/:id', () => {
-        calls += 1
-      }),
-    )
+    const patches = recordPatches()
     const { user, dialog, onClose } = renderForm(vetDoctor())
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
-    expect(calls).toBe(0)
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(patches.count).toBe(0)
   })
 
   it('ответ не дошёл, а изменение применилось — страница клиники и список перечитываются', async () => {
@@ -251,17 +230,15 @@ describe('ClinicFormModal: изменение', () => {
         <ClinicFormModal open clinic={vetDoctor()} onClose={vi.fn()} onSaved={vi.fn()} />
       </>,
     )
-    await vi.waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79990000000'))
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор|'))
+    await waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79990000000'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор|'))
     const dialog = screen.getByRole('dialog')
     await user.clear(screen.getByLabelText('Телефон'))
     await user.type(screen.getByLabelText('Телефон'), '+7 999 123-45-67')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
-    )
-    await vi.waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79991234567'))
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор Плюс'))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(NETWORK)
+    await waitFor(() => expect(screen.getByTestId('clinic')).toHaveTextContent('+79991234567'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('ВетДоктор Плюс'))
   })
 })
 
@@ -278,31 +255,21 @@ describe('ClinicFormModal: клиника обновилась при откры
   }
 
   it('правится только телефон — чужое изменение адреса не откатывается', async () => {
-    const bodies: unknown[] = []
-    server.use(
-      http.patch('*/api/admin/clinics/:id', async ({ request }) => {
-        bodies.push(await request.clone().json())
-      }),
-    )
+    const patches = recordPatches()
     const { user, dialog, onSaved } = await openThenRefetch()
     expect(screen.getByLabelText('Адрес')).toHaveValue('ул. Ленина, 10')
     await user.clear(screen.getByLabelText('Телефон'))
     await user.type(screen.getByLabelText('Телефон'), '+7 999 123-45-67')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ phone: '+79991234567' }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(patches.bodies).toEqual([{ phone: '+79991234567' }])
   })
 
   it('без правок — закрывается без запроса, устаревший PATCH не уходит', async () => {
-    let calls = 0
-    server.use(
-      http.patch('*/api/admin/clinics/:id', () => {
-        calls += 1
-      }),
-    )
+    const patches = recordPatches()
     const { user, dialog, onClose } = await openThenRefetch()
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
-    expect(calls).toBe(0)
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1))
+    expect(patches.count).toBe(0)
   })
 })

@@ -1,12 +1,17 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { useLocation } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
-import { readServer, SEED_PASSWORD, toAdminClinic, updateServer, type MockAccount } from '../../mocks/server-state'
+import { readServer, toAdminClinic, updateServer } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
+import { createGate } from '../../test/gate'
+import { addZoovetAccount } from '../../test/mock-state'
+import { findStatus } from '../../test/queries'
+import { renderRoute, renderWithProviders } from '../../test/render'
+import { stubRequestTimeout } from '../../test/requests'
+import { NETWORK, SERVER_UNAVAILABLE } from '../../test/texts'
 
 beforeEach(() => {
   loginMockAs('admin')
@@ -27,41 +32,21 @@ const renderClinic = (id: number | string, state?: unknown) =>
     { route: `/admin/clinics/${id}`, state },
   )
 
-/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
-async function findStatus(text: string) {
-  const message = await screen.findByText(text)
-  expect(message.closest('[role="status"]')).not.toBeNull()
-  return message
-}
-
-/** Ворота: запрос держится, пока тест не вызовет release. */
-function createGate() {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { opened, release }
-}
-
-const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
 const CREATED = 'Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.'
 
 /** Аккаунт клиники 4, созданный в обход страницы: другим администратором или запросом, ответ которого не дошёл. */
-function addZoovetAccount(email: string) {
-  updateServer((state) => {
-    const account: MockAccount = {
-      id: state.nextUserId,
-      email,
-      password: SEED_PASSWORD,
-      role: 'clinic',
-      full_name: 'Зоовет',
-      must_change_password: true,
-      is_active: true,
-      recovery_code: null,
-      clinic_id: 4,
-    }
-    state.nextUserId += 1
-    state.accounts.push(account)
+const addCreatedAccount = (email: string) => addZoovetAccount({ email, mustChangePassword: true })
+
+/** Клиника скрыта на сервере, как это делает обработчик скрытия: аккаунт заблокирован, будущих записей не осталось. */
+function hideClinicInState(id: number) {
+  return updateServer((state) => {
+    const item = state.clinics.find((entry) => entry.id === id)
+    const account = state.accounts.find((entry) => entry.clinic_id === id)
+    if (!item || !account) throw new Error(`В seed нет клиники ${id} с аккаунтом`)
+    item.archived_at = '2026-10-25T10:00:00.000Z'
+    item.futureAppointments = 0
+    account.is_active = false
+    return toAdminClinic(state, item)
   })
 }
 
@@ -111,9 +96,9 @@ describe('AdminClinicPage: данные', () => {
     renderClinic(4, { notice: 'created' })
     expect(screen.getByTestId('location-state')).toHaveTextContent('"notice":"created"')
 
-    await findStatus('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')
+    await findStatus(CREATED)
     await waitFor(() => expect(screen.getByTestId('location-state')).toHaveTextContent(/^null$/))
-    expect(screen.getByText('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')).toBeInTheDocument()
+    expect(screen.getByText(CREATED)).toBeInTheDocument()
   })
 
   it('регион статуса есть уже при загрузке: тот же узел получает сообщение', async () => {
@@ -130,7 +115,7 @@ describe('AdminClinicPage: данные', () => {
   })
 
   it('переход из списка после добавления (данные уже в кэше): регион статуса пустой, затем тот же узел получает сообщение', async () => {
-    const { user } = renderWithProviders(<AppRoutes />, { route: '/admin/clinics' })
+    const { user } = renderRoute('/admin/clinics')
     await user.click(await screen.findByRole('button', { name: 'Добавить клинику' }))
     const dialog = screen.getByRole('dialog', { name: 'Новая клиника' })
     await user.type(within(dialog).getByLabelText('Название'), 'Лапа')
@@ -223,7 +208,7 @@ describe('AdminClinicPage: аккаунт клиники', () => {
   it('409: аккаунт уже создал другой администратор — карточка перечитана, после закрытия окна доступен сброс', async () => {
     const { user } = renderClinic(4)
     expect(await screen.findByText('Клиника не может войти, пока нет аккаунта.')).toBeInTheDocument()
-    addZoovetAccount('zoovet-other@example.com')
+    addCreatedAccount('zoovet-other@example.com')
     await user.click(screen.getByRole('button', { name: 'Создать аккаунт' }))
     const dialog = screen.getByRole('dialog', { name: 'Аккаунт клиники' })
     await user.type(within(dialog).getByLabelText('Email клиники'), 'zoovet@example.com')
@@ -299,15 +284,12 @@ describe('AdminClinicPage: аккаунт клиники', () => {
 
   it('создание аккаунта: запрос завис — по таймауту «Нет связи», окно снова закрывается, карточка перечитана', async () => {
     const gate = createGate()
-    let arrived!: () => void
-    const reached = new Promise<void>((resolve) => {
-      arrived = resolve
-    })
+    const reached = createGate()
     server.use(
       http.post('*/api/admin/clinics/:id/account', async () => {
         // Сервер успел создать аккаунт, а ответ не пришёл вовремя.
-        addZoovetAccount('zoovet@example.com')
-        arrived()
+        addCreatedAccount('zoovet@example.com')
+        reached.release()
         await gate.opened
         return HttpResponse.json({ detail: 'Поздно' }, { status: 500 })
       }),
@@ -316,14 +298,12 @@ describe('AdminClinicPage: аккаунт клиники', () => {
     await user.click(await screen.findByRole('button', { name: 'Создать аккаунт' }))
     const dialog = screen.getByRole('dialog', { name: 'Аккаунт клиники' })
     await user.type(within(dialog).getByLabelText('Email клиники'), 'zoovet@example.com')
-    // Подменяем только перед отправкой: обмен токена при загрузке берёт свой таймаут.
-    const controller = new AbortController()
-    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    const timeout = stubRequestTimeout()
     await user.click(within(dialog).getByRole('button', { name: 'Создать аккаунт' }))
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).toHaveAttribute('aria-disabled', 'true')
-    await reached
+    await reached.opened
 
-    controller.abort(new DOMException('Истекло время', 'TimeoutError'))
+    timeout.expire()
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(NETWORK)
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
     expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
@@ -381,23 +361,11 @@ describe('AdminClinicPage: скрытие', () => {
   })
 
   it('пока идёт скрытие, окно не закрыть; ответ закрывает его и показывает статус', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    const gate = createGate()
     server.use(
       http.post('*/api/admin/clinics/:id/archive', async () => {
-        await gate
-        const clinic = updateServer((state) => {
-          const item = state.clinics.find((entry) => entry.id === 2)
-          const account = state.accounts.find((entry) => entry.clinic_id === 2)
-          if (!item || !account) throw new Error('В seed нет клиники 2 с аккаунтом')
-          item.archived_at = '2026-10-25T10:00:00.000Z'
-          item.futureAppointments = 0
-          account.is_active = false
-          return toAdminClinic(state, item)
-        })
-        return HttpResponse.json({ clinic, cancelled_appointments: 7 })
+        await gate.opened
+        return HttpResponse.json({ clinic: hideClinicInState(2), cancelled_appointments: 7 })
       }),
     )
     const { user } = renderClinic(2)
@@ -415,7 +383,7 @@ describe('AdminClinicPage: скрытие', () => {
     await user.click(cancel)
     expect(dialog).toHaveAttribute('open')
 
-    release()
+    gate.release()
     expect(await screen.findByText('Клиника скрыта. Отменено записей: 7.')).toBeInTheDocument()
     expect(dialog).not.toHaveAttribute('open')
   })
@@ -427,9 +395,7 @@ describe('AdminClinicPage: скрытие', () => {
     const dialog = screen.getByRole('dialog', { name: 'Скрыть клинику' })
     expect(await within(dialog).findByText('Будет отменено 7 записей. Владельцы получат уведомление.')).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Скрыть' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Сервис временно недоступен. Попробуйте через несколько минут.',
-    )
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(SERVER_UNAVAILABLE)
     expect(dialog).toHaveAttribute('open')
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
     await user.click(within(dialog).getByRole('button', { name: 'Закрыть' }))
@@ -440,14 +406,7 @@ describe('AdminClinicPage: скрытие', () => {
   it('ответ скрытия не дошёл, а клиника скрыта — страница перечитана; после закрытия окна фокус на заголовке', async () => {
     server.use(
       http.post('*/api/admin/clinics/:id/archive', () => {
-        updateServer((state) => {
-          const item = state.clinics.find((entry) => entry.id === 2)
-          const account = state.accounts.find((entry) => entry.clinic_id === 2)
-          if (!item || !account) throw new Error('В seed нет клиники 2 с аккаунтом')
-          item.archived_at = '2026-10-25T10:00:00.000Z'
-          item.futureAppointments = 0
-          account.is_active = false
-        })
+        hideClinicInState(2)
         return HttpResponse.error()
       }),
     )
@@ -536,6 +495,6 @@ describe('AdminClinicPage: скрытие', () => {
     server.use(http.post('*/api/admin/clinics/:id/restore', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
     const { user } = renderClinic(5)
     await user.click(await screen.findByRole('button', { name: 'Вернуть клинику' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Сервис временно недоступен. Попробуйте через несколько минут.')
+    expect(await screen.findByRole('alert')).toHaveTextContent(SERVER_UNAVAILABLE)
   })
 })

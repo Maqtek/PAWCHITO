@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest'
 import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { loginMockAs, logoutMock } from '../../mocks/session'
+import { createGate } from '../../test/gate'
 import { renderWithProviders } from '../../test/render'
+import { settle } from '../../test/requests'
 import { useRedirectSignedIn } from './useRedirectSignedIn'
 
 function Probe({ enabled }: { enabled?: boolean }) {
@@ -33,19 +35,16 @@ function renderProbe(enabled?: boolean) {
 
 /** Гость на /users/me; ответы, начиная с номера holdFrom, держатся до release. */
 function guestMe({ holdFrom = Infinity } = {}) {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
+  const gate = createGate()
   const calls = { me: 0 }
   server.use(
     http.get('*/api/users/me', async () => {
       calls.me += 1
-      if (calls.me >= holdFrom) await opened
+      if (calls.me >= holdFrom) await gate.opened
       return HttpResponse.json({ detail: 'Не авторизован' }, { status: 401 })
     }),
   )
-  return { calls, release }
+  return { calls, release: gate.release }
 }
 
 describe('useRedirectSignedIn', () => {
@@ -98,7 +97,7 @@ describe('useRedirectSignedIn', () => {
     const me = guestMe()
     renderProbe(false)
     expect(screen.getByText('Форма')).toBeInTheDocument()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await settle(100)
     expect(screen.getByText('Форма')).toBeInTheDocument()
     expect(me.calls.me).toBe(0)
   })

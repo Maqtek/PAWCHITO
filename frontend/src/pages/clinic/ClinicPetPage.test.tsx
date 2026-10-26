@@ -1,23 +1,13 @@
 import { fireEvent, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppRoutes } from '../../app/routes'
-import { loginMockAs, resetMockServer } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { setSeedClock } from '../../test/clock'
+import { renderRoute } from '../../test/render'
 
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-  loginMockAs('clinic')
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock('clinic'))
 
 describe('ClinicPetPage', () => {
   it('карточка: данные, особенности, прививки, дневник и приёмы в этой клинике — только чтение', async () => {
-    renderWithProviders(<AppRoutes />, { route: '/clinic/pets/10' })
+    renderRoute('/clinic/pets/10')
     expect(await screen.findByRole('heading', { level: 1, name: 'Майло' })).toBeInTheDocument()
     expect(screen.getByText('Аллергия на курицу')).toBeInTheDocument()
     expect(screen.getByText('Дисплазия тазобедренных суставов')).toBeInTheDocument()
@@ -30,7 +20,7 @@ describe('ClinicPetPage', () => {
   })
 
   it('фото — только после завершённого приёма; формат и размер проверяются до отправки', async () => {
-    const view = renderWithProviders(<AppRoutes />, { route: '/clinic/pets/10' })
+    const view = renderRoute('/clinic/pets/10')
     const input = await screen.findByLabelText('Загрузить фото')
     // user.upload отбросил бы файл по accept — а проверяем как раз сообщение формы.
     fireEvent.change(input, { target: { files: [new File(['не фото'], 'note.txt', { type: 'text/plain' })] } })
@@ -40,13 +30,13 @@ describe('ClinicPetPage', () => {
     expect(await screen.findByText('Фото больше 5 МБ — выберите поменьше.')).toBeInTheDocument()
     view.unmount()
     // У Рекса приём в клинике подтверждён, но ещё не прошёл.
-    renderWithProviders(<AppRoutes />, { route: '/clinic/pets/13' })
+    renderRoute('/clinic/pets/13')
     expect(await screen.findByRole('heading', { level: 1, name: 'Рекс' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Загрузить фото')).not.toBeInTheDocument()
   })
 
   it('без неотменённой записи в клинику — карточка недоступна', async () => {
-    renderWithProviders(<AppRoutes />, { route: '/clinic/pets/12' })
+    renderRoute('/clinic/pets/12')
     expect(await screen.findByText('Карточка недоступна')).toBeInTheDocument()
   })
 })

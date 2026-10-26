@@ -1,7 +1,9 @@
 import { fireEvent, screen } from '@testing-library/react'
+import type { UserEvent } from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/errors'
 import { SelectField, TextField } from '../components/ui'
+import { createGate } from '../test/gate'
 import { renderWithProviders } from '../test/render'
 import { useForm, type FormFailure } from './use-form'
 
@@ -36,6 +38,13 @@ function TestForm({
   )
 }
 
+/** Верные значения и отправка. */
+async function submitValid(user: UserEvent) {
+  await user.type(screen.getByLabelText('Email'), 'a@b.c')
+  await user.type(screen.getByLabelText('Пароль'), '12345678')
+  await user.click(screen.getByRole('button', { name: 'Отправить' }))
+}
+
 describe('useForm', () => {
   it('до отправки ошибок нет; при отправке — все сразу, фокус на первое неверное, запроса нет', async () => {
     const onSubmit = vi.fn(async () => {})
@@ -66,26 +75,22 @@ describe('useForm', () => {
   it('верные значения уходят в onSubmit', async () => {
     const onSubmit = vi.fn(async () => {})
     const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
     expect(onSubmit).toHaveBeenCalledWith({ email: 'a@b.c', password: '12345678' })
   })
 
   it('пока идёт запрос, кнопка заблокирована, повторная отправка игнорируется', async () => {
-    let release!: () => void
-    const onSubmit = vi.fn(() => new Promise<void>((resolve) => (release = resolve)))
+    const gate = createGate()
+    const onSubmit = vi.fn(() => gate.opened)
     const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
 
     const button = await screen.findByRole('button', { name: 'Отправляем…' })
     expect(button).toBeDisabled()
     fireEvent.submit(button.closest('form')!)
     expect(onSubmit).toHaveBeenCalledTimes(1)
 
-    release()
+    gate.release()
     expect(await screen.findByRole('button', { name: 'Отправить' })).toBeEnabled()
   })
 
@@ -94,9 +99,7 @@ describe('useForm', () => {
       throw new ApiError(422, 'Слишком простой', { fieldErrors: { password: 'Слишком простой', unknown: 'лишнее' } })
     })
     const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
 
     expect(await screen.findByText('Слишком простой')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('Проверьте поля формы.')
@@ -109,16 +112,14 @@ describe('useForm', () => {
 
   it('ошибки сервера по полям снимаются, когда уходит новая отправка', async () => {
     let attempt = 0
-    let release!: () => void
+    const gate = createGate()
     const onSubmit = vi.fn(async () => {
       attempt += 1
       if (attempt === 1) throw new ApiError(422, 'Email занят', { fieldErrors: { email: 'Email занят' } })
-      await new Promise<void>((resolve) => (release = resolve))
+      await gate.opened
     })
     const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
     expect(await screen.findByText('Email занят')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
@@ -126,7 +127,7 @@ describe('useForm', () => {
     expect(await screen.findByRole('button', { name: 'Отправляем…' })).toBeInTheDocument()
     expect(screen.queryByText('Email занят')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Email')).not.toHaveAttribute('aria-invalid')
-    release()
+    gate.release()
     expect(await screen.findByRole('button', { name: 'Отправить' })).toBeInTheDocument()
   })
 
@@ -135,9 +136,7 @@ describe('useForm', () => {
       throw new ApiError(401, 'Неверный email или пароль')
     })
     const { user } = renderWithProviders(<TestForm onSubmit={onSubmit} />)
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
     expect(await screen.findByRole('alert')).toHaveTextContent('Неверный email или пароль.')
   })
 
@@ -148,9 +147,7 @@ describe('useForm', () => {
     const { user } = renderWithProviders(
       <TestForm onSubmit={onSubmit} onError={(_, values) => ({ fields: { email: `Занят: ${values.email}` } })} />,
     )
-    await user.type(screen.getByLabelText('Email'), 'a@b.c')
-    await user.type(screen.getByLabelText('Пароль'), '12345678')
-    await user.click(screen.getByRole('button', { name: 'Отправить' }))
+    await submitValid(user)
     expect(await screen.findByText('Занят: a@b.c')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

@@ -7,6 +7,7 @@ import { queryKeys } from '../api/queries'
 import { server } from '../mocks/node'
 import { loginMockAs, readMockCookie } from '../mocks/session'
 import { renderWithProviders } from '../test/render'
+import { LOGOUT_PENDING_KEY, SELECTED_PET_KEY } from '../test/storage-keys'
 import { AppShell } from './AppShell'
 
 function renderShell() {
@@ -55,7 +56,7 @@ describe('AppShell', () => {
     await user.click(screen.getByRole('button', { name: 'Кошка Барсик' }))
 
     expect(screen.getByRole('button', { name: 'Питомец: Барсик. Сменить питомца' })).toBeInTheDocument()
-    expect(localStorage.getItem('pawchito:selected-pet-id')).toBe('11')
+    expect(localStorage.getItem(SELECTED_PET_KEY)).toBe('11')
   })
 
   it('имя кнопки меню пользователя начинается с видимого текста (WCAG 2.5.3)', async () => {
@@ -88,7 +89,7 @@ describe('AppShell', () => {
   })
 
   it('выход: экран входа, токен сброшен, моки в гостя, выбор питомца забыт', async () => {
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     const { user } = renderShell()
     const [menu] = await screen.findAllByRole('button', { name: /меню пользователя/i })
     expect(getAccessToken()).not.toBeNull()
@@ -98,8 +99,8 @@ describe('AppShell', () => {
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
     expect(getAccessToken()).toBeNull()
     expect(readMockCookie()).toBeNull()
-    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
-    expect(localStorage.getItem('pawchito:logout-pending')).toBeNull()
+    expect(localStorage.getItem(SELECTED_PET_KEY)).toBeNull()
+    expect(localStorage.getItem(LOGOUT_PENDING_KEY)).toBeNull()
   })
 
   it('ошибка загрузки питомцев: ни переключателя, ни «Добавить питомца»', async () => {
@@ -125,7 +126,7 @@ describe('AppShell', () => {
 
   it('выход без сети: экран входа, метка «выход не завершён», выбор питомца забыт', async () => {
     server.use(http.post('*/api/auth/logout', () => HttpResponse.error()))
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     const { user } = renderShell()
     const [menu] = await screen.findAllByRole('button', { name: /меню пользователя/i })
     await user.click(menu)
@@ -133,7 +134,7 @@ describe('AppShell', () => {
 
     expect(await screen.findByText('Экран входа')).toBeInTheDocument()
     expect(getAccessToken()).toBeNull()
-    expect(localStorage.getItem('pawchito:logout-pending')).toBe('1')
-    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    expect(localStorage.getItem(LOGOUT_PENDING_KEY)).toBe('1')
+    expect(localStorage.getItem(SELECTED_PET_KEY)).toBeNull()
   })
 })

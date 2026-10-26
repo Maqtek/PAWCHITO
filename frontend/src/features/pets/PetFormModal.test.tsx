@@ -1,15 +1,16 @@
 import { useQuery } from '@tanstack/react-query'
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
 import { petsQuery } from '../../api/queries'
 import type { Pet } from '../../api/schema'
 import { server } from '../../mocks/node'
 import { readServer, updateServer } from '../../mocks/server-state'
+import { createGate } from '../../test/gate'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests, settle } from '../../test/requests'
+import { NETWORK } from '../../test/texts'
 import { PetFormModal } from './PetFormModal'
-
-const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
 
 const seedPet = (id: number) => {
   const pet = readServer().pets.find((item) => item.id === id)
@@ -35,17 +36,9 @@ function renderForm(pet?: Pet) {
   return { ...result, onSaved, onClose, dialog: screen.getByRole('dialog') }
 }
 
-/** Тела запросов; обработчик ничего не отвечает — запрос уходит дальше, в мок питомцев. */
-function captureBodies(method: 'post' | 'patch') {
-  const bodies: unknown[] = []
-  const path = method === 'post' ? '*/api/pets' : '*/api/pets/:petId'
-  server.use(
-    http[method](path, async ({ request }) => {
-      bodies.push(await request.clone().json())
-    }),
-  )
-  return bodies
-}
+/** Запросы добавления (post) или изменения (patch) питомца; уходят дальше, в мок питомцев. */
+const recordPets = (method: 'post' | 'patch') =>
+  recordRequests(method, method === 'post' ? '*/api/pets' : '*/api/pets/:petId')
 
 /** Поле даты: user.type в jsdom не набирает type="date" по символам — значение ставится целиком, как из календаря. */
 function setBirthDate(dialog: HTMLElement, value: string) {
@@ -54,7 +47,7 @@ function setBirthDate(dialog: HTMLElement, value: string) {
 
 describe('PetFormModal: добавление', () => {
   it('пустые кличка и вид — ошибки, фокус на кличке, запроса нет', async () => {
-    const bodies = captureBodies('post')
+    const posts = recordPets('post')
     const { user, dialog } = renderForm()
     expect(within(dialog).getByRole('heading', { name: 'Новый питомец' })).toBeInTheDocument()
     await user.type(within(dialog).getByLabelText('Кличка'), '   ')
@@ -62,12 +55,12 @@ describe('PetFormModal: добавление', () => {
     expect(within(dialog).getByLabelText('Кличка')).toHaveFocus()
     expect(within(dialog).getByLabelText('Кличка')).toHaveAccessibleDescription('Заполните поле')
     expect(within(dialog).getByLabelText('Вид')).toHaveAccessibleDescription('Выберите вид')
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(bodies).toEqual([])
+    await settle()
+    expect(posts.bodies).toEqual([])
   })
 
   it('все поля: пробелы обрезаны, пустая порода — null, пол по умолчанию «Не указан»', async () => {
-    const bodies = captureBodies('post')
+    const posts = recordPets('post')
     const { user, dialog, onSaved } = renderForm()
     expect(within(dialog).getByLabelText('Пол')).toHaveValue('unknown')
     await user.type(within(dialog).getByLabelText('Кличка'), '  Бублик ')
@@ -75,14 +68,14 @@ describe('PetFormModal: добавление', () => {
     await user.type(within(dialog).getByLabelText('Порода'), '   ')
     setBirthDate(dialog, '2024-02-29')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить питомца' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ name: 'Бублик', species: 'dog', breed: null, birth_date: '2024-02-29', sex: 'unknown' }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(posts.bodies).toEqual([{ name: 'Бублик', species: 'dog', breed: null, birth_date: '2024-02-29', sex: 'unknown' }])
     expect(onSaved.mock.calls[0][0]).toMatchObject({ owner_id: 1, name: 'Бублик', species: 'dog', birth_date: '2024-02-29' })
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Майло|Барсик|Бублик'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Майло|Барсик|Бублик'))
   })
 
   it('дата рождения в будущем или раньше 1900 года — ошибка у поля без запроса', async () => {
-    const bodies = captureBodies('post')
+    const posts = recordPets('post')
     const { user, dialog } = renderForm()
     expect(within(dialog).getByLabelText('Дата рождения')).toHaveAttribute('min', '1900-01-01')
     await user.type(within(dialog).getByLabelText('Кличка'), 'Бублик')
@@ -93,7 +86,7 @@ describe('PetFormModal: добавление', () => {
     expect(within(dialog).getByText('Дата рождения — не позже сегодняшнего дня')).toBeInTheDocument()
     setBirthDate(dialog, '1899-12-31')
     expect(within(dialog).getByText('Дата рождения — не раньше 1900 года')).toBeInTheDocument()
-    expect(bodies).toEqual([])
+    expect(posts.bodies).toEqual([])
   })
 
   it('ответ 422 — ошибка у поля и над кнопкой', async () => {
@@ -126,22 +119,19 @@ describe('PetFormModal: добавление', () => {
       }),
     )
     const { user, dialog } = renderForm()
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Майло|Барсик'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Майло|Барсик'))
     await user.type(within(dialog).getByLabelText('Кличка'), 'Бублик')
     await user.selectOptions(within(dialog).getByLabelText('Вид'), 'Кошка')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить питомца' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(NETWORK)
-    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Бублик'))
+    await waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Бублик'))
   })
 
   it('пока идёт запрос, окно не закрыть', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    const gate = createGate()
     server.use(
       http.post('*/api/pets', async () => {
-        await gate
+        await gate.opened
       }),
     )
     const { user, dialog, onClose, onSaved } = renderForm()
@@ -155,14 +145,14 @@ describe('PetFormModal: добавление', () => {
     await user.click(cancel)
     expect(onClose).not.toHaveBeenCalled()
 
-    release()
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    gate.release()
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
   })
 })
 
 describe('PetFormModal: изменение', () => {
   it('поля заполнены; уходят только изменённые поля', async () => {
-    const bodies = captureBodies('patch')
+    const patches = recordPets('patch')
     const { user, dialog, onSaved } = renderForm(seedPet(11))
     expect(within(dialog).getByRole('heading', { name: 'Изменить данные питомца' })).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Кличка')).toHaveValue('Барсик')
@@ -172,30 +162,30 @@ describe('PetFormModal: изменение', () => {
     expect(within(dialog).getByLabelText('Пол')).toHaveValue('male')
     await user.selectOptions(within(dialog).getByLabelText('Пол'), 'Девочка')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ sex: 'female' }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(patches.bodies).toEqual([{ sex: 'female' }])
     expect(onSaved.mock.calls[0][0]).toMatchObject({ name: 'Барсик', sex: 'female' })
   })
 
   it('стёртые порода и дата рождения уходят как null и убираются', async () => {
-    const bodies = captureBodies('patch')
+    const patches = recordPets('patch')
     const { user, dialog, onSaved } = renderForm(seedPet(11))
     await user.clear(within(dialog).getByLabelText('Порода'))
     setBirthDate(dialog, '')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ breed: null, birth_date: null }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(patches.bodies).toEqual([{ breed: null, birth_date: null }])
     expect(readServer().pets.find((pet) => pet.id === 11)).toMatchObject({ breed: null, birth_date: null })
   })
 
   it('ничего не изменено (пробелы по краям не в счёт) — окно закрывается без запроса', async () => {
-    const bodies = captureBodies('patch')
+    const patches = recordPets('patch')
     const { user, dialog, onClose, onSaved } = renderForm(seedPet(11))
     await user.type(within(dialog).getByLabelText('Кличка'), '  ')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(onSaved).not.toHaveBeenCalled()
-    expect(bodies).toEqual([])
+    expect(patches.bodies).toEqual([])
   })
 
   it('питомец не найден (404) — текст ошибки', async () => {

@@ -1,19 +1,13 @@
 import { screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppRoutes } from '../../app/routes'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readServer } from '../../mocks/server-state'
-import { loginMockAs, resetMockServer } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
+import { setSeedClock } from '../../test/clock'
+import { findStatus, region } from '../../test/queries'
+import { renderRoute } from '../../test/render'
+import { SELECTED_PET_KEY } from '../../test/storage-keys'
 
-/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
-async function findStatus(text: string) {
-  const message = await screen.findByText(text)
-  expect(message.closest('[role="status"]')).not.toBeNull()
-  return message
-}
-
-const renderCourse = () => renderWithProviders(<AppRoutes />, { route: '/course' })
-const course = () => screen.getByRole('region', { name: 'Мелоксикам, 1,5 мл' })
+const renderCourse = () => renderRoute('/course')
+const course = () => region('Мелоксикам, 1,5 мл')
 /** Дни курса — по первой строке пункта: «вторник, 27 октября». */
 const days = () =>
   within(course())
@@ -23,16 +17,7 @@ const days = () =>
 
 // Среда, 28 октября 2026, 09:00 по Москве. Курс Майло после приёма №22: Мелоксикам в 20:00 с 12 октября по 1 ноября;
 // до 26.10 выполнен, 22.10 пропущен, доза 27.10 просрочена.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-  loginMockAs('owner')
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock('owner'))
 
 describe('CoursePage', () => {
   it('активный курс: прогресс, дни с первой неотмеченной дозы, прошедшие — под кнопкой', async () => {
@@ -85,14 +70,14 @@ describe('CoursePage', () => {
     vi.setSystemTime(new Date('2026-11-10T06:00:00Z'))
     renderCourse()
     expect(await screen.findByText('Активных курсов нет')).toBeInTheDocument()
-    const completed = screen.getByRole('region', { name: 'Завершённые курсы' })
+    const completed = region('Завершённые курсы')
     expect(within(completed).getByText('Мелоксикам, 1,5 мл')).toBeInTheDocument()
     expect(await within(completed).findByText('14 из 21 выполнено, 1 пропущено')).toBeInTheDocument()
     expect(within(completed).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('у питомца без назначений — пояснение, откуда берутся курсы', async () => {
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     renderCourse()
     expect(await screen.findByText('Курсов лечения нет')).toBeInTheDocument()
     expect(screen.getByText('Дозы по назначению врача и прогресс курса: Барсик.')).toBeInTheDocument()

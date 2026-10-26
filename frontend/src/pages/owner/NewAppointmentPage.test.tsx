@@ -1,26 +1,16 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppRoutes } from '../../app/routes'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
 import { readServer } from '../../mocks/server-state'
-import { loginMockAs, resetMockServer } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
+import { setSeedClock } from '../../test/clock'
+import { renderRoute } from '../../test/render'
 
-const renderWizard = () => renderWithProviders(<AppRoutes />, { route: '/appointments/new' })
+const renderWizard = () => renderRoute('/appointments/new')
 const times = () => within(screen.getByRole('list', { name: 'Свободное время' })).getAllByRole('button').map((button) => button.textContent)
 
 // Среда, 28 октября 2026, 09:00 по Москве; seed записей пересчитан от этой даты.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-  loginMockAs('owner')
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock('owner'))
 
 /** Клиника → врач: шаги, общие для всех сценариев. */
 async function pickVet(user: ReturnType<typeof renderWizard>['user'], vet = 'Петров Павел Петрович') {

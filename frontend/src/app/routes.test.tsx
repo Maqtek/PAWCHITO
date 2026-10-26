@@ -1,61 +1,38 @@
 import { act, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { endMockSessions, loginMockAs, logoutMock } from '../mocks/session'
-import { renderWithProviders } from '../test/render'
-import { AppRoutes } from './routes'
+import { renderRoute } from '../test/render'
 
 describe('маршруты', () => {
   it('владелец на главной: приветствие и карточка питомца', async () => {
-    renderWithProviders(<AppRoutes />)
+    renderRoute('/')
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: 'Майло' })).toBeInTheDocument()
   })
 
   it('клиника с главной попадает в свои записи', async () => {
     loginMockAs('clinic')
-    renderWithProviders(<AppRoutes />)
+    renderRoute('/')
     expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
   })
 
   it('владелец не попадает в кабинет клиники', async () => {
-    renderWithProviders(<AppRoutes />, { route: '/clinic/vets' })
+    renderRoute('/clinic/vets')
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
   })
 
-
   it('гость попадает на вход и входит клиникой через моки', async () => {
     logoutMock()
-    const { user } = renderWithProviders(
-      <AppRoutes />,
-      { route: '/tasks' }
-    )
-    expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'Вход',
-      })
-    ).toBeInTheDocument()
-    await user.type(
-      screen.getByLabelText('Email'),
-      'clinic@example.com'
-    )
-    await user.type(
-      screen.getByLabelText('Пароль'),
-      'pawchito1'
-    )
-    await user.click(
-      screen.getByRole('button', { name: 'Войти' })
-    )
-    expect(
-      await screen.findByRole('heading', {
-        level: 1,
-        name: 'Записи',
-      })
-    ).toBeInTheDocument()
+    const { user } = renderRoute('/tasks')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Email'), 'clinic@example.com')
+    await user.type(screen.getByLabelText('Пароль'), 'pawchito1')
+    await user.click(screen.getByRole('button', { name: 'Войти' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
   })
 
   it('сервер завершил сессию во время работы: экран входа с «Сессия истекла»', async () => {
-    const { queryClient } = renderWithProviders(<AppRoutes />)
+    const { queryClient } = renderRoute('/')
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
 
     endMockSessions()
@@ -67,7 +44,7 @@ describe('маршруты', () => {
 
   it.each(['/login', '/register', '/recover'])('%s: экран — единственная область main', async (route) => {
     logoutMock()
-    renderWithProviders(<AppRoutes />, { route })
+    renderRoute(route)
     const email = await screen.findByLabelText('Email')
     expect(screen.getAllByRole('main')).toHaveLength(1)
     expect(screen.getByRole('main')).toContainElement(screen.getByRole('heading', { level: 1 }))
@@ -75,12 +52,12 @@ describe('маршруты', () => {
   })
 
   it('вошедший на /register уходит на главную', async () => {
-    renderWithProviders(<AppRoutes />, { route: '/register' })
+    renderRoute('/register')
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
   })
 
   it('неизвестный адрес', async () => {
-    renderWithProviders(<AppRoutes />, { route: '/nope' })
+    renderRoute('/nope')
     expect(await screen.findByRole('heading', { level: 1, name: 'Страница не найдена' })).toBeInTheDocument()
   })
 })

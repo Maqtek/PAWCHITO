@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { screen } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { readServer, toUser } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
+import { createGate } from '../../test/gate'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests, settle, stubRequestTimeout } from '../../test/requests'
+import { NETWORK, SERVER_UNAVAILABLE } from '../../test/texts'
 import { NameField } from './NameField'
 
 /** Имя из кэша рядом с полем — как в меню пользователя. */
@@ -65,30 +68,20 @@ describe('NameField', () => {
   })
 
   it('«Отмена» закрывает правку без запроса, фокус на карандаше', async () => {
-    let calls = 0
-    server.use(
-      http.patch('*/api/users/me', () => {
-        calls += 1
-      }),
-    )
+    const patches = recordRequests('patch', '*/api/users/me')
     const { user } = await openEditor()
     await user.type(screen.getByRole('textbox', { name: 'Имя' }), '!')
     await user.click(screen.getByRole('button', { name: 'Отмена' }))
 
     expect(screen.queryByRole('textbox', { name: 'Имя' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Изменить имя' })).toHaveFocus()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(calls).toBe(0)
+    await settle()
+    expect(patches.count).toBe(0)
     expect(ownerName()).toBe('Анна Смирнова')
   })
 
   it('пустое имя — ошибка без запроса; имя не изменилось — закрыть без запроса', async () => {
-    let calls = 0
-    server.use(
-      http.patch('*/api/users/me', () => {
-        calls += 1
-      }),
-    )
+    const patches = recordRequests('patch', '*/api/users/me')
     const { user } = await openEditor()
     await user.clear(screen.getByRole('textbox', { name: 'Имя' }))
     await user.type(screen.getByRole('textbox', { name: 'Имя' }), '   ')
@@ -99,8 +92,8 @@ describe('NameField', () => {
     await user.type(screen.getByRole('textbox', { name: 'Имя' }), 'Анна Смирнова ')
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     expect(await screen.findByRole('button', { name: 'Изменить имя' })).toBeInTheDocument()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(calls).toBe(0)
+    await settle()
+    expect(patches.count).toBe(0)
   })
 
   it('422 — ошибка у поля; 500 — текст над кнопками, правка остаётся открытой', async () => {
@@ -119,18 +112,15 @@ describe('NameField', () => {
 
     server.use(http.patch('*/api/users/me', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Сервис временно недоступен. Попробуйте через несколько минут.')
+    expect(await screen.findByRole('alert')).toHaveTextContent(SERVER_UNAVAILABLE)
     expect(screen.getByRole('textbox', { name: 'Имя' })).toBeInTheDocument()
   })
 
   it('пока запрос идёт, Esc и «Отмена» ничего не делают; ответ закрывает правку', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    const gate = createGate()
     server.use(
       http.patch('*/api/users/me', async () => {
-        await gate
+        await gate.opened
         const state = readServer()
         const owner = state.accounts.find((item) => item.email === 'owner@example.com')!
         return HttpResponse.json(toUser(state, { ...owner, full_name: 'Анна Иванова' }))
@@ -149,38 +139,31 @@ describe('NameField', () => {
     await user.click(cancel)
     expect(screen.getByRole('textbox', { name: 'Имя' })).toHaveValue('Анна Иванова')
 
-    release()
+    gate.release()
     expect(await screen.findByText('Имя сохранено')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Имя' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Изменить имя' })).toHaveFocus()
   })
 
   it('запрос завис — по таймауту «Нет связи», правка остаётся открытой', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    const gate = createGate()
     server.use(
       http.patch('*/api/users/me', async () => {
-        await gate
+        await gate.opened
         return HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })
       }),
     )
     const { user } = await openEditor()
     await user.type(screen.getByRole('textbox', { name: 'Имя' }), '!')
-    // Подменяем только перед отправкой: обмен токена при загрузке берёт свой таймаут.
-    const controller = new AbortController()
-    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    const timeout = stubRequestTimeout()
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     expect(await screen.findByRole('button', { name: 'Сохраняем…' })).toBeInTheDocument()
 
-    controller.abort(new DOMException('Истекло время', 'TimeoutError'))
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
-    )
+    timeout.expire()
+    expect(await screen.findByRole('alert')).toHaveTextContent(NETWORK)
     expect(screen.getByRole('textbox', { name: 'Имя' })).toHaveValue('Анна Смирнова!')
     expect(screen.getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
-    release()
+    gate.release()
   })
 
   it('HTML в имени выводится текстом', async () => {

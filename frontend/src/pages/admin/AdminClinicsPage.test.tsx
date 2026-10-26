@@ -1,17 +1,16 @@
 import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
 import { loginMockAs } from '../../mocks/session'
 import { updateServer } from '../../mocks/server-state'
-import { renderWithProviders } from '../../test/render'
+import { renderRoute } from '../../test/render'
 
 beforeEach(() => {
   loginMockAs('admin')
 })
 
-const renderList = () => renderWithProviders(<AppRoutes />, { route: '/admin/clinics' })
+const renderList = () => renderRoute('/admin/clinics')
 
 // Добавление клиники из списка — переход на её страницу со статусом — проверяет AdminClinicPage.test.tsx.
 describe('AdminClinicsPage', () => {

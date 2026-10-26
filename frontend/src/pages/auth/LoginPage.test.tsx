@@ -7,7 +7,10 @@ import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { updateServer } from '../../mocks/server-state'
 import { loginMockAs, logoutMock } from '../../mocks/session'
+import { createGate } from '../../test/gate'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests, settle } from '../../test/requests'
+import { TOO_MANY_ATTEMPTS } from '../../test/texts'
 import { LoginPage } from './LoginPage'
 
 function LocationProbe() {
@@ -40,15 +43,6 @@ async function signInAs(user: UserEvent, email: string, password: string) {
   await user.type(await screen.findByLabelText('Email'), email)
   await user.type(screen.getByLabelText('Пароль'), password)
   await user.click(screen.getByRole('button', { name: 'Войти' }))
-}
-
-/** Ворота: ответ держится, пока тест не вызовет release. */
-function createGate() {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { opened, release }
 }
 
 /** Считает запросы /users/me; начиная с номера holdFrom, ответ мок-сервера ждёт release. */
@@ -96,7 +90,7 @@ describe('LoginPage', () => {
     const { user } = renderLogin()
     await signInAs(user, 'owner@example.com', 'pawchito1')
     // toHaveTextContent сводит неразрывный пробел к обычному — сверяем сырой текст, чтобы неразрывный пробел проверялся.
-    expect((await screen.findByRole('alert')).textContent).toBe('Слишком много попыток. Попробуйте через 15\u00A0минут.')
+    expect((await screen.findByRole('alert')).textContent).toBe(TOO_MANY_ATTEMPTS)
   })
 
   it('пустые поля — проверка без запроса, фокус на email', async () => {
@@ -108,14 +102,13 @@ describe('LoginPage', () => {
 
   it.each([500, 429])('ответ %i: фокус остаётся на кнопке; пока идёт вход, повторный клик запрос не шлёт', async (status) => {
     const gate = createGate()
-    let calls = 0
     server.use(
       http.post('*/api/auth/login', async () => {
-        calls += 1
         await gate.opened
         return HttpResponse.json({ detail: 'Сбой' }, { status })
       }),
     )
+    const logins = recordRequests('post', '*/api/auth/login')
     const { user } = renderLogin()
     await user.type(await screen.findByLabelText('Email'), 'owner@example.com')
     await user.type(screen.getByLabelText('Пароль'), 'pawchito1')
@@ -125,18 +118,18 @@ describe('LoginPage', () => {
 
     expect(await screen.findByRole('button', { name: 'Входим…' })).toBe(button)
     expect(button).toHaveAttribute('aria-disabled', 'true')
-    await waitFor(() => expect(calls).toBe(1))
+    await waitFor(() => expect(logins.count).toBe(1))
     await user.click(button)
     await user.keyboard('{Enter}')
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(calls).toBe(1)
+    await settle()
+    expect(logins.count).toBe(1)
 
     gate.release()
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(button).toHaveTextContent('Войти')
     expect(button).toHaveAttribute('aria-disabled', 'false')
     expect(button).toHaveFocus()
-    expect(calls).toBe(1)
+    expect(logins.count).toBe(1)
   })
 
   it('уже вошедшего сразу уводит на главную роли', async () => {
