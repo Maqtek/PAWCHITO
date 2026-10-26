@@ -1,30 +1,22 @@
 import { screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
-import { AppRoutes } from '../../app/routes'
 import { NBSP } from '../../lib/format'
 import { server } from '../../mocks/node'
 import { readServer, updateServer } from '../../mocks/server-state'
-import { renderWithProviders } from '../../test/render'
+import { articleTitles, findStatus } from '../../test/queries'
+import { renderRoute } from '../../test/route'
 
-const renderPets = () => renderWithProviders(<AppRoutes />, { route: '/pets' })
-
-/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
-async function findStatus(text: string) {
-  const message = await screen.findByText(text)
-  expect(message.closest('[role="status"]')).not.toBeNull()
-  return message
-}
+const renderPets = () => renderRoute('/pets')
 
 const card = (name: string) => screen.getByRole('article', { name })
-const names = () => screen.queryAllByRole('article').map((item) => within(item).getByRole('heading').textContent)
 const switcher = () => screen.getByRole('button', { name: /^Питомец: / })
 
 describe('PetsPage: список', () => {
   it('только свои активные питомцы в порядке добавления; иллюстрация по виду, данные, выбранный', async () => {
     renderPets()
     expect(await screen.findByRole('article', { name: 'Майло' })).toBeInTheDocument()
-    expect(names()).toEqual(['Майло', 'Барсик'])
+    expect(articleTitles()).toEqual(['Майло', 'Барсик'])
     // Архивный Кеша и чужой Рекс в список не попадают.
     expect(screen.queryByText('Кеша')).not.toBeInTheDocument()
     expect(screen.queryByText('Рекс')).not.toBeInTheDocument()
@@ -79,7 +71,7 @@ describe('PetsPage: добавление и изменение', () => {
     await user.selectOptions(within(dialog).getByLabelText('Вид'), 'Другое')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить питомца' }))
     await findStatus('Питомец Кузя добавлен и выбран.')
-    expect(names()).toEqual(['Майло', 'Барсик', 'Кузя'])
+    expect(articleTitles()).toEqual(['Майло', 'Барсик', 'Кузя'])
     expect(within(card('Кузя')).getByRole('img', { name: 'Другое Кузя' })).toBeInTheDocument()
     expect(within(card('Кузя')).getByText('Выбран')).toBeInTheDocument()
     expect(switcher()).toHaveAccessibleName('Питомец: Кузя. Сменить питомца')
@@ -104,7 +96,7 @@ describe('PetsPage: архив', () => {
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).getByText(/Вернуть питомца из архива пока нельзя/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Отмена' }))
-    expect(names()).toEqual(['Майло', 'Барсик'])
+    expect(articleTitles()).toEqual(['Майло', 'Барсик'])
     expect(readServer().pets.find((pet) => pet.id === 11)?.archived_at).toBeNull()
   })
 
@@ -113,9 +105,8 @@ describe('PetsPage: архив', () => {
     await user.click(await screen.findByRole('button', { name: 'В архив, Майло' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'В архив' }))
     // Две предстоящие записи Майло отменены, запланированные дела удалены; сколько дел курса впереди — зависит от дня seed.
-    const message = await screen.findByText(/^Питомец перенесён в архив: отменены 2 записи, удалено \d+ дел\.$/)
-    expect(message.closest('[role="status"]')).not.toBeNull()
-    expect(names()).toEqual(['Барсик'])
+    await findStatus(/^Питомец перенесён в архив: отменены 2 записи, удалено \d+ дел\.$/)
+    expect(articleTitles()).toEqual(['Барсик'])
     expect(within(card('Барсик')).getByText('Выбран')).toBeInTheDocument()
     expect(switcher()).toHaveAccessibleName('Питомец: Барсик. Сменить питомца')
     // Фокус — на контейнере списка: кнопка, открывшая окно, пропала вместе с карточкой.
@@ -146,6 +137,6 @@ describe('PetsPage: архив', () => {
     await user.click(within(dialog).getByRole('button', { name: 'В архив' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Сервис временно недоступен')
     await user.click(within(dialog).getByRole('button', { name: 'Отмена' }))
-    expect(names()).toEqual(['Майло', 'Барсик'])
+    expect(articleTitles()).toEqual(['Майло', 'Барсик'])
   })
 })

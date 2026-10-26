@@ -1,21 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { TimelineItem } from '../../api/schema'
-import { newObservation, SEED_PASSWORD, updateServer } from '../server-state'
-import { resetMockServer } from '../session'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email = 'owner@example.com'): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
+import { setSeedClock } from '../../test/clock'
+import { accessToken, call, locs } from '../../test/mock-api'
+import { newObservation, updateServer } from '../server-state'
 
 async function timeline(token: string, path: string): Promise<TimelineItem[]> {
   const response = await call('GET', path, { token })
@@ -26,9 +13,10 @@ async function timeline(token: string, path: string): Promise<TimelineItem[]> {
 /** Элементы ленты коротко: тип, дата и id данных. */
 const brief = (items: TimelineItem[]) => items.map((item) => [item.type, item.date, item.data.id])
 
-async function locs(response: Response): Promise<string[]> {
+/** Места ошибок ответа, который обязан быть 422. */
+async function queryLocs(response: Response): Promise<string[]> {
   expect(response.status).toBe(422)
-  return ((await response.json()) as { detail: { loc: (string | number)[] }[] }).detail.map((item) => item.loc.join('.')).sort()
+  return locs(response)
 }
 
 /** Лента Майло по seed на 28.10.2026: отменённой записи №23 (23.10) и предстоящих №20 и №21 в ней нет. */
@@ -44,15 +32,7 @@ const MILO_SEED = [
 
 // Среда, 28 октября 2026, 09:00 по Москве. Seed записей считается от «сегодня»: №22 — завершённый приём 12.10 с курсом
 // Мелоксикама с того же дня, №23 — отменённая клиникой 23.10, №20 и №21 — впереди.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('лента истории', () => {
   it('наблюдения, прививки, приёмы с итогом и курсы — от новых дат к старым, по типу в один день', async () => {
@@ -165,17 +145,17 @@ describe('лента истории', () => {
   it('неверные before и limit — 422 в loc query', async () => {
     const token = await accessToken()
     for (const query of ['before=10.10.2026', 'before=2026-02-30', 'before=', 'before=2026-10-1']) {
-      expect(await locs(await call('GET', `/pets/10/timeline?${query}`, { token }))).toEqual(['query.before'])
+      expect(await queryLocs(await call('GET', `/pets/10/timeline?${query}`, { token }))).toEqual(['query.before'])
     }
     for (const query of ['limit=0', 'limit=101', 'limit=abc', 'limit=1.5', 'limit=-1', 'limit=']) {
-      expect(await locs(await call('GET', `/pets/10/timeline?${query}`, { token }))).toEqual(['query.limit'])
+      expect(await queryLocs(await call('GET', `/pets/10/timeline?${query}`, { token }))).toEqual(['query.limit'])
     }
-    expect(await locs(await call('GET', '/pets/10/timeline?before=вчера&limit=500', { token }))).toEqual([
+    expect(await queryLocs(await call('GET', '/pets/10/timeline?before=вчера&limit=500', { token }))).toEqual([
       'query.before',
       'query.limit',
     ])
     // Параметры проверяются раньше поиска питомца.
-    expect(await locs(await call('GET', '/pets/13/timeline?limit=0', { token }))).toEqual(['query.limit'])
+    expect(await queryLocs(await call('GET', '/pets/13/timeline?limit=0', { token }))).toEqual(['query.limit'])
   })
 
   it('доступ: гость — 401, клиника — 403, чужой и несуществующий питомец — 404, архивный — как обычно', async () => {

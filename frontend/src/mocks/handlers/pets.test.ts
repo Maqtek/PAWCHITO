@@ -1,32 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { describe, expect, it, vi } from 'vitest'
 import type { Pet, PetArchived } from '../../api/schema'
-import { readServer, SEED_PASSWORD } from '../server-state'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const owner = () => accessToken('owner@example.com')
-
-async function fieldsOf(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc[1]).sort()
-}
+import { accessToken, bodyFields, call, owner } from '../../test/mock-api'
+import { readServer } from '../server-state'
 
 const petInState = (id: number) => readServer().pets.find((pet) => pet.id === id)
-
-afterEach(() => {
-  vi.useRealTimers()
-})
 
 describe('питомцы: доступ', () => {
   it('гость — 401, клиника и администратор — 403', async () => {
@@ -54,7 +31,7 @@ describe('питомцы: добавление', () => {
       body: { name: '  ', species: 'hamster', breed: 5, birth_date: '2022-5-1', sex: 'boy' },
     })
     expect(response.status).toBe(422)
-    expect(await fieldsOf(response)).toEqual(['birth_date', 'breed', 'name', 'sex', 'species'])
+    expect(await bodyFields(response)).toEqual(['birth_date', 'breed', 'name', 'sex', 'species'])
   })
 
   it('кличка — до 50 символов Unicode; порода — до 100; управляющие символы и тело не JSON — 422', async () => {
@@ -64,11 +41,7 @@ describe('питомцы: добавление', () => {
     expect((await call('POST', '/pets', { token, body: { ...base, name: '🐱'.repeat(51) } })).status).toBe(422)
     expect((await call('POST', '/pets', { token, body: { ...base, name: 'Бас', breed: 'х'.repeat(101) } })).status).toBe(422)
     expect((await call('POST', '/pets', { token, body: { ...base, name: 'Бас\u0007ик' } })).status).toBe(422)
-    const notJson = await fetch(`${apiBaseUrl()}/pets`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: 'не json',
-    })
+    const notJson = await call('POST', '/pets', { token, raw: 'не json' })
     expect(notJson.status).toBe(422)
   })
 
@@ -135,7 +108,7 @@ describe('питомцы: изменение', () => {
     expect(await cleared.json()).toMatchObject({ breed: null, birth_date: null })
     const invalid = await call('PATCH', '/pets/11', { token, body: { name: null, species: null, sex: null } })
     expect(invalid.status).toBe(422)
-    expect(await fieldsOf(invalid)).toEqual(['name', 'sex', 'species'])
+    expect(await bodyFields(invalid)).toEqual(['name', 'sex', 'species'])
   })
 
   it('архивного питомца можно получить и изменить', async () => {

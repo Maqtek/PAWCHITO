@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { getAccessToken } from '../api/auth-token'
 import { renderWithProviders } from '../test/render'
+import { SERVER_UNAVAILABLE } from '../test/texts'
 import { MockLogin } from './MockLogin'
 import { server } from './node'
 import { readServer, updateServer } from './server-state'
@@ -37,9 +38,7 @@ describe('MockLogin', () => {
 
     await user.click(screen.getByRole('button', { name: 'Владелец' }))
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Сервис временно недоступен. Попробуйте через несколько минут.',
-    )
+    expect(await screen.findByRole('alert')).toHaveTextContent(SERVER_UNAVAILABLE)
   })
 
   it('«Сбросить моки» возвращает seed и стирает cookie', async () => {

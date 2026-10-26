@@ -1,30 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { describe, expect, it, vi } from 'vitest'
 import type { Condition, Observation, Vaccination } from '../../api/schema'
-import { readServer, SEED_PASSWORD } from '../server-state'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const owner = () => accessToken('owner@example.com')
-
-async function fieldsOf(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc.join('.')).sort()
-}
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+import { accessToken, call, locs, owner } from '../../test/mock-api'
+import { readServer } from '../server-state'
 
 describe('здоровье: доступ и чужие данные', () => {
   it('гость — 401, клиника и администратор — 403', async () => {
@@ -69,7 +46,7 @@ describe('особенности здоровья', () => {
       token,
       body: { kind: 'flu', title: 'х'.repeat(101), description: 'а\u0007б' },
     })
-    expect(await fieldsOf(invalid)).toEqual(['body.description', 'body.kind', 'body.title'])
+    expect(await locs(invalid)).toEqual(['body.description', 'body.kind', 'body.title'])
     const created = await call('POST', '/pets/10/conditions', {
       token,
       body: { kind: 'chronic', title: ' Гастрит ', description: '   ' },
@@ -125,18 +102,18 @@ describe('дневник', () => {
   it('параметры периода: формат и порядок — 422 в loc query', async () => {
     const token = await owner()
     const invalid = await call('GET', '/pets/10/observations?date_from=10.10.2026', { token })
-    expect(await fieldsOf(invalid)).toEqual(['query.date_from'])
+    expect(await locs(invalid)).toEqual(['query.date_from'])
     const reversed = await call('GET', '/pets/10/observations?date_from=2026-10-20&date_to=2026-10-10', { token })
-    expect(await fieldsOf(reversed)).toEqual(['query.date_to'])
+    expect(await locs(reversed)).toEqual(['query.date_to'])
   })
 
   it('добавление: нужна дата и хотя бы одно поле — иначе 422 с loc body; пустые строки не считаются', async () => {
     const token = await owner()
     const empty = await call('POST', '/pets/10/observations', { token, body: { date: '2026-10-25', note: '   ' } })
     expect(empty.status).toBe(422)
-    expect(await fieldsOf(empty)).toEqual(['body'])
+    expect(await locs(empty)).toEqual(['body'])
     const noDate = await call('POST', '/pets/10/observations', { token, body: { weight: 4.2 } })
-    expect(await fieldsOf(noDate)).toEqual(['body.date'])
+    expect(await locs(noDate)).toEqual(['body.date'])
     const created = await call('POST', '/pets/10/observations', {
       token,
       body: { date: '2026-10-25', weight: 31.25, energy: 'high', symptoms: '  ', note: 'Бегал' },
@@ -171,7 +148,7 @@ describe('дневник', () => {
       body: { appetite: null, energy: null, symptoms: '' },
     })
     expect(emptied.status).toBe(422)
-    expect(await fieldsOf(emptied)).toEqual(['body'])
+    expect(await locs(emptied)).toEqual(['body'])
     expect(readServer().observations.find((item) => item.id === 2)?.appetite).toBe('low')
     expect((await call('PATCH', '/pets/10/observations/2', { token, body: { date: null } })).status).toBe(422)
     expect((await call('PATCH', '/pets/10/observations/1', { token, body: { weight: 31 } })).status).toBe(403)
@@ -193,7 +170,7 @@ describe('прививки', () => {
       token,
       body: { name: 'Мультифел', date: '2026-01-10', next_date: '2026-01-10' },
     })
-    expect(await fieldsOf(sameDay)).toEqual(['body.next_date'])
+    expect(await locs(sameDay)).toEqual(['body.next_date'])
     const overdue = await call('POST', '/pets/11/vaccinations', {
       token,
       body: { name: ' Мультифел ', date: '2025-01-10', next_date: '2026-01-10' },
@@ -203,14 +180,14 @@ describe('прививки', () => {
     const once = await call('POST', '/pets/11/vaccinations', { token, body: { name: 'Разовая', date: '2026-02-01' } })
     expect(await once.json()).toMatchObject({ next_date: null })
     const invalid = await call('POST', '/pets/11/vaccinations', { token, body: { name: '', date: '2026-02-30' } })
-    expect(await fieldsOf(invalid)).toEqual(['body.date', 'body.name'])
+    expect(await locs(invalid)).toEqual(['body.date', 'body.name'])
   })
 
   it('изменение: порядок дат — по итоговым значениям, после поиска; null убирает следующую', async () => {
     const token = await owner()
     // Новая дата прививки позже прежней следующей — 422 у next_date.
     const crossed = await call('PATCH', '/pets/10/vaccinations/1', { token, body: { date: '2026-02-01', next_date: '2026-01-20' } })
-    expect(await fieldsOf(crossed)).toEqual(['body.next_date'])
+    expect(await locs(crossed)).toEqual(['body.next_date'])
     expect((await call('PATCH', '/pets/10/vaccinations/999', { token, body: { next_date: '2020-01-01' } })).status).toBe(404)
     const cleared = await call('PATCH', '/pets/10/vaccinations/1', { token, body: { next_date: null } })
     expect(await cleared.json()).toMatchObject({ date: '2026-01-15', next_date: null })

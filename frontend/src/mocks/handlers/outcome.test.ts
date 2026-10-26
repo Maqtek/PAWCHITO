@@ -1,27 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiBaseUrl } from '../../api/base-url'
 import type { OutcomeResult, Pet } from '../../api/schema'
-import { readServer, SEED_PASSWORD } from '../server-state'
-import { resetMockServer, startMockVisit } from '../session'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const clinic = () => accessToken('clinic@example.com')
-
-async function locs(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: (string | number)[] }[] }).detail.map((item) => item.loc.join('.')).sort()
-}
+import { setSeedClock } from '../../test/clock'
+import { call, clinic, locs, owner } from '../../test/mock-api'
+import { readServer } from '../server-state'
+import { startMockVisit } from '../session'
 
 /**
  * Фото вручную собранным multipart: FormData из jsdom не отправляется через fetch из Node,
@@ -58,15 +41,7 @@ const FULL_OUTCOME = {
 }
 
 // Seed пересчитан от среды 28 октября 2026: запись №20 Майло к Петрову — пятница 30.10 в 10:00, подтверждена.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 /** Пятница 30.10, 10:30 по Москве — приём №20 уже идёт. */
 const afterVisit = () => vi.setSystemTime(new Date('2026-10-30T07:30:00Z'))
@@ -234,7 +209,7 @@ describe('фото питомца', () => {
 
   it('у владельца — фото в карточке питомца', async () => {
     await uploadPhoto(await clinic(), 10, PNG)
-    const pets = (await (await call('GET', '/pets', { token: await accessToken('owner@example.com') })).json()) as Pet[]
+    const pets = (await (await call('GET', '/pets', { token: await owner() })).json()) as Pet[]
     expect(pets[0].photo_url).toMatch(/^data:image\/png/)
   })
 })

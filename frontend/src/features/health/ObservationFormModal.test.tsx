@@ -1,10 +1,9 @@
-import { fireEvent, screen, within } from '@testing-library/react'
-import { http } from 'msw'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Observation } from '../../api/schema'
-import { server } from '../../mocks/node'
 import { readServer } from '../../mocks/server-state'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests } from '../../test/requests'
 import { ObservationFormModal } from './ObservationFormModal'
 import { parseWeight } from './weight'
 
@@ -23,17 +22,9 @@ function renderForm(observation?: Observation) {
   return { ...result, onSaved, onClose, dialog: screen.getByRole('dialog') }
 }
 
-/** Тела запросов; обработчик ничего не отвечает — запрос уходит дальше, в мок дневника. */
-function captureBodies(method: 'post' | 'patch') {
-  const bodies: unknown[] = []
-  const path = method === 'post' ? '*/api/pets/:petId/observations' : '*/api/pets/:petId/observations/:id'
-  server.use(
-    http[method](path, async ({ request }) => {
-      bodies.push(await request.clone().json())
-    }),
-  )
-  return bodies
-}
+/** Запросы добавления (post) или правки (patch) наблюдения; уходят дальше, в мок дневника. */
+const recordObservations = (method: 'post' | 'patch') =>
+  recordRequests(method, method === 'post' ? '*/api/pets/:petId/observations' : '*/api/pets/:petId/observations/:id')
 
 describe('parseWeight', () => {
   it.each([
@@ -53,25 +44,25 @@ describe('parseWeight', () => {
 
 describe('ObservationFormModal', () => {
   it('новое: дата — сегодня; без полей кроме даты — ошибка у веса, запроса нет', async () => {
-    const bodies = captureBodies('post')
+    const posts = recordObservations('post')
     const { user, dialog } = renderForm()
     expect(within(dialog).getByLabelText('Дата')).not.toHaveValue('')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить' }))
     expect(within(dialog).getByLabelText('Вес')).toHaveFocus()
     expect(within(dialog).getByText('Заполните хотя бы одно поле, кроме даты')).toBeInTheDocument()
-    expect(bodies).toEqual([])
+    expect(posts.bodies).toEqual([])
   })
 
   it('вес с запятой уходит числом, пустые поля — null', async () => {
-    const bodies = captureBodies('post')
+    const posts = recordObservations('post')
     const { user, dialog, onSaved } = renderForm()
     fireEvent.change(within(dialog).getByLabelText('Дата'), { target: { value: '2026-10-25' } })
     await user.type(within(dialog).getByLabelText('Вес'), '31,25')
     await user.selectOptions(within(dialog).getByLabelText('Аппетит'), 'Ниже обычного')
     await user.type(within(dialog).getByLabelText('Симптомы'), '   ')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(posts.bodies).toEqual([
       { date: '2026-10-25', weight: 31.25, appetite: 'low', energy: null, symptoms: null, note: null },
     ])
   })
@@ -86,7 +77,7 @@ describe('ObservationFormModal', () => {
   })
 
   it('правка своего: поля заполнены, уходят только изменённые; стёртая заметка — null', async () => {
-    const bodies = captureBodies('patch')
+    const patches = recordObservations('patch')
     const { user, dialog, onSaved } = renderForm(seedObservation(3))
     expect(within(dialog).getByRole('heading', { name: 'Изменить наблюдение' })).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Вес')).toHaveValue('31,2')
@@ -95,7 +86,7 @@ describe('ObservationFormModal', () => {
     await user.type(within(dialog).getByLabelText('Вес'), '3,12')
     await user.clear(within(dialog).getByLabelText('Заметка'))
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
-    await vi.waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
-    expect(bodies).toEqual([{ weight: 3.12, note: null }])
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(patches.bodies).toEqual([{ weight: 3.12, note: null }])
   })
 })

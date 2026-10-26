@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
-import { afterAll, afterEach, beforeEach } from 'vitest'
+import { afterAll, afterEach, beforeEach, vi } from 'vitest'
 import { resetSessionForTests } from '../api/session'
 import { server } from '../mocks/node'
 import { loginMockAs, resetMockServer } from '../mocks/session'
@@ -28,6 +28,9 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  // Часы теста (setSeedClock, vi.setSystemTime) — снова настоящие. Первым, до ожидания запросов: так было, пока часы
+  // возвращал afterEach файла, — vitest вызывает afterEach в обратном порядке, и хуки файла шли раньше этого.
+  vi.useRealTimers()
   // До сброса моков: иначе поздний ответ прошлого теста придёт уже к следующему.
   await settleRenderedClients()
   cleanup()

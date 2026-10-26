@@ -1,30 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HomeSummary } from '../../api/schema'
-import { SEED_PASSWORD } from '../server-state'
-import { resetMockServer } from '../session'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email = 'owner@example.com'): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
+import { SEED_NOW, setSeedClock } from '../../test/clock'
+import { accessToken, call, locs } from '../../test/mock-api'
 
 async function summary(token: string, petId: number): Promise<HomeSummary> {
   const response = await call('GET', `/home/summary?pet_id=${petId}`, { token })
   expect(response.status).toBe(200)
   return (await response.json()) as HomeSummary
-}
-
-async function locs(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: (string | number)[] }[] }).detail.map((item) => item.loc.join('.'))
 }
 
 const todayIds = (data: HomeSummary) => data.today.map((item) => item.id)
@@ -33,15 +15,7 @@ const todayIds = (data: HomeSummary) => data.today.map((item) => item.id)
 // выполнен, 22.10 пропущен, доза 27.10 (№16) просрочена, сегодняшняя — №17. Свои дела: корм сегодня в 18:00 (№32),
 // зубы завтра в 21:00 (№31). Записи Майло: подтверждённая №20 в пятницу, 30.10, в 10:00 и заявка №21 2 ноября;
 // у Барсика — заявка №24 на завтра в 09:00.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('сводка главной', () => {
   it('питомец, активный курс с прогрессом, дела на сегодня с просроченными, ближайшая запись', async () => {
@@ -90,7 +64,7 @@ describe('сводка главной', () => {
     vi.setSystemTime(new Date('2026-10-30T07:00:00Z'))
     expect((await summary(token, 10)).next_appointment).toMatchObject({ id: 21, status: 'requested' })
 
-    vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
+    vi.setSystemTime(SEED_NOW)
     expect((await summary(token, 11)).next_appointment).toMatchObject({ id: 24, pet: { name: 'Барсик' } })
     expect((await call('POST', '/appointments/24/cancel', { token })).status).toBe(200)
     expect((await summary(token, 11)).next_appointment).toBeNull()

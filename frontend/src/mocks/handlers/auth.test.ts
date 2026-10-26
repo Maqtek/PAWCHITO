@@ -1,31 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { accessToken, call, login, refresh } from '../../test/mock-api'
 import { readServer, SEED_PASSWORD, updateServer, writeMockCookie } from '../server-state'
 import { loginMockAs, logoutMock, readMockCookie, requireMockPasswordChange, resetMockServer } from '../session'
 
-/** Запрос к мокам напрямую, без клиента и сессии приложения. */
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
+const register = (email: string, fullName: string, password = 'secret123') =>
+  call('POST', '/auth/register', { body: { email, password, full_name: fullName } })
 
-const login = (email: string, password = SEED_PASSWORD) => call('POST', '/auth/login', { body: { email, password } })
-const refresh = () => call('POST', '/auth/refresh')
-
-async function accessToken(email: string): Promise<string> {
-  const response = await login(email)
-  return ((await response.json()) as { access_token: string }).access_token
-}
+/** Восстановление доступа владельца кодом code — с новым паролем newsecret1. */
+const recover = (code: string) =>
+  call('POST', '/auth/recover', { body: { email: 'owner@example.com', recovery_code: code, new_password: 'newsecret1' } })
 
 describe('регистрация', () => {
   it('201: пользователь, код восстановления, токен и cookie', async () => {
     logoutMock()
-    const response = await call('POST', '/auth/register', {
-      body: { email: 'new@example.com', password: 'secret123', full_name: 'Новый Владелец' },
-    })
+    const response = await register('new@example.com', 'Новый Владелец')
     expect(response.status).toBe(201)
     const body = await response.json()
     expect(body).toMatchObject({
@@ -38,16 +26,12 @@ describe('регистрация', () => {
   })
 
   it('409: email занят без учёта регистра', async () => {
-    const response = await call('POST', '/auth/register', {
-      body: { email: 'OWNER@example.com', password: 'secret123', full_name: 'Двойник' },
-    })
+    const response = await register('OWNER@example.com', 'Двойник')
     expect(response.status).toBe(409)
   })
 
   it('422: пароль короче 8 символов — ошибка поля в формате FastAPI', async () => {
-    const response = await call('POST', '/auth/register', {
-      body: { email: 'x@example.com', password: 'short', full_name: 'X' },
-    })
+    const response = await register('x@example.com', 'X', 'short')
     expect(response.status).toBe(422)
     expect(await response.json()).toEqual({
       detail: [{ loc: ['body', 'password'], msg: 'Пароль должен быть не короче 8 символов', type: 'value_error' }],
@@ -85,9 +69,7 @@ describe('вход', () => {
 
   it('счётчик общий для входа и восстановления', async () => {
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      await call('POST', '/auth/recover', {
-        body: { email: 'owner@example.com', recovery_code: 'AAAA-AAAA-AAAA-AAAA', new_password: 'newsecret1' },
-      })
+      await recover('AAAA-AAAA-AAAA-AAAA')
     }
     await login('owner@example.com', 'wrong-pass')
     await login('owner@example.com', 'wrong-pass')
@@ -139,17 +121,13 @@ describe('refresh', () => {
 
 describe('восстановление', () => {
   it('400: неверный код', async () => {
-    const response = await call('POST', '/auth/recover', {
-      body: { email: 'owner@example.com', recovery_code: 'AAAA-AAAA-AAAA-AAAA', new_password: 'newsecret1' },
-    })
+    const response = await recover('AAAA-AAAA-AAAA-AAAA')
     expect(response.status).toBe(400)
     expect(await response.json()).toEqual({ detail: 'Неверный email или код' })
   })
 
   it('200: новый код, новый пароль, сессии завершены; регистр кода не важен', async () => {
-    const response = await call('POST', '/auth/recover', {
-      body: { email: 'owner@example.com', recovery_code: 'k7qm-2xpa-9rtd-4wnb', new_password: 'newsecret1' },
-    })
+    const response = await recover('k7qm-2xpa-9rtd-4wnb')
     expect(response.status).toBe(200)
     const { recovery_code: code } = (await response.json()) as { recovery_code: string }
     expect(code).not.toBe('K7QM-2XPA-9RTD-4WNB')
@@ -158,19 +136,14 @@ describe('восстановление', () => {
   })
 
   it.each(['k7qm 2xpa 9rtd 4wnb', 'K7QM2XPA9RTD4WNB'])('200: код «%s» — регистр и разделители не важны', async (code) => {
-    const response = await call('POST', '/auth/recover', {
-      body: { email: 'owner@example.com', recovery_code: code, new_password: 'newsecret1' },
-    })
-    expect(response.status).toBe(200)
+    expect((await recover(code)).status).toBe(200)
   })
 
   it.each([
     ['15', 'K7QM-2XPA-9RTD-4WN'],
     ['17', 'K7QM-2XPA-9RTD-4WNBX'],
   ])('422: %s символов после очистки — не код, попытка не считается', async (_length, code) => {
-    const response = await call('POST', '/auth/recover', {
-      body: { email: 'owner@example.com', recovery_code: code, new_password: 'newsecret1' },
-    })
+    const response = await recover(code)
     expect(response.status).toBe(422)
     expect(readServer().attempts).toEqual({})
   })
@@ -348,13 +321,8 @@ describe('доступ и сеть', () => {
 })
 
 describe('лимиты полей (как у бэкенда)', () => {
-  const register = (email: string, fullName: string, password = 'secret123') =>
-    call('POST', '/auth/register', { body: { email, password, full_name: fullName } })
-
   it('регистрация: все ошибки полей сразу, по-русски', async () => {
-    const response = await call('POST', '/auth/register', {
-      body: { email: 'not-an-email', password: 'x'.repeat(129), full_name: '   ' },
-    })
+    const response = await register('not-an-email', '   ', 'x'.repeat(129))
     expect(response.status).toBe(422)
     const { detail } = (await response.json()) as { detail: { loc: string[]; msg: string }[] }
     expect(detail.map((item) => [item.loc[1], item.msg])).toEqual([
@@ -396,9 +364,7 @@ describe('лимиты полей (как у бэкенда)', () => {
   })
 
   it('восстановление: код не в формате — 422 и попытка не считается', async () => {
-    const response = await call('POST', '/auth/recover', {
-      body: { email: 'owner@example.com', recovery_code: 'abc', new_password: 'newsecret1' },
-    })
+    const response = await recover('abc')
     expect(response.status).toBe(422)
     expect(readServer().attempts).toEqual({})
   })
@@ -412,11 +378,7 @@ describe('лимиты полей (как у бэкенда)', () => {
 
   it('поле не строка или тело не JSON — 422, а не 500', async () => {
     expect((await call('POST', '/auth/login', { body: { email: 42, password: null } })).status).toBe(422)
-    const broken = await fetch(`${apiBaseUrl()}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: 'не json',
-    })
+    const broken = await call('POST', '/auth/login', { raw: 'не json' })
     expect(broken.status).toBe(422)
   })
 })

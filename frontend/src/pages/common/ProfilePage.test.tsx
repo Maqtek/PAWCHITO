@@ -1,39 +1,25 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
 import { meQuery } from '../../api/queries'
-import { AppRoutes } from '../../app/routes'
 import { tooManyRequests } from '../../mocks/http-utils'
 import { server } from '../../mocks/node'
 import { readServer, SEED_PASSWORD } from '../../mocks/server-state'
 import { loginMockAs } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
+import { createGate } from '../../test/gate'
+import { call } from '../../test/mock-api'
+import { stubRequestTimeout } from '../../test/requests'
+import { renderRoute } from '../../test/route'
+import { NETWORK, TOO_MANY_ATTEMPTS } from '../../test/texts'
 
 const owner = () => readServer().accounts.find((item) => item.email === 'owner@example.com')
 
-// Между числом и словом — неразрывный пробел, как в errorMessage; toHaveTextContent заменил бы его обычным.
-const TOO_MANY_ATTEMPTS = 'Слишком много попыток. Попробуйте через 15\u00A0минут.'
-
-/** Ворота: запрос держится, пока тест не вызовет release. */
-function createGate() {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { opened, release }
-}
-
 const recover = (recoveryCode: string) =>
-  fetch(`${apiBaseUrl()}/auth/recover`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: 'owner@example.com', recovery_code: recoveryCode, new_password: 'another-pass1' }),
+  call('POST', '/auth/recover', {
+    body: { email: 'owner@example.com', recovery_code: recoveryCode, new_password: 'another-pass1' },
   })
 
-function renderProfile() {
-  return renderWithProviders(<AppRoutes />, { route: '/profile' })
-}
+const renderProfile = () => renderRoute('/profile')
 
 describe('ProfilePage', () => {
   it('данные аккаунта: имя, email, роль', async () => {
@@ -236,16 +222,12 @@ describe('ProfilePage', () => {
     await user.click(await screen.findByRole('button', { name: 'Новый код восстановления' }))
     const dialog = screen.getByRole('dialog', { name: 'Новый код восстановления' })
     await user.type(within(dialog).getByLabelText('Текущий пароль'), SEED_PASSWORD)
-    // Подменяем только перед отправкой: обмен токена при загрузке берёт свой таймаут.
-    const controller = new AbortController()
-    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
+    const timeout = stubRequestTimeout()
     await user.click(within(dialog).getByRole('button', { name: 'Получить новый код' }))
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).toHaveAttribute('aria-disabled', 'true')
 
-    controller.abort(new DOMException('Истекло время', 'TimeoutError'))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
-    )
+    timeout.expire()
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(NETWORK)
     expect(within(dialog).getByRole('button', { name: 'Отмена' })).not.toHaveAttribute('aria-disabled', 'true')
     expect(within(dialog).getByRole('button', { name: 'Закрыть' })).toBeInTheDocument()
     gate.release()

@@ -1,35 +1,21 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppRoutes } from '../../app/routes'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '../../mocks/node'
 import { readServer } from '../../mocks/server-state'
-import { loginMockAs, resetMockServer } from '../../mocks/session'
-import { renderWithProviders } from '../../test/render'
-
-/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
-async function findStatus(text: string) {
-  const message = await screen.findByText(text)
-  expect(message.closest('[role="status"]')).not.toBeNull()
-  return message
-}
+import { setSeedClock } from '../../test/clock'
+import { findStatus } from '../../test/queries'
+import { renderRoute } from '../../test/route'
 
 // Seed пересчитан от среды 28 октября 2026; затем часы — на пятницу 30.10, 10:30: приём №20 Майло (10:00) и №25 Рекса
 // (10:30) подтверждены и ждут итога.
 beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-  loginMockAs('clinic')
+  setSeedClock('clinic')
   vi.setSystemTime(new Date('2026-10-30T07:30:00Z'))
 })
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 async function openOutcome() {
-  const view = renderWithProviders(<AppRoutes />, { route: '/clinic/appointments?view=awaiting' })
+  const view = renderRoute('/clinic/appointments?view=awaiting')
   await view.user.click(await screen.findByRole('button', { name: 'Внести итог, Майло, пятница, 30 октября, 10:00' }))
   return { ...view, dialog: screen.getByRole('dialog', { name: 'Итог приёма' }) }
 }
@@ -104,7 +90,7 @@ describe('форма итога приёма', () => {
   it('итог сохранён: статус с делами курса, запись ушла из «Ждут итога», данные питомца — из карточки', async () => {
     const { user, dialog } = await openOutcome()
     // Текущие данные питомца подставлены из карточки.
-    await vi.waitFor(() => expect(within(dialog).getByLabelText('Порода')).toHaveValue('Золотистый ретривер'))
+    await waitFor(() => expect(within(dialog).getByLabelText('Порода')).toHaveValue('Золотистый ретривер'))
     await user.type(within(dialog).getByLabelText('Заключение'), 'Отит правого уха')
     await user.selectOptions(within(dialog).getByLabelText('Статус ухода'), 'На лечении')
     await user.click(within(dialog).getByRole('button', { name: 'Добавить рецепт' }))

@@ -1,11 +1,13 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AppRoutes } from '../../app/routes'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../../mocks/node'
 import { readServer, updateServer } from '../../mocks/server-state'
-import { loginMockAs, resetMockServer } from '../../mocks/session'
+import { setSeedClock } from '../../test/clock'
+import { articleTitles, findStatus, region } from '../../test/queries'
 import { renderWithProviders } from '../../test/render'
+import { renderRoute } from '../../test/route'
+import { SELECTED_PET_KEY } from '../../test/storage-keys'
 import { HomePage } from './HomePage'
 
 describe('HomePage', () => {
@@ -43,34 +45,15 @@ describe('HomePage', () => {
   })
 })
 
-/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
-async function findStatus(text: string) {
-  const message = await screen.findByText(text)
-  expect(message.closest('[role="status"]')).not.toBeNull()
-  return message
-}
-
-const renderHome = () => renderWithProviders(<AppRoutes />, { route: '/' })
-const region = (name: string) => screen.getByRole('region', { name })
-const titles = () =>
-  within(region('Сегодня'))
-    .queryAllByRole('article')
-    .map((item) => within(item).getByRole('heading').textContent)
+const renderHome = () => renderRoute('/')
+/** Заголовки дел на сегодня по порядку. */
+const titles = () => articleTitles(region('Сегодня'))
 
 // Среда, 28 октября 2026, 09:00 по Москве. У Майло: курс Мелоксикама в 20:00 до 1 ноября (14 из 21 доз выполнено,
 // одна пропущена, доза 27.10 просрочена), «Купить корм» сегодня в 18:00, подтверждённая запись в пятницу в 10:00.
 // У владельца пять уведомлений, три непрочитанных.
 describe('HomePage: сводка выбранного питомца', () => {
-  beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-    resetMockServer()
-    loginMockAs('owner')
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-  })
+  beforeEach(() => setSeedClock('owner'))
 
   it('карточка со статусом ухода, дела на сегодня с просроченными, прогресс курса, ближайшая запись', async () => {
     renderHome()
@@ -132,7 +115,7 @@ describe('HomePage: сводка выбранного питомца', () => {
 
     await user.click(within(notices).getByRole('link', { name: /^Новое:\s*Клиника «ВетДоктор» подтвердила запись/ }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Запись к врачу' })).toBeInTheDocument()
-    await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Уведомления, непрочитанных: 2' })).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Уведомления, непрочитанных: 2' })).toBeInTheDocument())
     expect(readServer().notifications.find((item) => item.id === 3)?.read_at).not.toBeNull()
   })
 
@@ -154,18 +137,18 @@ describe('HomePage: сводка выбранного питомца', () => {
     expect(within(dialog).getByText(/будет отмечено пропущенным/)).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Пропустить' }))
     await findStatus('Пропущено: Купить корм.')
-    await vi.waitFor(() => expect(titles()).toEqual(['Мелоксикам, 1,5 мл', 'Мелоксикам, 1,5 мл']))
+    await waitFor(() => expect(titles()).toEqual(['Мелоксикам, 1,5 мл', 'Мелоксикам, 1,5 мл']))
 
     await user.click(screen.getByRole('button', { name: 'Выполнено, Мелоксикам, 1,5 мл, вторник, 27 октября, 20:00' }))
     await findStatus('Выполнено: Мелоксикам, 1,5 мл.')
-    await vi.waitFor(() => expect(titles()).toHaveLength(1))
+    await waitFor(() => expect(titles()).toHaveLength(1))
     await user.click(screen.getByRole('button', { name: 'Выполнено, Мелоксикам, 1,5 мл, сегодня, 20:00' }))
     expect(await within(region('Сегодня')).findByRole('heading', { name: 'На сегодня дел нет' })).toBeInTheDocument()
     expect(within(region('Лечение')).getByText('16 из 21 выполнено, 1 пропущено')).toBeInTheDocument()
   })
 
   it('питомец без курсов и дел на сегодня: пустые блоки и его ближайшая запись', async () => {
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     renderHome()
     expect(await screen.findByRole('heading', { name: 'На сегодня дел нет' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 2, name: 'Барсик' })).toBeInTheDocument()
@@ -184,7 +167,7 @@ describe('HomePage: сводка выбранного питомца', () => {
     updateServer((state) => {
       for (const item of state.appointments) if (item.pet_id === 11) item.status = 'cancelled'
     })
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     renderHome()
     const next = await screen.findByRole('region', { name: 'Ближайшая запись' })
     expect(within(next).getByText('Предстоящих записей нет.')).toBeInTheDocument()

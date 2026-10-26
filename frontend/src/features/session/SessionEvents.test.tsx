@@ -9,18 +9,11 @@ import { server } from '../../mocks/node'
 import { loginMockAs, logoutMock } from '../../mocks/session'
 import { LoginPage } from '../../pages/auth/LoginPage'
 import { renderWithProviders } from '../../test/render'
+import { recordRequests } from '../../test/requests'
+import { closeOtherTabs, otherTab } from '../../test/session'
+import { LOGOUT_PENDING_KEY, SELECTED_PET_KEY } from '../../test/storage-keys'
 
-const openTabs: BroadcastChannel[] = []
-
-function otherTab() {
-  const channel = new BroadcastChannel('pawchito:session')
-  openTabs.push(channel)
-  return channel
-}
-
-afterEach(() => {
-  openTabs.splice(0).forEach((channel) => channel.close())
-})
+afterEach(closeOtherTabs)
 
 /** Как изменилась история при последнем переходе: POP, PUSH или REPLACE. */
 function NavigationProbe() {
@@ -42,7 +35,7 @@ function renderApp(route = '/') {
 
 describe('SessionEvents', () => {
   it('сессия истекла: экран входа с причиной, кэш очищен, питомец забыт', async () => {
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     const { queryClient } = renderApp()
     queryClient.setQueryData(['probe'], 1)
 
@@ -51,7 +44,7 @@ describe('SessionEvents', () => {
 
     expect(await screen.findByText('Сессия истекла — войдите снова')).toBeInTheDocument()
     expect(queryClient.getQueryData(['probe'])).toBeUndefined()
-    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    expect(localStorage.getItem(SELECTED_PET_KEY)).toBeNull()
   })
 
   it('выход без ответа сервера: текст про связь', async () => {
@@ -77,24 +70,17 @@ describe('SessionEvents', () => {
     expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
   })
 
-  it('выход в другой вкладке: экран входа с причиной', async () => {
-    renderApp()
-    logoutMock() // другая вкладка вышла и стёрла общую cookie
-    otherTab().postMessage({ type: 'signed-out' })
-    expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
-  })
-
-  it('выход в другой вкладке: кэш очищен, питомец забыт', async () => {
-    localStorage.setItem('pawchito:selected-pet-id', '11')
+  it('выход в другой вкладке: экран входа с причиной, кэш очищен, питомец забыт', async () => {
+    localStorage.setItem(SELECTED_PET_KEY, '11')
     const { queryClient } = renderApp()
     queryClient.setQueryData(['probe'], 1)
-    logoutMock()
+    logoutMock() // другая вкладка вышла и стёрла общую cookie
 
-    otherTab().postMessage({ type: 'signed-out' })
+    otherTab().channel.postMessage({ type: 'signed-out' })
 
     expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
     expect(queryClient.getQueryData(['probe'])).toBeUndefined()
-    expect(localStorage.getItem('pawchito:selected-pet-id')).toBeNull()
+    expect(localStorage.getItem(SELECTED_PET_KEY)).toBeNull()
   })
 
   it('вход в другой вкладке: из экрана входа — в кабинет, запись истории заменена', async () => {
@@ -103,7 +89,7 @@ describe('SessionEvents', () => {
     // Форма на экране — проверка входа закончилась гостем; дальше в кабинет ведёт только сообщение вкладки.
     expect(await screen.findByRole('button', { name: 'Войти' })).toBeInTheDocument()
     loginMockAs('owner') // другая вкладка вошла и записала cookie
-    otherTab().postMessage({ type: 'signed-in' })
+    otherTab().channel.postMessage({ type: 'signed-in' })
     expect(await screen.findByText('Кабинет')).toBeInTheDocument()
     expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
   })
@@ -147,18 +133,13 @@ describe('SessionEvents', () => {
   })
 
   it('при запуске довыходит на сервере, если выход был начат без сети', async () => {
-    let logoutCalls = 0
-    server.use(
-      http.post('*/api/auth/logout', () => {
-        logoutCalls += 1
-        return new HttpResponse(null, { status: 204 })
-      }),
-    )
-    localStorage.setItem('pawchito:logout-pending', '1')
+    server.use(http.post('*/api/auth/logout', () => new HttpResponse(null, { status: 204 })))
+    const logouts = recordRequests('post', '*/api/auth/logout')
+    localStorage.setItem(LOGOUT_PENDING_KEY, '1')
 
     renderApp('/login')
 
-    await waitFor(() => expect(localStorage.getItem('pawchito:logout-pending')).toBeNull())
-    expect(logoutCalls).toBe(1)
+    await waitFor(() => expect(localStorage.getItem(LOGOUT_PENDING_KEY)).toBeNull())
+    expect(logouts.count).toBe(1)
   })
 })

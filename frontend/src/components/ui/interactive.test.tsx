@@ -87,23 +87,6 @@ describe('Modal', () => {
     expect(document.body).toHaveFocus()
   })
 
-  it('dismissible={false}: открываем обратно после браузера — фокус остаётся на месте', () => {
-    render(
-      <Modal open onClose={() => {}} title="Новый код" dismissible={false}>
-        <TextField label="Пароль" />
-        <button type="button">Получить</button>
-      </Modal>,
-    )
-    const dialog = screen.getByRole('dialog', { name: 'Новый код' }) as HTMLDialogElement
-    screen.getByRole('button', { name: 'Получить' }).focus()
-
-    dialog.close()
-    fireEvent(dialog, new Event('close'))
-
-    expect(dialog).toHaveAttribute('open')
-    expect(screen.getByRole('button', { name: 'Получить' })).toHaveFocus()
-  })
-
   it('закрытое окно не открыто', () => {
     const { container } = render(
       <Modal open={false} onClose={() => {}} title="Новое дело">
@@ -133,21 +116,23 @@ describe('Modal', () => {
     expect(dialog).toHaveAttribute('open')
   })
 
-  it('dismissible={false}: браузер закрыл окно сам — открываем обратно, родитель не закрывал', () => {
+  it('dismissible={false}: браузер закрыл окно сам — открываем обратно, родитель не закрывал, фокус остаётся на месте', () => {
     const onClose = vi.fn()
     render(
       <Modal open onClose={onClose} title="Новый код" dismissible={false}>
-        <p>Тело окна</p>
+        <TextField label="Пароль" />
+        <button type="button">Получить</button>
       </Modal>,
     )
-    const dialog = screen.getByRole('dialog', { name: 'Новый код' })
+    const dialog = screen.getByRole('dialog', { name: 'Новый код' }) as HTMLDialogElement
+    screen.getByRole('button', { name: 'Получить' }).focus()
 
-    const native = dialog as HTMLDialogElement
-    native.close()
+    dialog.close()
     fireEvent(dialog, new Event('close'))
 
     expect(dialog).toHaveAttribute('open')
     expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Получить' })).toHaveFocus()
   })
 
   it('закрытое родителем окно не открывается снова по событию close', () => {
@@ -201,8 +186,8 @@ describe('Tabs', () => {
 })
 
 describe('Dropdown', () => {
-  it('открывается и закрывается по Esc, клику снаружи и выбору пункта', async () => {
-    const user = userEvent.setup()
+  /** Меню с одним пунктом и текст рядом — для клика снаружи. Возвращает кнопку меню. */
+  function renderDropdown() {
     render(
       <div>
         <Dropdown label="Меню" button="Открыть">
@@ -215,7 +200,12 @@ describe('Dropdown', () => {
         <p>Снаружи</p>
       </div>,
     )
-    const trigger = screen.getByRole('button', { name: 'Меню' })
+    return screen.getByRole('button', { name: 'Меню' })
+  }
+
+  it('открывается и закрывается по Esc, клику снаружи и выбору пункта', async () => {
+    const user = userEvent.setup()
+    const trigger = renderDropdown()
 
     await user.click(trigger)
     expect(trigger).toHaveAttribute('aria-expanded', 'true')
@@ -234,22 +224,6 @@ describe('Dropdown', () => {
   })
 
   describe('возврат фокуса', () => {
-    function renderDropdown() {
-      render(
-        <div>
-          <Dropdown label="Меню" button="Открыть">
-            {(close) => (
-              <button type="button" onClick={close}>
-                Пункт
-              </button>
-            )}
-          </Dropdown>
-          <p>Снаружи</p>
-        </div>,
-      )
-      return screen.getByRole('button', { name: 'Меню' })
-    }
-
     it('возвращается на кнопку после Esc и после выбора пункта', async () => {
       const user = userEvent.setup()
       const trigger = renderDropdown()

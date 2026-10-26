@@ -1,21 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Reminder, ReminderMarked } from '../../api/schema'
-import { readServer, SEED_PASSWORD } from '../server-state'
-import { resetMockServer } from '../session'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email = 'owner@example.com'): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
+import { setSeedClock } from '../../test/clock'
+import { accessToken, call, locs } from '../../test/mock-api'
+import { readServer } from '../server-state'
 
 async function list(token: string, query: string): Promise<Reminder[]> {
   const response = await call('GET', `/reminders?${query}`, { token })
@@ -23,24 +10,12 @@ async function list(token: string, query: string): Promise<Reminder[]> {
   return (await response.json()) as Reminder[]
 }
 
-async function locs(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: (string | number)[] }[] }).detail.map((item) => item.loc.join('.')).sort()
-}
-
 const NEW_REMINDER = { pet_id: 10, title: '  Погулять в парке  ', due_at: '2026-10-28T19:00:00+03:00' }
 
 // Среда, 28 октября 2026, 09:00 по Москве. Курс Майло (рецепт №1, Мелоксикам в 20:00) — с 12.10 по 01.11: до 26.10
 // выполнен, 22.10 пропущен, 27.10 просрочен. Свои дела: зубы 22.10 (выполнено) и 29.10 в 21:00 — серия №30, корм
 // сегодня в 18:00, у Барсика капли 31.10.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('список дел', () => {
   it('по плановому времени; фильтры складываются; просроченное помечено', async () => {

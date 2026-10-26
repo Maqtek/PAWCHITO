@@ -1,6 +1,11 @@
+import { waitFor } from '@testing-library/react'
 import { http, HttpResponse } from 'msw'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { server } from '../mocks/node'
+import { createGate } from '../test/gate'
+import { settle } from '../test/requests'
+import { closeOtherTabs, collectEvents, otherTab, tokenBody, tokenResponse } from '../test/session'
+import { LOGOUT_PENDING_KEY as PENDING } from '../test/storage-keys'
 import { getAccessToken, setAccessToken } from './auth-token'
 import { ApiError, NetworkError } from './errors'
 import {
@@ -8,20 +13,13 @@ import {
   ensureSession,
   finishPendingLogout,
   isRestoreUnavailable,
-  onSessionChange,
   reauthenticateWith,
   refreshAccessToken,
   requirePasswordChange,
   signIn,
   signInWith,
   signOut,
-  type SessionEvent,
 } from './session'
-
-const PENDING = 'pawchito:logout-pending'
-
-const tokenResponse = (token: string) =>
-  HttpResponse.json({ access_token: token, token_type: 'bearer', expires_in: 900 })
 
 /** Отвечает на /auth/refresh и /auth/logout и считает обращения. */
 function authServer({
@@ -42,32 +40,6 @@ function authServer({
   return calls
 }
 
-/** Ворота: ответ сервера держится, пока тест не вызовет release. */
-function createGate() {
-  let release!: () => void
-  const opened = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { opened, release }
-}
-
-function collectEvents() {
-  const events: SessionEvent[] = []
-  onSessionChange((event) => events.push(event))
-  return events
-}
-
-const openTabs: BroadcastChannel[] = []
-
-/** Вторая «вкладка»: свой канал с тем же именем. */
-function otherTab() {
-  const channel = new BroadcastChannel('pawchito:session')
-  const received: unknown[] = []
-  channel.onmessage = (event: MessageEvent) => received.push(event.data)
-  openTabs.push(channel)
-  return { channel, received }
-}
-
 type LockCallback = () => Promise<unknown>
 
 function installLocks(request: (name: string, callback: LockCallback) => Promise<unknown>) {
@@ -76,7 +48,7 @@ function installLocks(request: (name: string, callback: LockCallback) => Promise
 
 afterEach(() => {
   Reflect.deleteProperty(navigator, 'locks')
-  openTabs.splice(0).forEach((channel) => channel.close())
+  closeOtherTabs()
 })
 
 describe('ensureSession', () => {
@@ -212,7 +184,7 @@ describe('вход и выход', () => {
     signIn('t1')
     expect(getAccessToken()).toBe('t1')
     expect(localStorage.getItem(PENDING)).toBeNull()
-    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-in' }]))
+    await waitFor(() => expect(tab.received).toEqual([{ type: 'signed-in' }]))
     await ensureSession()
     expect(calls.refresh).toBe(0)
   })
@@ -227,7 +199,7 @@ describe('вход и выход', () => {
     expect(getAccessToken()).toBeNull()
     expect(localStorage.getItem(PENDING)).toBeNull()
     expect(events).toEqual([{ type: 'signed-out', serverConfirmed: true }])
-    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-out' }]))
+    await waitFor(() => expect(tab.received).toEqual([{ type: 'signed-out' }]))
   })
 
   it('signOut без сети: метка остаётся и блокирует восстановление сессии', async () => {
@@ -256,7 +228,7 @@ describe('вход и выход', () => {
     expect(calls.logout).toBe(1)
     expect(getAccessToken()).toBeNull()
     expect(events).toEqual([expect.objectContaining({ type: 'signed-out' })])
-    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-out' }]))
+    await waitFor(() => expect(tab.received).toEqual([{ type: 'signed-out' }]))
   })
 
   it.each([
@@ -294,8 +266,8 @@ describe('вход и выход', () => {
     localStorage.setItem(PENDING, '1')
     const calls = authServer()
     window.dispatchEvent(new Event('online'))
-    await vi.waitFor(() => expect(calls.logout).toBe(1))
-    await vi.waitFor(() => expect(localStorage.getItem(PENDING)).toBeNull())
+    await waitFor(() => expect(calls.logout).toBe(1))
+    await waitFor(() => expect(localStorage.getItem(PENDING)).toBeNull())
   })
 })
 
@@ -339,7 +311,7 @@ describe('обмен и выход одновременно', () => {
 
     const refreshing = refreshAccessToken()
     otherTab().channel.postMessage({ type: 'signed-out' })
-    await vi.waitFor(() => expect(getAccessToken()).toBeNull())
+    await waitFor(() => expect(getAccessToken()).toBeNull())
     gate.release()
 
     await expect(refreshing).resolves.toEqual({ status: 'unavailable' })
@@ -374,7 +346,7 @@ describe('события сессии', () => {
     const events = collectEvents()
     setAccessToken('t1')
     tab.channel.postMessage({ type: 'signed-out' })
-    await vi.waitFor(() => expect(events).toEqual([{ type: 'signed-out-elsewhere' }]))
+    await waitFor(() => expect(events).toEqual([{ type: 'signed-out-elsewhere' }]))
     expect(getAccessToken()).toBeNull()
   })
 
@@ -385,7 +357,7 @@ describe('события сессии', () => {
     await ensureSession()
     expect(calls.refresh).toBe(1)
     tab.channel.postMessage({ type: 'signed-in' })
-    await vi.waitFor(() => expect(events).toEqual([{ type: 'signed-in-elsewhere' }]))
+    await waitFor(() => expect(events).toEqual([{ type: 'signed-in-elsewhere' }]))
     expect(getAccessToken()).toBeNull()
     await ensureSession()
     expect(calls.refresh).toBe(2)
@@ -401,7 +373,7 @@ describe('requirePasswordChange', () => {
 })
 
 describe('signInWith', () => {
-  const login = (token = 'new') => async () => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
+  const login = (token = 'new') => async () => tokenBody(token)
 
   it('ждёт обмен этой вкладки и входит внутри очереди', async () => {
     const names: string[] = []
@@ -454,7 +426,7 @@ describe('signInWith', () => {
     const tab = otherTab()
     const result = await signInWith(async () => ({ ...(await login()()), recovery_code: 'AAAA-BBBB-CCCC-DDDD' }))
     expect(result.recovery_code).toBe('AAAA-BBBB-CCCC-DDDD')
-    await vi.waitFor(() => expect(tab.received).toEqual([{ type: 'signed-in' }]))
+    await waitFor(() => expect(tab.received).toEqual([{ type: 'signed-in' }]))
   })
 
   it('упавший запрос: токен не меняется, вкладкам ничего не уходит', async () => {
@@ -462,7 +434,7 @@ describe('signInWith', () => {
     setAccessToken('t0')
     await expect(signInWith(() => Promise.reject(new Error('401')))).rejects.toThrow('401')
     expect(getAccessToken()).toBe('t0')
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await settle()
     expect(tab.received).toEqual([])
   })
 
@@ -502,7 +474,6 @@ describe('signInWith', () => {
 })
 
 describe('reauthenticateWith', () => {
-  const issued = (token: string) => ({ access_token: token, token_type: 'bearer' as const, expires_in: 900 })
   const unauthorized = () => new ApiError(401, 'Требуется вход')
 
   /** Очередь как у Web Locks: задачи по одной, вложенный запрос того же имени ждал бы вечно. */
@@ -528,14 +499,14 @@ describe('reauthenticateWith', () => {
     const seen: { token: string; signal: AbortSignal }[] = []
     const result = await reauthenticateWith(async (token, signal) => {
       seen.push({ token, signal })
-      return issued('t1')
+      return tokenBody('t1')
     })
     expect(result.access_token).toBe('t1')
     expect(seen.map((item) => item.token)).toEqual(['t0'])
     expect(seen[0].signal).toBeInstanceOf(AbortSignal)
     expect(names).toEqual(['pawchito:refresh'])
     expect(getAccessToken()).toBe('t1')
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await settle(20)
     expect(tab.received).toEqual([])
   })
 
@@ -547,7 +518,7 @@ describe('reauthenticateWith', () => {
     const result = await reauthenticateWith(async (token) => {
       tokens.push(token)
       if (token === 'stale') throw unauthorized()
-      return issued('changed')
+      return tokenBody('changed')
     })
     expect(tokens).toEqual(['stale', 'fresh'])
     expect(names).toEqual(['pawchito:refresh'])
@@ -596,7 +567,7 @@ describe('reauthenticateWith', () => {
 
     const changing = reauthenticateWith(async (token) => {
       tokens.push(token)
-      return issued('changed')
+      return tokenBody('changed')
     })
     gate.release()
 
@@ -653,7 +624,7 @@ describe('доработки после #28', () => {
     // Канал доставляет по порядку: когда дошёл signed-out, неизвестное сообщение уже обработано.
     tab.channel.postMessage({ type: 'reauthenticated' })
     tab.channel.postMessage({ type: 'signed-out' })
-    await vi.waitFor(() => expect(events).toContainEqual({ type: 'signed-out-elsewhere' }))
+    await waitFor(() => expect(events).toContainEqual({ type: 'signed-out-elsewhere' }))
     expect(events).toEqual([{ type: 'signed-out-elsewhere' }])
   })
 })
