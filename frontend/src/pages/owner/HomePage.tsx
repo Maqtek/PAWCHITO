@@ -7,7 +7,7 @@ import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
 import { PetSummary } from '../../features/home/PetSummary'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
-import { formatDayDate, greeting } from '../../lib/format'
+import { displayName, formatDayDate, greeting } from '../../lib/format'
 
 export function HomePage() {
   const { data: user } = useQuery(meQuery)
@@ -46,7 +46,7 @@ export function HomePage() {
     <>
       <PageHeader
         eyebrow={formatDayDate(now)}
-        title={user ? `${greeting(now)}, ${user.full_name}` : greeting(now)}
+        title={user ? `${greeting(now)}, ${displayName(user)}` : greeting(now)}
         documentTitle="Главная"
         actions={
           <Link to="/pets" className={buttonClass()}>

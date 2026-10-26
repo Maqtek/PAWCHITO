@@ -67,6 +67,26 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: 'Меню пользователя: Анна Смирнова' })).toHaveTextContent('АС')
   })
 
+  it('аккаунт клиники без имени (full_name: null в UserOut бэкенда): вместо имени email, кабинет не падает', async () => {
+    loginMockAs('clinic')
+    server.use(
+      http.get('*/api/users/me', () =>
+        HttpResponse.json({
+          id: 3,
+          email: 'clinic@example.com',
+          role: 'clinic',
+          full_name: null,
+          must_change_password: false,
+        }),
+      ),
+    )
+    renderShell()
+
+    const desktop = await screen.findByRole('button', { name: 'clinic@example.com, Клиника — меню пользователя' })
+    expect(desktop).toHaveTextContent('clinic@example.com')
+    expect(screen.getByRole('button', { name: 'Меню пользователя: clinic@example.com' })).toHaveTextContent('CL')
+  })
+
   it('выход: экран входа, токен сброшен, моки в гостя, выбор питомца забыт', async () => {
     localStorage.setItem('pawchito:selected-pet-id', '11')
     const { user } = renderShell()

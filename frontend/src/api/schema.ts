@@ -53,12 +53,9 @@ export interface components {
       | 'outcome_added'
       | 'pet_updated_by_clinic'
       | 'appointment_rescheduled'
-    /**
-     * UserOut из openapi.json, но full_name — строка: по контракту у клиники это название клиники.
-     * Бэкенд пока отдаёт string | null (у аккаунта клиники имени нет), поэтому пути с User — ручные.
-     */
-    User: Omit<Generated['UserOut'], 'full_name'> & { full_name: string }
-    RegisterResponse: Omit<Generated['RegisterOut'], 'user'> & { user: components['schemas']['User'] }
+    /** UserOut из openapi.json. full_name схема допускает null — имя показывать через displayName. */
+    User: Generated['UserOut']
+    RegisterResponse: Generated['RegisterOut']
     ClinicRef: { id: number; name: string }
     Pet: {
       id: number
@@ -365,38 +362,6 @@ type Schemas = components['schemas']
 
 /** Ручные пути: эндпоинты, которых ещё нет в openapi.json, и те, где ответ расходится с контрактом. */
 interface ManualPaths {
-  /** Ручной из-за User: в openapi.json user.full_name — string | null. */
-  '/auth/register': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody: Body<Generated['RegisterIn']>
-      responses: {
-        201: Json<Schemas['RegisterResponse']>
-        409: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
-  /** Ручной из-за User: в openapi.json full_name — string | null. */
-  '/users/me': {
-    parameters: NoParams
-    get: {
-      parameters: NoParams
-      requestBody?: never
-      responses: { 200: Json<Schemas['User']>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
-    }
-    patch: {
-      parameters: NoParams
-      requestBody: Body<Generated['UserUpdate']>
-      responses: {
-        200: Json<Schemas['User']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
   '/pets': {
     parameters: NoParams
     get: {

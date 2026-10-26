@@ -99,6 +99,11 @@ export function formatAge(birthDate: string, today: Date): string {
   return `${years}${NBSP}${pluralize(years, ['год', 'года', 'лет'])}`
 }
 
+/** Имя пользователя в интерфейсе: без full_name (аккаунт клиники с null) — email. */
+export function displayName(user: { full_name: string | null; email: string }): string {
+  return user.full_name?.trim() || user.email
+}
+
 /**
  * Инициалы для аватара: «Анна Смирнова» → «АС», «ВетДоктор» → «ВД» (заглавная внутри слова начинает часть),
  * «Администратор» → «АД» (одно слово — первые две буквы).

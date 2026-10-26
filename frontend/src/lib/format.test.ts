@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAge, formatDayDate, formatShortDate, formatTime, greeting, initials, pluralize } from './format'
+import { displayName, formatAge, formatDayDate, formatShortDate, formatTime, greeting, initials, pluralize } from './format'
 
 describe('pluralize', () => {
   const forms = ['год', 'года', 'лет'] as const
@@ -84,5 +84,15 @@ describe('initials', () => {
     ['', '?'],
   ])('«%s» → %s', (name, text) => {
     expect(initials(name)).toBe(text)
+  })
+})
+
+describe('displayName', () => {
+  it.each([
+    ['Анна Смирнова', 'Анна Смирнова'],
+    [null, 'clinic@example.com'],
+    ['  ', 'clinic@example.com'],
+  ])('full_name %j → %s', (fullName, text) => {
+    expect(displayName({ full_name: fullName, email: 'clinic@example.com' })).toBe(text)
   })
 })
