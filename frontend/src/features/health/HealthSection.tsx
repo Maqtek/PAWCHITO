@@ -1,6 +1,6 @@
 import { Plus } from 'lucide-react'
-import { useId, type ReactNode, type Ref } from 'react'
-import { Button, Card, EmptyState, LoadError, Spinner } from '../../components/ui'
+import type { ReactNode, Ref } from 'react'
+import { Button, EmptyState, LoadError, SectionCard, Spinner } from '../../components/ui'
 
 interface HealthSectionProps<T> {
   title: string
@@ -28,8 +28,6 @@ export function HealthSection<T>({
   empty,
   children,
 }: HealthSectionProps<T>) {
-  const headingId = useId()
-
   function content() {
     if (list.isPending) return <Spinner label={loadingLabel} />
     if (!list.data) return <LoadError title={errorTitle} onRetry={() => void list.refetch()} />
@@ -38,22 +36,19 @@ export function HealthSection<T>({
   }
 
   return (
-    <section aria-labelledby={headingId}>
-      <Card className="p-5 sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id={headingId} className="text-lg font-extrabold">
-            {title}
-          </h2>
-          <Button variant="secondary" size="sm" icon={Plus} onClick={onAdd}>
-            {addLabel}
-            <span className="sr-only">: {title.toLowerCase()}</span>
-          </Button>
-        </div>
-        {/* tabIndex -1: сюда уходит фокус, когда запись пропала из списка вместе со своей кнопкой. */}
-        <div ref={listRef} tabIndex={-1} className="mt-4 outline-none">
-          {content()}
-        </div>
-      </Card>
-    </section>
+    <SectionCard
+      title={title}
+      action={
+        <Button variant="secondary" size="sm" icon={Plus} onClick={onAdd}>
+          {addLabel}
+          <span className="sr-only">: {title.toLowerCase()}</span>
+        </Button>
+      }
+    >
+      {/* tabIndex -1: сюда уходит фокус, когда запись пропала из списка вместе со своей кнопкой. */}
+      <div ref={listRef} tabIndex={-1} className="mt-4 outline-none">
+        {content()}
+      </div>
+    </SectionCard>
   )
 }
