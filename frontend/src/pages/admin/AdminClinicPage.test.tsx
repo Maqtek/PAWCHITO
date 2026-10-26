@@ -107,12 +107,7 @@ describe('AdminClinicPage: данные', () => {
     expect(screen.getByText('+7 999 000-00-01')).toBeInTheDocument()
   })
 
-  it('после добавления — статус из state', async () => {
-    renderClinic(4, { notice: 'created' })
-    await findStatus('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')
-  })
-
-  it('сообщение из state убирается из истории, а на экране остаётся', async () => {
+  it('после добавления — статус из state; сообщение убирается из истории, а на экране остаётся', async () => {
     renderClinic(4, { notice: 'created' })
     expect(screen.getByTestId('location-state')).toHaveTextContent('"notice":"created"')
 
@@ -336,20 +331,7 @@ describe('AdminClinicPage: аккаунт клиники', () => {
     gate.release()
   })
 
-  it('сброс пароля: кнопка сброса на месте — после «Готово» фокус не уводится на заголовок', async () => {
-    const { user } = renderClinic(2)
-    const opener = await screen.findByRole('button', { name: 'Сбросить пароль' })
-    await user.click(opener)
-    const dialog = screen.getByRole('dialog', { name: 'Сброс пароля' })
-    await user.click(within(dialog).getByRole('button', { name: 'Сбросить пароль' }))
-    await within(dialog).findByRole('heading', { level: 3, name: 'Временный пароль клиники' })
-    await user.click(within(dialog).getByRole('checkbox', { name: 'Пароль передан клинике' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Готово' }))
-    expect(await screen.findByText('Пароль сброшен. Временный пароль передан клинике.')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Аккаунт клиники' })).not.toHaveFocus()
-  })
-
-  it('сброс пароля: подтверждение → временный пароль → статус; на сервере новый пароль и флаг смены', async () => {
+  it('сброс пароля: подтверждение → временный пароль → статус, фокус не уводится; на сервере новый пароль и флаг смены', async () => {
     const { user } = renderClinic(2)
     await user.click(await screen.findByRole('button', { name: 'Сбросить пароль' }))
     const dialog = screen.getByRole('dialog', { name: 'Сброс пароля' })
@@ -362,6 +344,8 @@ describe('AdminClinicPage: аккаунт клиники', () => {
     await user.click(within(dialog).getByRole('checkbox', { name: 'Пароль передан клинике' }))
     await user.click(within(dialog).getByRole('button', { name: 'Готово' }))
     expect(await screen.findByText('Пароль сброшен. Временный пароль передан клинике.')).toBeInTheDocument()
+    // Кнопка сброса на месте — фокус не уводится на заголовок карточки.
+    expect(screen.getByRole('heading', { name: 'Аккаунт клиники' })).not.toHaveFocus()
   })
 
   it('у скрытой клиники нет кнопок аккаунта, статус «Заблокирован — клиника скрыта»', async () => {

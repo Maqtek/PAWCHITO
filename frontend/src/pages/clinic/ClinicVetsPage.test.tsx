@@ -44,14 +44,7 @@ describe('ClinicVetsPage: список', () => {
     expect(within(orlov).queryByRole('button', { name: /отпуск/ })).not.toBeInTheDocument()
   })
 
-  it('врачей другой клиники нет ни в одной вкладке', async () => {
-    const { user } = renderVets()
-    await screen.findByRole('tab', { name: 'Активные (3)' })
-    expect(screen.queryByText('Белова Ольга Игоревна')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('tab', { name: 'Архив (1)' }))
-    expect(screen.queryByText('Белова Ольга Игоревна')).not.toBeInTheDocument()
-  })
-
+  // Что чужих врачей нет в списке, видно и по точным спискам вкладок выше; разграничение по клиникам — в тестах моков.
   it('аккаунт другой клиники видит только её врачей', async () => {
     updateServer((state) => {
       state.accounts.push({

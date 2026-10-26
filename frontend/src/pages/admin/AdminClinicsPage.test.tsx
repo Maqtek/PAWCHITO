@@ -13,6 +13,7 @@ beforeEach(() => {
 
 const renderList = () => renderWithProviders(<AppRoutes />, { route: '/admin/clinics' })
 
+// Добавление клиники из списка — переход на её страницу со статусом — проверяет AdminClinicPage.test.tsx.
 describe('AdminClinicsPage', () => {
   it('вкладки со счётчиками: по умолчанию активные, скрытые — отдельно', async () => {
     const { user } = renderList()
@@ -53,29 +54,10 @@ describe('AdminClinicsPage', () => {
     expect(screen.queryByRole('link', { name: /Новая/ })).not.toBeInTheDocument()
   })
 
-  it('добавление — переход на страницу клиники со статусом', async () => {
-    const { user } = renderList()
-    await user.click(await screen.findByRole('button', { name: 'Добавить клинику' }))
-    const dialog = screen.getByRole('dialog', { name: 'Новая клиника' })
-    await user.type(within(dialog).getByLabelText('Название'), 'Лапа')
-    await user.type(within(dialog).getByLabelText('Адрес'), 'ул. Мира, 1')
-    await user.type(within(dialog).getByLabelText('Телефон'), '89997778899')
-    await user.click(within(dialog).getByRole('button', { name: 'Добавить клинику' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Лапа' })).toBeInTheDocument()
-    // Сообщение приходит следующим рендером, в уже показанный регион статуса.
-    expect(await screen.findByText('Клиника добавлена. Создайте аккаунт, чтобы клиника могла войти.')).toBeInTheDocument()
-  })
-
-  it('пустой список и ошибка загрузки', async () => {
+  it('пустой список', async () => {
     server.use(http.get('*/api/admin/clinics', () => HttpResponse.json([])))
-    const first = renderList()
-    expect(await screen.findByText('Клиник пока нет')).toBeInTheDocument()
-    first.unmount()
-
-    server.use(http.get('*/api/admin/clinics', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 })))
     renderList()
-    expect(await screen.findByText('Не удалось загрузить клиники')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Повторить' })).toBeInTheDocument()
+    expect(await screen.findByText('Клиник пока нет')).toBeInTheDocument()
   })
 
   it('нет скрытых клиник — пустая вкладка «Скрытые»', async () => {
@@ -88,10 +70,11 @@ describe('AdminClinicsPage', () => {
     expect(screen.getByText('Скрытых клиник нет')).toBeInTheDocument()
   })
 
-  it('«Повторить» после ошибки загрузки показывает список', async () => {
+  it('ошибка загрузки — сообщение; «Повторить» показывает список', async () => {
     server.use(http.get('*/api/admin/clinics', () => HttpResponse.json({ detail: 'Ошибка' }, { status: 500 }), { once: true }))
     const { user } = renderList()
-    await user.click(await screen.findByRole('button', { name: 'Повторить' }))
+    expect(await screen.findByText('Не удалось загрузить клиники')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Повторить' }))
     expect(await screen.findByRole('link', { name: /ВетДоктор/ })).toBeInTheDocument()
     expect(screen.queryByText('Не удалось загрузить клиники')).not.toBeInTheDocument()
   })

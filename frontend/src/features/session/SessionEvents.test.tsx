@@ -77,18 +77,11 @@ describe('SessionEvents', () => {
     expect(screen.getByTestId('navigation')).toHaveTextContent('REPLACE')
   })
 
-  it('выход в другой вкладке: экран входа с причиной', async () => {
-    renderApp()
-    logoutMock() // другая вкладка вышла и стёрла общую cookie
-    otherTab().postMessage({ type: 'signed-out' })
-    expect(await screen.findByText('Вы вышли в другой вкладке')).toBeInTheDocument()
-  })
-
-  it('выход в другой вкладке: кэш очищен, питомец забыт', async () => {
+  it('выход в другой вкладке: экран входа с причиной, кэш очищен, питомец забыт', async () => {
     localStorage.setItem('pawchito:selected-pet-id', '11')
     const { queryClient } = renderApp()
     queryClient.setQueryData(['probe'], 1)
-    logoutMock()
+    logoutMock() // другая вкладка вышла и стёрла общую cookie
 
     otherTab().postMessage({ type: 'signed-out' })
 
