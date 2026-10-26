@@ -148,13 +148,16 @@ describe('питомцы: изменение', () => {
 })
 
 describe('питомцы: архив', () => {
-  it('питомец пропадает из списка; будущие записи отменены, дел в моках нет; повтор — 200 без изменений', async () => {
+  it('питомец пропадает из списка; будущие записи отменены, запланированные дела удалены; повтор — 200 без изменений', async () => {
     const token = await owner()
+    // Сколько дел курса ещё впереди, зависит от дня недели seed, — считаем по состоянию.
+    const planned = readServer().reminders.filter((item) => item.pet_id === 10 && item.status === 'pending').length
+    expect(planned).toBeGreaterThan(0)
     const response = await call('POST', '/pets/10/archive', { token })
     expect(response.status).toBe(200)
     const result = (await response.json()) as PetArchived
     // У Майло в seed две предстоящие записи — «Подтверждена» и «Заявка» (этап 7).
-    expect(result).toMatchObject({ pet: { id: 10 }, cancelled_appointments: 2, deleted_reminders: 0 })
+    expect(result).toMatchObject({ pet: { id: 10 }, cancelled_appointments: 2, deleted_reminders: planned })
     expect(result.pet.archived_at).not.toBeNull()
     const list = (await (await call('GET', '/pets', { token })).json()) as Pet[]
     expect(list.map((pet) => pet.id)).toEqual([11])

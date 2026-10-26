@@ -53,10 +53,37 @@ export const healthLimits = {
   dateMin: '1900-01-01',
 } as const
 
+/** Итог приёма (контракты, раздел 5 «Лимиты полей итога»; БП §6, Р-56). */
+export const outcomeLimits = {
+  textMax: 2000,
+  prescriptionsMax: 10,
+  vaccinationsMax: 5,
+  conditionsMax: 5,
+  drugMax: 100,
+  dosageMax: 100,
+  timesMax: 6,
+  durationMax: 90,
+  /** Дата начала рецепта — не позже дня приёма + 30 дней. */
+  startDaysMax: 30,
+  /** Фото питомца — до 5 МБ (БП §6.4). */
+  photoBytesMax: 5 * 1024 * 1024,
+} as const
+
 /** Запись к врачу (контракты, раздел 4 «Лимиты полей записи»; БП §5). */
 export const appointmentLimits = {
   reasonCommentMax: 500,
   /** Окно записи: с сегодня по сегодня + 30 дней по Москве включительно (Р-49). */
   daysAhead: 30,
   slotMinutes: 30,
+} as const
+
+/** Своё дело (контракты, раздел 6 «Лимиты полей дела»; БП §7, Р-59). */
+export const reminderLimits = {
+  titleMax: 100,
+  /** Дата дела — с сегодня по сегодня + 365 дней по Москве. */
+  daysAhead: 365,
+  repeatMin: 1,
+  repeatMax: 365,
+  /** Готовые интервалы повтора в форме; остальное — «Свой интервал» (БП §7). */
+  repeatPresets: [1, 7, 14, 30],
 } as const

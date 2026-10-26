@@ -3,6 +3,7 @@ import type { Pet, PetCreate, PetUpdate } from '../../api/schema'
 import { readBody, validateBody } from '../auth-validation'
 import { authorizeAccount } from '../http-utils'
 import { birthDateError, breedError, normalizeBreed, petNameError, sexError, speciesError } from '../pet-validation'
+import { notifyAppointment } from '../notify'
 import { cancelFutureAppointments, newPet, readServer, updateServer, type MockServerState } from '../server-state'
 
 const notFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
@@ -106,8 +107,11 @@ export const petHandlers = [
       if (pet.archived_at !== null) return HttpResponse.json({ pet, cancelled_appointments: 0, deleted_reminders: 0 })
       pet.archived_at = new Date().toISOString()
       const cancelled = cancelFutureAppointments(state, (item) => item.pet_id === pet.id)
-      // Дел в моках нет до этапа 10 — удалять нечего.
-      return HttpResponse.json({ pet, cancelled_appointments: cancelled, deleted_reminders: 0 })
+      for (const appointment of cancelled) notifyAppointment(state, appointment, 'cancelledPetArchived')
+      // Запланированные дела — и свои, и курса — удаляются (Р-02); отмеченные остаются в истории.
+      const planned = state.reminders.filter((item) => item.pet_id === pet.id && item.status === 'pending')
+      state.reminders = state.reminders.filter((item) => !planned.includes(item))
+      return HttpResponse.json({ pet, cancelled_appointments: cancelled.length, deleted_reminders: planned.length })
     }),
   ),
 ]

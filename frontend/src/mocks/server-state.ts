@@ -6,8 +6,12 @@ import type {
   AppointmentStatus,
   CancelledBy,
   Condition,
+  EventCategory,
+  NotificationType,
   Observation,
   Pet,
+  Prescription,
+  Reminder,
   Role,
   User,
   Vaccination,
@@ -15,6 +19,8 @@ import type {
 } from '../api/schema'
 import { addDays, isoWeekday, moscowDateTime, toMoscowString } from '../lib/dates'
 import { moscowIsoDate } from '../lib/format'
+import { careStatusLabel } from '../lib/labels'
+import { clinicDayLink, noticeText } from './notification-texts'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -67,6 +73,20 @@ export interface MockAppointment {
   outcome: AppointmentOutcome | null
 }
 
+/** Дело в состоянии моков: is_overdue не хранится — считается в момент ответа (Р-60). */
+export type MockReminder = Omit<Reminder, 'is_overdue'>
+
+/** Уведомление аккаунта: владельца или клиники (БП §9). */
+export interface MockNotification {
+  id: number
+  user_id: number
+  type: NotificationType
+  text: string
+  link: string
+  created_at: string
+  read_at: string | null
+}
+
 export interface MockServerState {
   accounts: MockAccount[]
   nextUserId: number
@@ -88,6 +108,13 @@ export interface MockServerState {
   /** Записи к врачу всех владельцев; владелец видит только записи своих питомцев. */
   appointments: MockAppointment[]
   nextAppointmentId: number
+  /** Рецепты хранятся в итоге записи; номер — общий на все итоги. */
+  nextPrescriptionId: number
+  /** Дела всех питомцев; владелец видит только дела своих — по pet_id. */
+  reminders: MockReminder[]
+  nextReminderId: number
+  notifications: MockNotification[]
+  nextNotificationId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -215,7 +242,120 @@ function seedAppointment(
   }
 }
 
+/** Записи к врачам «ВетДоктора» (клиника 2): Петров (4), Соколова (5, в отпуске), Ким (6). */
+function seedAppointments(prescription: Prescription): MockAppointment[] {
+  return [
+    seedAppointment(20, 10, 4, seedDay(2), '10:00', 'vaccination', {
+      status: 'confirmed',
+      reason_comment: 'Плановая от бешенства',
+    }),
+    seedAppointment(21, 10, 6, seedDay(5), '15:30', 'follow_up'),
+    seedAppointment(22, 10, 4, seedDay(-16), '11:00', 'illness', {
+      status: 'completed',
+      reason_comment: 'Хромает на заднюю лапу',
+      outcome: {
+        conclusion: 'Растяжение связок задней лапы',
+        recommendations: 'Покой две недели, повторный приём через месяц',
+        care_status: 'treatment',
+        completed_at: moscowDateTime(seedDay(-16), '11:40'),
+        prescriptions: [prescription],
+        vaccinations: [],
+      },
+    }),
+    seedAppointment(23, 10, 5, seedDay(-5), '12:00', 'checkup', {
+      status: 'cancelled',
+      cancelled_by: 'clinic',
+      clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
+    }),
+    seedAppointment(24, 11, 6, seedDay(1), '09:00', 'checkup'),
+    // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
+    seedAppointment(25, 13, 4, seedDay(2), '10:30', 'checkup', { status: 'confirmed' }),
+  ]
+}
+
+/** Курс Майло после приёма №22: раз в день три недели с дня приёма — сейчас идёт последняя неделя. */
+function seedPrescription(): Prescription {
+  return { id: 1, drug: 'Мелоксикам', dosage: '1,5 мл', times: ['20:00'], duration_days: 21, start_date: seedDay(-16) }
+}
+
+function seedCustomReminder(
+  id: number,
+  petId: number,
+  title: string,
+  category: EventCategory,
+  dueAt: string,
+  repeatIntervalDays: number | null,
+  extra: Partial<MockReminder> = {},
+): MockReminder {
+  return {
+    id,
+    pet_id: petId,
+    source: 'custom',
+    prescription_id: null,
+    title,
+    category,
+    due_at: dueAt,
+    status: 'pending',
+    done_at: null,
+    repeat_interval_days: repeatIntervalDays,
+    series_id: repeatIntervalDays === null ? null : id,
+    ...extra,
+  }
+}
+
+/**
+ * Дела seed: курс Майло до позавчера выполнен (одна доза пропущена), вчерашняя доза просрочена, дальше запланировано;
+ * свои дела — чистка зубов Майло раз в неделю (прошлая выполнена), корм на сегодня, капли от блох Барсику раз в месяц.
+ */
+function seedReminders(prescription: Prescription): MockReminder[] {
+  const today = moscowIsoDate(new Date())
+  const markedAfter = (dueAt: string) => toMoscowString(new Date(new Date(dueAt).getTime() + 15 * 60 * 1000))
+  const course = courseDoses(prescription).map((dueAt, index): MockReminder => {
+    const reminder = courseReminder(index + 1, 10, prescription, dueAt)
+    if (dueAt.slice(0, 10) >= addDays(today, -1)) return reminder
+    return { ...reminder, status: index === 10 ? 'skipped' : 'done', done_at: markedAfter(dueAt) }
+  })
+  const lastBrushing = moscowDateTime(addDays(today, -6), '21:00')
+  return [
+    ...course,
+    seedCustomReminder(30, 10, 'Почистить зубы', 'routine', lastBrushing, 7, { status: 'done', done_at: markedAfter(lastBrushing) }),
+    seedCustomReminder(31, 10, 'Почистить зубы', 'routine', moscowDateTime(addDays(today, 1), '21:00'), 7, { series_id: 30 }),
+    seedCustomReminder(32, 10, 'Купить корм', 'routine', moscowDateTime(today, '18:00'), null),
+    seedCustomReminder(33, 11, 'Капли от блох', 'prevention', moscowDateTime(addDays(today, 3), '10:00'), 30),
+  ]
+}
+
+/**
+ * Уведомления по seed-записям: у владельца три непрочитанных и два прочитанных, у «ВетДоктора» — две заявки
+ * непрочитанные и одна прочитанная. Время — часы назад от сегодня, как и сами записи.
+ */
+function seedNotifications(appointments: MockAppointment[]): MockNotification[] {
+  const slot = (id: number) => appointments.find((item) => item.id === id)?.slot_start ?? ''
+  const hoursAgo = (hours: number) => toMoscowString(new Date(Date.now() - hours * 60 * 60 * 1000))
+  const notice = (
+    id: number,
+    userId: number,
+    type: NotificationType,
+    text: string,
+    link: string,
+    hours: number,
+    read = false,
+  ): MockNotification => ({ id, user_id: userId, type, text, link, created_at: hoursAgo(hours), read_at: read ? hoursAgo(hours / 2) : null })
+  return [
+    notice(1, 1, 'appointment_cancelled_by_clinic', noticeText.cancelledByClinic('ВетДоктор', 'Майло', slot(23), 'Врач заболела, перезапишитесь, пожалуйста'), '/appointments/23', 30),
+    notice(2, 1, 'outcome_added', noticeText.outcomeAdded('Майло', careStatusLabel.treatment), '/appointments/22', 20, true),
+    notice(3, 1, 'appointment_confirmed', noticeText.confirmed('ВетДоктор', 'Майло', slot(20), 'Петров Павел Петрович'), '/appointments/20', 5),
+    notice(4, 1, 'appointment_confirmed', noticeText.confirmed('ВетДоктор', 'Майло', slot(22), 'Петров Павел Петрович'), '/appointments/22', 400, true),
+    notice(5, 1, 'outcome_added', noticeText.outcomeAdded('Майло', careStatusLabel.treatment), '/appointments/22', 2),
+    notice(6, 6, 'appointment_requested', noticeText.requested('Майло', slot(20), 'Петров Павел Петрович'), clinicDayLink(slot(20)), 50, true),
+    notice(7, 6, 'appointment_requested', noticeText.requested('Майло', slot(21), 'Ким Елена Викторовна'), clinicDayLink(slot(21)), 4),
+    notice(8, 6, 'appointment_requested', noticeText.requested('Барсик', slot(24), 'Ким Елена Викторовна'), clinicDayLink(slot(24)), 1),
+  ]
+}
+
 export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refreshDelayMs?: number } = {}): MockServerState {
+  const prescription = seedPrescription()
+  const appointments = seedAppointments(prescription)
   return {
     accounts: [
       seedAccount(1, 'owner@example.com', 'owner', 'Анна Смирнова', { recovery_code: 'K7QM-2XPA-9RTD-4WNB' }),
@@ -298,35 +438,13 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       { id: 4, pet_id: 13, name: 'Нобивак Rabies', date: '2026-03-01', next_date: null, source: 'owner', appointment_id: null },
     ],
     nextVaccinationId: 100,
-    // Записи к врачам «ВетДоктора» (клиника 2): Петров (4), Соколова (5, в отпуске), Ким (6).
-    appointments: [
-      seedAppointment(20, 10, 4, seedDay(2), '10:00', 'vaccination', {
-        status: 'confirmed',
-        reason_comment: 'Плановая от бешенства',
-      }),
-      seedAppointment(21, 10, 6, seedDay(5), '15:30', 'follow_up'),
-      seedAppointment(22, 10, 4, seedDay(-16), '11:00', 'illness', {
-        status: 'completed',
-        reason_comment: 'Хромает на заднюю лапу',
-        outcome: {
-          conclusion: 'Растяжение связок задней лапы',
-          recommendations: 'Покой две недели, повторный приём через месяц',
-          care_status: 'treatment',
-          completed_at: moscowDateTime(seedDay(-16), '11:40'),
-          prescriptions: [],
-          vaccinations: [],
-        },
-      }),
-      seedAppointment(23, 10, 5, seedDay(-5), '12:00', 'checkup', {
-        status: 'cancelled',
-        cancelled_by: 'clinic',
-        clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
-      }),
-      seedAppointment(24, 11, 6, seedDay(1), '09:00', 'checkup'),
-      // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
-      seedAppointment(25, 13, 4, seedDay(2), '10:30', 'checkup', { status: 'confirmed' }),
-    ],
+    appointments,
     nextAppointmentId: 100,
+    nextPrescriptionId: 100,
+    reminders: seedReminders(prescription),
+    nextReminderId: 100,
+    notifications: seedNotifications(appointments),
+    nextNotificationId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,
@@ -409,13 +527,13 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
 /** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
 /**
  * Отмена системой (БП §5): записи «Заявка» и «Подтверждена», которые ещё не начались, — при архиве питомца и скрытии
- * клиники (Р-51). Возвращает число отменённых.
+ * клиники (Р-51). Возвращает отменённые записи: по ним уходят уведомления.
  */
 export function cancelFutureAppointments(
   state: MockServerState,
   matches: (appointment: MockAppointment) => boolean,
   now = new Date(),
-): number {
+): MockAppointment[] {
   const future = state.appointments.filter(
     (item) =>
       (item.status === 'requested' || item.status === 'confirmed') &&
@@ -426,10 +544,52 @@ export function cancelFutureAppointments(
     appointment.status = 'cancelled'
     appointment.cancelled_by = 'system'
   }
-  return future.length
+  return future
 }
 
 /** Ответ Appointment: клиника — по врачу, клички и имена — текущие (Р-50). */
+/** Дозы курса: каждое время каждого дня рецепта, по порядку (БП §6.2). */
+export function courseDoses(prescription: Prescription): string[] {
+  const doses: string[] = []
+  for (let day = 0; day < prescription.duration_days; day += 1) {
+    const date = addDays(prescription.start_date, day)
+    for (const time of prescription.times) doses.push(moscowDateTime(date, time))
+  }
+  return doses
+}
+
+/** Дело курса: название — «препарат, дозировка», тип — «Лечение», без повтора (Р-63). */
+function courseReminder(id: number, petId: number, prescription: Prescription, dueAt: string): MockReminder {
+  return {
+    id,
+    pet_id: petId,
+    source: 'prescription',
+    prescription_id: prescription.id,
+    title: `${prescription.drug}, ${prescription.dosage}`,
+    category: 'treatment',
+    due_at: dueAt,
+    status: 'pending',
+    done_at: null,
+    repeat_interval_days: null,
+    series_id: null,
+  }
+}
+
+/** Дела курса на дозы, время которых ещё не прошло (БП §6.2); возвращает, сколько создано. */
+export function addCourseReminders(state: MockServerState, petId: number, prescription: Prescription, now: Date): number {
+  const doses = courseDoses(prescription).filter((dueAt) => new Date(dueAt).getTime() > now.getTime())
+  for (const dueAt of doses) {
+    state.reminders.push(courseReminder(state.nextReminderId, petId, prescription, dueAt))
+    state.nextReminderId += 1
+  }
+  return doses.length
+}
+
+/** Дело для ответа: просрочено, если запланировано, а время прошло (Р-60). */
+export function toReminder(reminder: MockReminder, now = new Date()): Reminder {
+  return { ...reminder, is_overdue: reminder.status === 'pending' && new Date(reminder.due_at).getTime() < now.getTime() }
+}
+
 export function toAppointment(state: MockServerState, appointment: MockAppointment): Appointment {
   const { pet_id, vet_id, ...fields } = appointment
   const pet = state.pets.find((item) => item.id === pet_id)

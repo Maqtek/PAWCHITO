@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import type { ErrorContext } from '../../api/error-messages'
 import { Button, FormAlert, Modal } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 
@@ -11,16 +12,34 @@ interface ConfirmActionModalProps {
   /** Запрос и обновление кэша; ошибка остаётся в окне. */
   onConfirm: () => Promise<void>
   onClose: () => void
+  /** Откуда текст ошибки сервера; по умолчанию — записи здоровья. */
+  context?: ErrorContext
   children: ReactNode
 }
 
-/** Подтверждение необратимого для владельца действия с записью здоровья: архив особенности, удаление прививки. */
-export function ConfirmActionModal({ open, title, submit, submitting, onConfirm, onClose, children }: ConfirmActionModalProps) {
+/** Подтверждение необратимого для владельца действия: архив особенности, удаление прививки, пропуск и удаление дела. */
+export function ConfirmActionModal({
+  open,
+  title,
+  submit,
+  submitting,
+  onConfirm,
+  onClose,
+  context = 'health',
+  children,
+}: ConfirmActionModalProps) {
   const [busy, setBusy] = useState(false)
   return (
     <Modal open={open} onClose={onClose} title={title} dismissible={!busy}>
       {open && (
-        <ConfirmForm submit={submit} submitting={submitting} onConfirm={onConfirm} onCancel={onClose} onBusyChange={setBusy}>
+        <ConfirmForm
+          submit={submit}
+          submitting={submitting}
+          onConfirm={onConfirm}
+          onCancel={onClose}
+          onBusyChange={setBusy}
+          context={context}
+        >
           {children}
         </ConfirmForm>
       )}
@@ -35,14 +54,15 @@ interface ConfirmFormProps {
   onCancel: () => void
   /** Запрос идёт: окно нельзя закрыть, иначе действие применится, а ответ или ошибку показать будет некому. */
   onBusyChange: (busy: boolean) => void
+  context: ErrorContext
   children: ReactNode
 }
 
-function ConfirmForm({ submit, submitting, onConfirm, onCancel, onBusyChange, children }: ConfirmFormProps) {
+function ConfirmForm({ submit, submitting, onConfirm, onCancel, onBusyChange, context, children }: ConfirmFormProps) {
   const form = useForm({
     initial: {},
     validate: () => ({}),
-    context: 'health',
+    context,
     onSubmit: async () => {
       onBusyChange(true)
       try {

@@ -7,6 +7,7 @@ import type {
   DataSource,
   EventCategory,
   Level,
+  ReminderStatus,
   Role,
   Sex,
   Species,
@@ -108,4 +109,17 @@ export const cancelledByLabel: Record<CancelledBy, string> = {
   owner: 'Вы отменили запись',
   clinic: 'Клиника отменила запись',
   system: 'Запись отменена автоматически',
+}
+
+/** Статус дела (глоссарий): просрочено — не статус, а запланированное дело, время которого прошло. */
+export const reminderStatusLabel: Record<ReminderStatus, string> = {
+  pending: 'Запланировано',
+  done: 'Выполнено',
+  skipped: 'Пропущено',
+}
+
+export const reminderStatusTone: Record<ReminderStatus, Tone> = {
+  pending: 'sky',
+  done: 'mint',
+  skipped: 'neutral',
 }

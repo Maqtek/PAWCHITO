@@ -10,6 +10,7 @@ import {
   workDaysError,
 } from '../clinic-validation'
 import { authorizeAccount } from '../http-utils'
+import { notifyAppointment } from '../notify'
 import {
   attemptsKey,
   cancelFutureAppointments,
@@ -138,7 +139,9 @@ export const adminHandlers = [
       clinic.futureAppointments = 0
       // Настоящие записи владельцев (этап 7) тоже отменяются; число в ответе — по счётчику seed (MockClinic).
       const vetIds = new Set(state.vets.filter((vet) => vet.clinic_id === clinic.id).map((vet) => vet.id))
-      cancelFutureAppointments(state, (item) => vetIds.has(item.vet_id))
+      for (const appointment of cancelFutureAppointments(state, (item) => vetIds.has(item.vet_id))) {
+        notifyAppointment(state, appointment, 'cancelledClinicUnavailable')
+      }
       const clinicAccount = accountOf(state, clinic)
       if (clinicAccount) {
         clinicAccount.is_active = false
