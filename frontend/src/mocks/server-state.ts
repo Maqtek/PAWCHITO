@@ -1,4 +1,4 @@
-import type { AdminClinic, Role, User } from '../api/schema'
+import type { AdminClinic, Role, User, Vet } from '../api/schema'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -38,6 +38,9 @@ export interface MockServerState {
   nextUserId: number
   clinics: MockClinic[]
   nextClinicId: number
+  /** Врачи всех клиник; клиника видит только своих — по clinic_id аккаунта. */
+  vets: Vet[]
+  nextVetId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -97,6 +100,18 @@ function seedClinic(
   }
 }
 
+function seedVet(id: number, clinicId: number, fullName: string, specialization: string | null, extra: Partial<Vet> = {}): Vet {
+  return {
+    id,
+    clinic_id: clinicId,
+    full_name: fullName,
+    specialization,
+    on_vacation: false,
+    archived_at: null,
+    ...extra,
+  }
+}
+
 export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refreshDelayMs?: number } = {}): MockServerState {
   return {
     accounts: [
@@ -117,6 +132,15 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       }),
     ],
     nextClinicId: 100,
+    vets: [
+      seedVet(4, 2, 'Петров Павел Петрович', 'терапевт'),
+      seedVet(5, 2, 'Соколова Мария Андреевна', 'хирург', { on_vacation: true }),
+      seedVet(6, 2, 'Ким Елена Викторовна', null),
+      seedVet(7, 2, 'Орлов Дмитрий Сергеевич', 'дерматолог', { archived_at: '2026-09-15T12:00:00+03:00' }),
+      // Врач другой клиники: clinic@example.com его не видит и не меняет (404).
+      seedVet(8, 4, 'Белова Ольга Игоревна', 'терапевт'),
+    ],
+    nextVetId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,

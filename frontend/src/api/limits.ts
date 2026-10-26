@@ -17,3 +17,12 @@ export const clinicLimits = {
   nameMax: 100,
   addressMax: 200,
 } as const
+
+/**
+ * Лимиты полей врача (контракты, раздел 5 «Лимиты полей врача»).
+ * Длина — в символах Unicode (code points), как у authLimits. Специализация необязательна (Р-38).
+ */
+export const vetLimits = {
+  fullNameMax: 100,
+  specializationMax: 100,
+} as const
