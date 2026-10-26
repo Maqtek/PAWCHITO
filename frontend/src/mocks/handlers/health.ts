@@ -1,41 +1,34 @@
 import { http, HttpResponse } from 'msw'
 import { healthLimits } from '../../api/limits'
 import type {
-  Condition,
   ConditionCreate,
   ConditionUpdate,
   Observation,
   ObservationCreate,
   ObservationUpdate,
-  Vaccination,
   VaccinationCreate,
   VaccinationUpdate,
 } from '../../api/schema'
-import { readBody, validateBody } from '../auth-validation'
-import { isoDateError, pastDateError } from '../date-validation'
 import {
-  conditionKindError,
-  conditionTitleError,
-  levelError,
-  multilineTextError,
-  normalizeText,
-  vaccineNameError,
-  weightError,
-} from '../health-validation'
-import { authorizeAccount, forbidden } from '../http-utils'
-import { newObservation, readServer, updateServer, type MockServerState } from '../server-state'
-import { findPet } from './pets'
+  activeConditions,
+  authorizeOwner,
+  findPet,
+  observationsInPeriod,
+  petNotFound,
+  petVaccinations,
+  readPeriod,
+} from '../access'
+import { isoDateError, pastDateError } from '../date-validation'
+import { conditionChecks, levelError, vaccineNameError, weightError } from '../health-validation'
+import { fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
+import { addCondition, addObservation, addVaccination, readServer, updateServer } from '../server-state'
+import { multilineTextError, normalizeText } from '../text-validation'
 
-const notFound = () => HttpResponse.json({ detail: 'Запись не найдена' }, { status: 404 })
-const petNotFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
+const recordNotFound = () => notFound('Запись не найдена')
 const fromClinic = () => forbidden('Запись внесена клиникой — изменить её может только клиника')
 
 /** 422 без поля: правило про всё тело, как model_validator у Pydantic (Р-45). */
-const nothingFilled = () =>
-  HttpResponse.json(
-    { detail: [{ loc: ['body'], msg: 'Заполните хотя бы одно поле, кроме даты', type: 'value_error' }] },
-    { status: 422 },
-  )
+const nothingFilled = () => unprocessable([fieldError(['body'], 'Заполните хотя бы одно поле, кроме даты')])
 
 const OBSERVATION_FIELDS = ['weight', 'appetite', 'energy', 'symptoms', 'note'] as const
 
@@ -47,11 +40,6 @@ function hasObservationData(values: Partial<Record<(typeof OBSERVATION_FIELDS)[n
   })
 }
 
-/** Владелец из access-токена или готовый ответ 401/403. */
-function authorizeOwner(state: MockServerState, request: Request) {
-  return authorizeAccount(state, request, { allowed: ['owner'] })
-}
-
 /** Запись этого питомца; запись другого питомца — как несуществующая, 404 (Р-47). */
 function findRecord<T extends { id: number; pet_id: number }>(list: T[], petId: number, rawId: unknown): T | undefined {
   const id = Number(rawId)
@@ -59,10 +47,6 @@ function findRecord<T extends { id: number; pet_id: number }>(list: T[], petId: 
 }
 
 const sent = (raw: Record<string, unknown>, field: string) => field in raw
-
-/** Новые даты сверху; в один день — последняя добавленная (Р-45, Р-46). */
-export const newestFirst = <T extends { id: number; date: string }>(a: T, b: T) =>
-  a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1
 
 // Как у бэкенда: доступ (401/403), тело (422), поиск питомца и записи (404), источник записи (403).
 export const healthHandlers = [
@@ -73,10 +57,7 @@ export const healthHandlers = [
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
-    // Архивные не отдаются: возврата из архива в MVP нет (Р-44).
-    return HttpResponse.json(
-      state.conditions.filter((item) => item.pet_id === pet.id && item.archived_at === null).sort((a, b) => a.id - b.id),
-    )
+    return HttpResponse.json(activeConditions(state, pet.id))
   }),
 
   http.post('*/api/pets/:petId/conditions', async ({ request, params }) => {
@@ -84,28 +65,11 @@ export const healthHandlers = [
     return updateServer((state) => {
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
-      const invalid = validateBody({
-        kind: conditionKindError(raw.kind),
-        title: conditionTitleError(raw.title),
-        description: sent(raw, 'description')
-          ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax)
-          : null,
-      })
+      const invalid = validateBody(conditionChecks(raw, { creating: true }))
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
-      const body = raw as ConditionCreate
-      const condition: Condition = {
-        id: state.nextConditionId,
-        pet_id: pet.id,
-        kind: body.kind,
-        title: body.title.trim(),
-        description: normalizeText(body.description),
-        source: 'owner',
-        archived_at: null,
-      }
-      state.nextConditionId += 1
-      state.conditions.push(condition)
+      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: pet.id, source: 'owner' })
       return HttpResponse.json(condition, { status: 201 })
     })
   }),
@@ -115,18 +79,12 @@ export const healthHandlers = [
     return updateServer((state) => {
       const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
-      const invalid = validateBody({
-        kind: sent(raw, 'kind') ? conditionKindError(raw.kind) : null,
-        title: sent(raw, 'title') ? conditionTitleError(raw.title) : null,
-        description: sent(raw, 'description')
-          ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax)
-          : null,
-      })
+      const invalid = validateBody(conditionChecks(raw, { creating: false }))
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const condition = findRecord(state.conditions, pet.id, params.id)
-      if (!condition) return notFound()
+      if (!condition) return recordNotFound()
       if (condition.source === 'clinic') return fromClinic()
       const body = raw as ConditionUpdate
       if (body.kind !== undefined) condition.kind = body.kind
@@ -143,7 +101,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const condition = findRecord(state.conditions, pet.id, params.id)
-      if (!condition) return notFound()
+      if (!condition) return recordNotFound()
       if (condition.source === 'clinic') return fromClinic()
       // Повторное архивирование ничего не меняет (Р-47).
       condition.archived_at ??= new Date().toISOString()
@@ -174,8 +132,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const body = raw as ObservationCreate
-      const observation = newObservation({
-        id: state.nextObservationId,
+      const observation = addObservation(state, {
         pet_id: pet.id,
         date: body.date,
         weight: body.weight ?? null,
@@ -185,8 +142,6 @@ export const healthHandlers = [
         note: normalizeText(body.note),
         source: 'owner',
       })
-      state.nextObservationId += 1
-      state.observations.push(observation)
       return HttpResponse.json(observation, { status: 201 })
     })
   }),
@@ -201,7 +156,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const observation = findRecord(state.observations, pet.id, params.id)
-      if (!observation) return notFound()
+      if (!observation) return recordNotFound()
       if (observation.source === 'clinic') return fromClinic()
       const body = raw as ObservationUpdate
       const next: Observation = {
@@ -227,7 +182,7 @@ export const healthHandlers = [
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
-    return HttpResponse.json(state.vaccinations.filter((item) => item.pet_id === pet.id).sort(newestFirst))
+    return HttpResponse.json(petVaccinations(state, pet.id))
   }),
 
   http.post('*/api/pets/:petId/vaccinations', async ({ request, params }) => {
@@ -244,18 +199,12 @@ export const healthHandlers = [
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
-      const body = raw as VaccinationCreate
-      const vaccination: Vaccination = {
-        id: state.nextVaccinationId,
+      const vaccination = addVaccination(state, {
+        ...(raw as VaccinationCreate),
         pet_id: pet.id,
-        name: body.name.trim(),
-        date: body.date,
-        next_date: body.next_date ?? null,
         source: 'owner',
         appointment_id: null,
-      }
-      state.nextVaccinationId += 1
-      state.vaccinations.push(vaccination)
+      })
       return HttpResponse.json(vaccination, { status: 201 })
     })
   }),
@@ -274,7 +223,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const vaccination = findRecord(state.vaccinations, pet.id, params.id)
-      if (!vaccination) return notFound()
+      if (!vaccination) return recordNotFound()
       if (vaccination.source === 'clinic') return fromClinic()
       const body = raw as VaccinationUpdate
       const date = body.date ?? vaccination.date
@@ -297,45 +246,13 @@ export const healthHandlers = [
       if (!pet) return petNotFound()
       const vaccination = findRecord(state.vaccinations, pet.id, params.id)
       // Повторное удаление — 404: прививки уже нет (Р-47).
-      if (!vaccination) return notFound()
+      if (!vaccination) return recordNotFound()
       if (vaccination.source === 'clinic') return fromClinic()
       state.vaccinations = state.vaccinations.filter((item) => item !== vaccination)
       return new HttpResponse(null, { status: 204 })
     }),
   ),
 ]
-
-interface Period {
-  from: string | null
-  to: string | null
-}
-
-/** Период дневника из параметров date_from / date_to или готовый ответ 422 (Р-45); его же читает карточка клиники (Р-54). */
-export function readPeriod(request: Request): Period | Response {
-  const query = new URL(request.url).searchParams
-  const from = query.get('date_from')
-  const to = query.get('date_to')
-  const fromError = from === null ? null : isoDateError(from, 'Начало периода')
-  const toError = to === null ? null : isoDateError(to, 'Конец периода')
-  const orderError = !fromError && !toError && from !== null && to !== null && from > to
-  const detail = [
-    fromError && { field: 'date_from', msg: fromError },
-    (toError ?? orderError) && { field: 'date_to', msg: toError ?? 'Конец периода — не раньше начала' },
-  ].filter((item): item is { field: string; msg: string } => typeof item === 'object' && item !== null)
-  if (detail.length === 0) return { from, to }
-  // Ошибка параметра запроса — в loc ["query", …], как у FastAPI.
-  return HttpResponse.json(
-    { detail: detail.map(({ field, msg }) => ({ loc: ['query', field], msg, type: 'value_error' })) },
-    { status: 422 },
-  )
-}
-
-/** Наблюдения питомца за период, границы включительно: новые даты сверху. */
-export function observationsInPeriod(state: MockServerState, petId: number, { from, to }: Period): Observation[] {
-  return state.observations
-    .filter((item) => item.pet_id === petId && (from === null || item.date >= from) && (to === null || item.date <= to))
-    .sort(newestFirst)
-}
 
 /** Проверки полей наблюдения: в POST дата обязательна, в PATCH — только присланные поля, null в дате — 422. */
 function observationChecks(raw: Record<string, unknown>, { creating }: { creating: boolean }) {

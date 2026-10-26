@@ -8,24 +8,35 @@ import type {
   RegisterRequest,
   UserUpdate,
 } from '../../api/schema'
+import { authorizeOwner } from '../access'
 import {
   emailError,
   fullNameError,
   maxLengthError,
   normalizeRecoveryCode,
   passwordError,
-  readBody,
   recoveryCodeError,
-  validateBody,
 } from '../auth-validation'
-import { authorizeAccount, forbidden, tooManyRequests, unauthorized } from '../http-utils'
 import {
-  attemptsKey,
+  authorizeAccount,
+  conflict,
+  forbidden,
+  readBody,
+  tooManyRequests,
+  unauthorized,
+  validateBody,
+} from '../http-utils'
+import {
+  clearFailures,
   findAccount,
+  findRefreshRecord,
   issueRefreshToken,
+  lockedFor,
+  newAccount,
   newRecoveryCode,
   readMockCookie,
   readServer,
+  registerFailure,
   revokeUserTokens,
   tokenBody,
   toUser,
@@ -35,33 +46,31 @@ import {
   type MockServerState,
 } from '../server-state'
 
-const MAX_FAILURES = 5
-const LOCK_MS = 15 * 60_000
-
-/**
- * Секунды до конца паузы после пяти неудач или null. Счётчик один на аккаунт: неверный пароль при входе,
- * неверный код восстановления и неверный текущий пароль при смене пароля и новом коде считаются вместе.
- */
-function lockedFor(state: MockServerState, email: string): number | null {
-  const lockedUntil = state.attempts[attemptsKey(email)]?.lockedUntil ?? null
-  if (lockedUntil === null || lockedUntil <= Date.now()) return null
-  return Math.ceil((lockedUntil - Date.now()) / 1000)
-}
-
-function registerFailure(state: MockServerState, email: string): void {
-  const failures = (state.attempts[attemptsKey(email)]?.failures ?? 0) + 1
-  state.attempts[attemptsKey(email)] =
-    failures >= MAX_FAILURES ? { failures: 0, lockedUntil: Date.now() + LOCK_MS } : { failures, lockedUntil: null }
-}
-
-function clearFailures(state: MockServerState, email: string): void {
-  delete state.attempts[attemptsKey(email)]
-}
-
 /** Новый refresh-токен в cookie и тело Token. */
 function startSession(state: MockServerState, account: MockAccount) {
   writeMockCookie(issueRefreshToken(state, account.id))
   return tokenBody(state, account)
+}
+
+/** Refresh не принят: cookie стирается, ответ 401. */
+function rejectRefresh(): Response {
+  writeMockCookie(null)
+  return unauthorized()
+}
+
+/**
+ * Сверка текущего пароля — после проверки тела: 422 попыткой не считается, а 429 — даже с верным паролем.
+ * Ответ 429 или 400, null — пароль верный.
+ */
+function currentPasswordError(state: MockServerState, account: MockAccount, password: string): Response | null {
+  const retryAfter = lockedFor(state, account.email)
+  if (retryAfter !== null) return tooManyRequests(retryAfter)
+  if (account.password !== password) {
+    registerFailure(state, account.email)
+    return HttpResponse.json({ detail: 'Неверный текущий пароль' }, { status: 400 })
+  }
+  clearFailures(state, account.email)
+  return null
 }
 
 export const authHandlers = [
@@ -75,20 +84,15 @@ export const authHandlers = [
     if (invalid) return invalid
     const body = raw as RegisterRequest
     return updateServer((state) => {
-      if (findAccount(state, body.email)) {
-        return HttpResponse.json({ detail: 'Email уже зарегистрирован' }, { status: 409 })
-      }
-      const account: MockAccount = {
+      if (findAccount(state, body.email)) return conflict('Email уже зарегистрирован')
+      const account = newAccount({
         id: state.nextUserId,
         email: body.email.trim(),
         password: body.password,
         role: 'owner',
         full_name: body.full_name.trim(),
-        must_change_password: false,
-        is_active: true,
         recovery_code: newRecoveryCode(),
-        clinic_id: null,
-      }
+      })
       state.nextUserId += 1
       state.accounts.push(account)
       return HttpResponse.json(
@@ -127,31 +131,23 @@ export const authHandlers = [
     const { refreshDelayMs } = readServer()
     if (refreshDelayMs > 0) await delay(refreshDelayMs)
     return updateServer((state) => {
-      const record = presented === null ? undefined : state.refreshTokens[presented]
-      if (!record) {
-        writeMockCookie(null)
-        return unauthorized()
-      }
+      const record = findRefreshRecord(state, presented)
+      if (!record) return rejectRefresh()
       if (record.revoked) {
         // БП §1: повторное предъявление отозванного токена отзывает все токены пользователя.
         revokeUserTokens(state, record.userId)
-        writeMockCookie(null)
-        return unauthorized()
+        return rejectRefresh()
       }
       record.revoked = true
       const account = state.accounts.find((item) => item.id === record.userId)
-      if (!account?.is_active) {
-        writeMockCookie(null)
-        return unauthorized()
-      }
+      if (!account?.is_active) return rejectRefresh()
       return HttpResponse.json(startSession(state, account))
     })
   }),
 
   http.post('*/api/auth/logout', () =>
     updateServer((state) => {
-      const presented = readMockCookie()
-      const record = presented === null ? undefined : state.refreshTokens[presented]
+      const record = findRefreshRecord(state, readMockCookie())
       if (record) record.revoked = true
       writeMockCookie(null)
       return new HttpResponse(null, { status: 204 })
@@ -195,14 +191,8 @@ export const authHandlers = [
       })
       if (invalid) return invalid
       const body = raw as ChangePasswordRequest
-      // Пауза после тела: 422 попыткой не считается, а 429 — даже с верным паролем.
-      const retryAfter = lockedFor(state, account.email)
-      if (retryAfter !== null) return tooManyRequests(retryAfter)
-      if (account.password !== body.current_password) {
-        registerFailure(state, account.email)
-        return HttpResponse.json({ detail: 'Неверный текущий пароль' }, { status: 400 })
-      }
-      clearFailures(state, account.email)
+      const wrongPassword = currentPasswordError(state, account, body.current_password)
+      if (wrongPassword) return wrongPassword
       account.password = body.new_password
       account.must_change_password = false
       revokeUserTokens(state, account.id)
@@ -233,20 +223,15 @@ export const authHandlers = [
   http.post('*/api/users/me/recovery-code', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const invalid = validateBody({
         current_password: maxLengthError(raw.current_password, authLimits.passwordMax, 'Пароль'),
       })
       if (invalid) return invalid
       const body = raw as RecoveryCodeRequest
-      const retryAfter = lockedFor(state, account.email)
-      if (retryAfter !== null) return tooManyRequests(retryAfter)
-      if (account.password !== body.current_password) {
-        registerFailure(state, account.email)
-        return HttpResponse.json({ detail: 'Неверный текущий пароль' }, { status: 400 })
-      }
-      clearFailures(state, account.email)
+      const wrongPassword = currentPasswordError(state, account, body.current_password)
+      if (wrongPassword) return wrongPassword
       account.recovery_code = newRecoveryCode()
       return HttpResponse.json({ recovery_code: account.recovery_code })
     })

@@ -1,30 +1,26 @@
 import { http, HttpResponse } from 'msw'
-import { healthLimits, outcomeLimits } from '../../api/limits'
-import type {
-  CareStatus,
-  ClinicPetUpdate,
-  Condition,
-  ConditionCreate,
-  OutcomeCreate,
-  Prescription,
-  Vaccination,
-  WeightCreate,
-} from '../../api/schema'
+import { outcomeLimits } from '../../api/limits'
+import type { ClinicPetUpdate, ConditionCreate, OutcomeCreate, Pet, Prescription, WeightCreate } from '../../api/schema'
 import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
-import { readBody, validateBody } from '../auth-validation'
+import { authorizeClinic, canReadCard, clinicOf, findClinicAppointment, petNotFound } from '../access'
 import { pastDateError } from '../date-validation'
-import { conditionKindError, conditionTitleError, multilineTextError, normalizeText, weightError } from '../health-validation'
+import { conditionChecks, weightError } from '../health-validation'
+import { conflict, fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
 import { notifyOutcome, notifyPetUpdated } from '../notify'
-import { outcomeErrors, type FieldError } from '../outcome-validation'
-import { birthDateError, breedError, normalizeBreed, sexError } from '../pet-validation'
-import { addCourseReminders, newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
-import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
-import { authorizeClinic } from './vets'
-
-const invalid = (detail: FieldError[]) => HttpResponse.json({ detail }, { status: 422 })
-const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
-const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
+import { outcomeErrors } from '../outcome-validation'
+import { clinicPetChecks } from '../pet-validation'
+import {
+  addCondition,
+  addCourseReminders,
+  addObservation,
+  addVaccination,
+  hasStarted,
+  toAppointment,
+  updateServer,
+  type MockServerState,
+} from '../server-state'
+import { normalizeText } from '../text-validation'
 
 /** Первые байты файла: тип фото определяется по содержимому, а не по имени (Р-58). */
 function photoType(bytes: Uint8Array): 'jpeg' | 'png' | 'webp' | null {
@@ -60,15 +56,35 @@ async function multipartFile(request: Request, field: string): Promise<Uint8Arra
 }
 
 /**
- * Может ли клиника менять карточку (Р-57): нет связи с питомцем — 404, как у чтения карточки;
- * связь есть, но нет завершённого приёма — 403.
+ * Питомец, карточку которого клиника может менять (Р-57), или готовый ответ: нет связи с питомцем — 404, как у чтения
+ * карточки; связь есть, но нет завершённого приёма — 403.
  */
-function editAccess(state: MockServerState, clinicId: number, petId: number): Response | null {
-  if (!canReadCard(state, clinicId, petId)) return notFound('Питомец не найден')
+function editablePet(state: MockServerState, clinicId: number, rawId: unknown): Pet | Response {
+  const petId = Number(rawId)
+  if (!canReadCard(state, clinicId, petId)) return petNotFound()
   const completed = state.appointments.some(
     (item) => item.pet_id === petId && item.status === 'completed' && clinicOf(state, item) === clinicId,
   )
-  return completed ? null : HttpResponse.json({ detail: 'Нет завершённого приёма' }, { status: 403 })
+  if (!completed) return forbidden('Нет завершённого приёма')
+  return state.pets.find((item) => item.id === petId) ?? petNotFound()
+}
+
+/** Порода, дата рождения и пол от клиники; возвращает, что действительно изменилось, — для уведомления владельцу. */
+function applyClinicPetUpdate(pet: Pet, update: ClinicPetUpdate): string[] {
+  const changes: string[] = []
+  if (update.breed !== undefined && normalizeText(update.breed) !== pet.breed) {
+    pet.breed = normalizeText(update.breed)
+    changes.push('порода')
+  }
+  if (update.birth_date !== undefined && update.birth_date !== pet.birth_date) {
+    pet.birth_date = update.birth_date
+    changes.push('дата рождения')
+  }
+  if (update.sex !== undefined && update.sex !== pet.sex) {
+    pet.sex = update.sex
+    changes.push('пол')
+  }
+  return changes
 }
 
 const sorted = (times: string[]) => [...times].sort()
@@ -81,22 +97,22 @@ export const outcomeHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const now = new Date()
-      const fieldErrors = outcomeErrors(raw, null, now)
-      if (fieldErrors.length > 0) return invalid(fieldErrors)
-      const appointment = findOwnAppointment(state, clinicId, params.id)
+      const errors = outcomeErrors(raw, null, now)
+      if (errors.length > 0) return unprocessable(errors)
+      const appointment = findClinicAppointment(state, clinicId, params.id)
       if (!appointment) return notFound('Запись не найдена')
       if (appointment.status === 'completed') return conflict('Итог уже внесён')
       if (appointment.status !== 'confirmed') return conflict('Итог вносится только у подтверждённой записи')
-      if (new Date(appointment.slot_start).getTime() > now.getTime()) return conflict('Время приёма ещё не наступило')
+      if (!hasStarted(appointment, now)) return conflict('Время приёма ещё не наступило')
       // Даты рецептов и прививок — относительно дня приёма, поэтому после поиска записи (Р-56).
       const day = moscowLocal(new Date(appointment.slot_start)).date
       const dateErrors = outcomeErrors(raw, day, now)
-      if (dateErrors.length > 0) return invalid(dateErrors)
+      if (dateErrors.length > 0) return unprocessable(dateErrors)
 
       const body = raw as OutcomeCreate
       const pet = state.pets.find((item) => item.id === appointment.pet_id)
       const clinic = state.clinics.find((item) => item.id === clinicId)
-      if (!pet || !clinic) return notFound('Питомец не найден')
+      if (!pet || !clinic) return petNotFound()
       const completedAt = toMoscowString(now)
 
       const prescriptions: Prescription[] = (body.prescriptions ?? []).map((item) => {
@@ -111,55 +127,19 @@ export const outcomeHandlers = [
         state.nextPrescriptionId += 1
         return prescription
       })
-      const vaccinations: Vaccination[] = (body.vaccinations ?? []).map((item) => {
-        const vaccination: Vaccination = {
-          id: state.nextVaccinationId,
-          pet_id: pet.id,
-          name: item.name.trim(),
-          date: item.date,
-          next_date: item.next_date ?? null,
-          source: 'clinic',
-          appointment_id: appointment.id,
-        }
-        state.nextVaccinationId += 1
-        state.vaccinations.push(vaccination)
-        return vaccination
-      })
-      for (const item of body.conditions ?? []) {
-        state.conditions.push({
-          id: state.nextConditionId,
-          pet_id: pet.id,
-          kind: item.kind,
-          title: item.title.trim(),
-          description: normalizeText(item.description),
-          source: 'clinic',
-          archived_at: null,
-        })
-        state.nextConditionId += 1
-      }
+      const vaccinations = (body.vaccinations ?? []).map((item) =>
+        addVaccination(state, { ...item, pet_id: pet.id, source: 'clinic', appointment_id: appointment.id }),
+      )
+      for (const item of body.conditions ?? []) addCondition(state, { ...item, pet_id: pet.id, source: 'clinic' })
 
       // Данные питомца: что изменилось — в уведомление владельцу (БП §6.4).
       const changes: string[] = []
       const update = body.pet_update ?? {}
       if (update.weight !== undefined) {
-        state.observations.push(
-          newObservation({ id: state.nextObservationId, pet_id: pet.id, date: day, weight: update.weight, source: 'clinic' }),
-        )
-        state.nextObservationId += 1
+        addObservation(state, { pet_id: pet.id, date: day, weight: update.weight, source: 'clinic' })
         changes.push('вес')
       }
-      if (update.breed !== undefined && normalizeBreed(update.breed) !== pet.breed) {
-        pet.breed = normalizeBreed(update.breed)
-        changes.push('порода')
-      }
-      if (update.birth_date !== undefined && update.birth_date !== pet.birth_date) {
-        pet.birth_date = update.birth_date
-        changes.push('дата рождения')
-      }
-      if (update.sex !== undefined && update.sex !== pet.sex) {
-        pet.sex = update.sex
-        changes.push('пол')
-      }
+      changes.push(...applyClinicPetUpdate(pet, update))
       if ((body.conditions ?? []).length > 0) changes.push('особенности здоровья')
 
       // Статус ухода — из итога, с датой и клиникой (БП §6.3).
@@ -178,7 +158,7 @@ export const outcomeHandlers = [
       }
       // Дела курса — каждое время каждого дня, кроме уже прошедшего (БП §6.2).
       const reminders = prescriptions.reduce((sum, prescription) => sum + addCourseReminders(state, pet.id, prescription, now), 0)
-      notifyOutcome(state, appointment, careStatusLabel[body.care_status as CareStatus], reminders)
+      notifyOutcome(state, appointment, careStatusLabel[body.care_status], reminders)
       notifyPetUpdated(state, pet.id, clinicId, changes)
       return HttpResponse.json({ appointment: toAppointment(state, appointment), created_reminders: reminders })
     })
@@ -190,33 +170,11 @@ export const outcomeHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       // Только порода, дата рождения и пол; кличку, вид, фото и статус ухода сервер игнорирует (Р-57).
-      const sent = (field: string) => field in raw
-      const bad = validateBody({
-        breed: sent('breed') ? breedError(raw.breed) : null,
-        birth_date: sent('birth_date') ? birthDateError(raw.birth_date) : null,
-        sex: sent('sex') ? sexError(raw.sex) : null,
-      })
+      const bad = validateBody(clinicPetChecks(raw))
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const pet = state.pets.find((item) => item.id === petId)
-      if (!pet) return notFound('Питомец не найден')
-      const body = raw as ClinicPetUpdate
-      const changes: string[] = []
-      if (body.breed !== undefined && normalizeBreed(body.breed) !== pet.breed) {
-        pet.breed = normalizeBreed(body.breed)
-        changes.push('порода')
-      }
-      if (body.birth_date !== undefined && body.birth_date !== pet.birth_date) {
-        pet.birth_date = body.birth_date
-        changes.push('дата рождения')
-      }
-      if (body.sex !== undefined && body.sex !== pet.sex) {
-        pet.sex = body.sex
-        changes.push('пол')
-      }
-      notifyPetUpdated(state, pet.id, clinicId, changes)
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
+      notifyPetUpdated(state, pet.id, clinicId, applyClinicPetUpdate(pet, raw as ClinicPetUpdate))
       return HttpResponse.json(pet)
     })
   }),
@@ -231,14 +189,11 @@ export const outcomeHandlers = [
         weight: raw.weight === null || raw.weight === undefined ? 'Укажите вес' : weightError(raw.weight),
       })
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
       const body = raw as WeightCreate
-      const observation = newObservation({ id: state.nextObservationId, pet_id: petId, date: body.date, weight: body.weight, source: 'clinic' })
-      state.nextObservationId += 1
-      state.observations.push(observation)
-      notifyPetUpdated(state, petId, clinicId, ['вес'])
+      const observation = addObservation(state, { pet_id: pet.id, date: body.date, weight: body.weight, source: 'clinic' })
+      notifyPetUpdated(state, pet.id, clinicId, ['вес'])
       return HttpResponse.json(observation, { status: 201 })
     })
   }),
@@ -248,29 +203,12 @@ export const outcomeHandlers = [
     return updateServer((state) => {
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
-      const bad = validateBody({
-        kind: conditionKindError(raw.kind),
-        title: conditionTitleError(raw.title),
-        description:
-          'description' in raw ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax) : null,
-      })
+      const bad = validateBody(conditionChecks(raw, { creating: true }))
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const body = raw as ConditionCreate
-      const condition: Condition = {
-        id: state.nextConditionId,
-        pet_id: petId,
-        kind: body.kind,
-        title: body.title.trim(),
-        description: normalizeText(body.description),
-        source: 'clinic',
-        archived_at: null,
-      }
-      state.nextConditionId += 1
-      state.conditions.push(condition)
-      notifyPetUpdated(state, petId, clinicId, ['особенности здоровья'])
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
+      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: pet.id, source: 'clinic' })
+      notifyPetUpdated(state, pet.id, clinicId, ['особенности здоровья'])
       return HttpResponse.json(condition, { status: 201 })
     })
   }),
@@ -280,17 +218,14 @@ export const outcomeHandlers = [
     return updateServer((state) => {
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
-      if (!bytes) return invalid([{ loc: ['body', 'file'], msg: 'Выберите файл фото', type: 'value_error' }])
+      if (!bytes) return unprocessable([fieldError(['body', 'file'], 'Выберите файл фото')])
       if (bytes.length > outcomeLimits.photoBytesMax) {
         return HttpResponse.json({ detail: 'Фото больше 5 МБ' }, { status: 413 })
       }
       const type = photoType(bytes)
       if (!type) return HttpResponse.json({ detail: 'Фото — JPEG, PNG или WebP' }, { status: 415 })
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const pet = state.pets.find((item) => item.id === petId)
-      if (!pet) return notFound('Питомец не найден')
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
       // Бэкенд пережимает фото в WebP и отдаёт /media/<uuid>.webp; моки хранят файл как есть, в data:-адресе (Р-58).
       let binary = ''
       for (const byte of bytes) binary += String.fromCharCode(byte)

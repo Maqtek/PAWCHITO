@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { toMoscowString } from '../../lib/dates'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, notFound, queryError } from '../http-utils'
 import { readServer, updateServer, type MockNotification, type MockServerState } from '../server-state'
 
 const LIMIT_MAX = 50
@@ -35,15 +35,10 @@ export const notificationHandlers = [
     if (account instanceof Response) return account
     const raw = new URL(request.url).searchParams.get('limit')
     const limit = raw === null ? LIMIT_MAX : Number(raw)
-    if (!Number.isInteger(limit) || limit < 1 || limit > LIMIT_MAX) {
-      return HttpResponse.json(
-        { detail: [{ loc: ['query', 'limit'], msg: `limit — от 1 до ${LIMIT_MAX}`, type: 'value_error' }] },
-        { status: 422 },
-      )
-    }
+    if (!Number.isInteger(limit) || limit < 1 || limit > LIMIT_MAX) return queryError('limit', `limit — от 1 до ${LIMIT_MAX}`)
     const own = ownNotifications(state, account.id)
     // От новых к старым; в одну секунду — от последнего созданного (Р-55).
-    const items = [...own].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).slice(0, limit)
+    const items = own.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id - a.id).slice(0, limit)
     return HttpResponse.json({ unread_count: unread(own), items: items.map(toNotification) })
   }),
 
@@ -63,7 +58,7 @@ export const notificationHandlers = [
       if (account instanceof Response) return account
       const notification = ownNotifications(state, account.id).find((item) => item.id === Number(params.id))
       // Чужое уведомление — как несуществующее (Р-55); повторная отметка ничего не меняет.
-      if (!notification) return HttpResponse.json({ detail: 'Уведомление не найдено' }, { status: 404 })
+      if (!notification) return notFound('Уведомление не найдено')
       notification.read_at ??= toMoscowString(new Date())
       return new HttpResponse(null, { status: 204 })
     }),

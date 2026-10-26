@@ -1,19 +1,12 @@
 import { http, HttpResponse } from 'msw'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { readBody, validateBody } from '../auth-validation'
-import { authorizeAccount, forbidden } from '../http-utils'
-import { readServer, updateServer, type MockServerState } from '../server-state'
-import { normalizeSpecialization, specializationError, vacationError, vetNameError } from '../vet-validation'
+import { authorizeClinic } from '../access'
+import { notFound, readBody, validateBody } from '../http-utils'
+import { newVet, readServer, updateServer, type MockServerState } from '../server-state'
+import { normalizeText } from '../text-validation'
+import { specializationError, vacationError, vetNameError } from '../vet-validation'
 
-const notFound = () => HttpResponse.json({ detail: 'Врач не найден' }, { status: 404 })
-
-/** Клиника аккаунта из access-токена или готовый ответ 401/403. */
-export function authorizeClinic(state: MockServerState, request: Request): number | Response {
-  const account = authorizeAccount(state, request, { allowed: ['clinic'] })
-  if (account instanceof Response) return account
-  // У аккаунта клиники clinic_id есть всегда; без него — как без прав.
-  return account.clinic_id ?? forbidden()
-}
+const vetNotFound = () => notFound('Врач не найден')
 
 /** Врач своей клиники; врач другой клиники — как несуществующий, 404 (Р-39). */
 function findVet(state: MockServerState, clinicId: number, rawId: unknown): Vet | undefined {
@@ -45,14 +38,12 @@ export const vetHandlers = [
       if (invalid) return invalid
       const body = raw as VetCreate
       // Новый врач не в отпуске: on_vacation из тела POST не берётся.
-      const vet: Vet = {
+      const vet = newVet({
         id: state.nextVetId,
         clinic_id: clinicId,
         full_name: body.full_name.trim(),
-        specialization: normalizeSpecialization(body.specialization),
-        on_vacation: false,
-        archived_at: null,
-      }
+        specialization: normalizeText(body.specialization),
+      })
       state.nextVetId += 1
       state.vets.push(vet)
       return HttpResponse.json(vet, { status: 201 })
@@ -73,10 +64,10 @@ export const vetHandlers = [
       })
       if (invalid) return invalid
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       const body = raw as VetUpdate
       if (body.full_name !== undefined) vet.full_name = body.full_name.trim()
-      if (body.specialization !== undefined) vet.specialization = normalizeSpecialization(body.specialization)
+      if (body.specialization !== undefined) vet.specialization = normalizeText(body.specialization)
       if (body.on_vacation !== undefined) vet.on_vacation = body.on_vacation
       return HttpResponse.json(vet)
     })
@@ -87,7 +78,7 @@ export const vetHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       // Повторное архивирование ничего не меняет. Флаг отпуска остаётся до возврата.
       vet.archived_at ??= new Date().toISOString()
       return HttpResponse.json(vet)
@@ -99,7 +90,7 @@ export const vetHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       vet.archived_at = null
       return HttpResponse.json(vet)
     }),

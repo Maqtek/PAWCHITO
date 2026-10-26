@@ -1,17 +1,8 @@
 import { clinicLimits } from '../api/limits'
-import { charCount, hasControlChars } from './auth-validation'
+import { textError } from './text-validation'
 
 const TIME = /^([01]\d|2[0-3]):(00|30)$/
 const PHONE = /^\+7\d{10}$/
-
-/** Обязательная строка: пробелы по краям не считаются, без управляющих символов. */
-export function textError(value: unknown, label: string, max: number): string | null {
-  if (typeof value !== 'string') return `${label}: ожидается строка`
-  const text = value.trim()
-  if (text === '') return `${label} не может быть пустым`
-  if (charCount(text) > max) return `${label} — не длиннее ${max} символов`
-  return hasControlChars(text) ? `${label} содержит недопустимые символы` : null
-}
 
 export const clinicNameError = (value: unknown) => textError(value, 'Название', clinicLimits.nameMax)
 export const clinicAddressError = (value: unknown) => textError(value, 'Адрес', clinicLimits.addressMax)
