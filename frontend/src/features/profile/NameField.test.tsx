@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { meQuery } from '../../api/queries'
 import { server } from '../../mocks/node'
 import { readServer, toUser } from '../../mocks/server-state'
+import { loginMockAs } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 import { NameField } from './NameField'
 
@@ -130,8 +131,9 @@ describe('NameField', () => {
     server.use(
       http.patch('*/api/users/me', async () => {
         await gate
-        const owner = readServer().accounts.find((item) => item.email === 'owner@example.com')!
-        return HttpResponse.json(toUser({ ...owner, full_name: 'Анна Иванова' }))
+        const state = readServer()
+        const owner = state.accounts.find((item) => item.email === 'owner@example.com')!
+        return HttpResponse.json(toUser(state, { ...owner, full_name: 'Анна Иванова' }))
       }),
     )
     const { user } = await openEditor()
@@ -188,5 +190,14 @@ describe('NameField', () => {
     await user.click(screen.getByRole('button', { name: 'Сохранить' }))
     expect(await screen.findByTestId('cached-name')).toHaveTextContent('<b>Анна</b>')
     expect(document.querySelector('b')).toBeNull()
+  })
+
+  it('у клиники — название без карандаша, подпись «Клиника» (Р-35)', async () => {
+    loginMockAs('clinic')
+    renderWithProviders(<Profile />)
+    expect(await screen.findByTestId('cached-name')).toHaveTextContent('ВетДоктор')
+    expect(screen.getByText('Клиника')).toBeInTheDocument()
+    expect(screen.queryByText('Имя')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Изменить имя' })).toBeNull()
   })
 })

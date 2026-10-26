@@ -11,6 +11,7 @@ export interface MockAccount {
   email: string
   password: string
   role: Role
+  /** У клиники пустое: её имя — название клиники, его подставляет toUser (Р-35). */
   full_name: string
   must_change_password: boolean
   is_active: boolean
@@ -100,9 +101,9 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
   return {
     accounts: [
       seedAccount(1, 'owner@example.com', 'owner', 'Анна Смирнова', { recovery_code: 'K7QM-2XPA-9RTD-4WNB' }),
-      seedAccount(6, 'clinic@example.com', 'clinic', 'ВетДоктор', { clinic_id: 2 }),
-      seedAccount(7, 'clinic-new@example.com', 'clinic', 'Клиника «Новая»', { clinic_id: 3, must_change_password: true }),
-      seedAccount(8, 'aibolit@example.com', 'clinic', 'Айболит', { clinic_id: 5, is_active: false }),
+      seedAccount(6, 'clinic@example.com', 'clinic', '', { clinic_id: 2 }),
+      seedAccount(7, 'clinic-new@example.com', 'clinic', '', { clinic_id: 3, must_change_password: true }),
+      seedAccount(8, 'aibolit@example.com', 'clinic', '', { clinic_id: 5, is_active: false }),
       seedAccount(9, 'admin@example.com', 'admin', 'Администратор'),
       seedAccount(12, 'blocked@example.com', 'owner', 'Иван Петров', { is_active: false }),
     ],
@@ -195,8 +196,11 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
   }
 }
 
-export function toUser({ id, email, role, full_name, must_change_password }: MockAccount): User {
-  return { id, email, role, full_name, must_change_password }
+/** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
+export function toUser(state: MockServerState, account: MockAccount): User {
+  const { id, email, role, full_name, must_change_password } = account
+  const clinic = role === 'clinic' ? state.clinics.find((item) => item.id === account.clinic_id) : undefined
+  return { id, email, role, full_name: clinic?.name ?? full_name, must_change_password }
 }
 
 function randomPart(): string {

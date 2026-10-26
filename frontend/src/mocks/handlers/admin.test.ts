@@ -220,4 +220,14 @@ describe('админка: аккаунт клиники', () => {
     expect(missing.status).toBe(404)
     expect(await missing.json()).toEqual({ detail: 'У клиники нет аккаунта' })
   })
+
+  it('имя аккаунта — название клиники: после переименования админом сразу новое в /users/me (Р-35)', async () => {
+    const clinicToken = await accessToken('clinic@example.com')
+    const name = async () =>
+      ((await (await call('GET', '/users/me', { token: clinicToken })).json()) as { full_name: string }).full_name
+    expect(await name()).toBe('ВетДоктор')
+
+    await call('PATCH', '/admin/clinics/2', { token: await admin(), body: { name: 'ВетДоктор на Ленина' } })
+    expect(await name()).toBe('ВетДоктор на Ленина')
+  })
 })

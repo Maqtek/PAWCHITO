@@ -245,6 +245,15 @@ describe('профиль', () => {
     expect((await call('PATCH', '/users/me', { token, body: { full_name: '   ' } })).status).toBe(422)
   })
 
+  it('PATCH /users/me клиникой — 403 даже с невалидным телом, имя не меняется (Р-35)', async () => {
+    const token = await accessToken('clinic@example.com')
+    const renamed = await call('PATCH', '/users/me', { token, body: { full_name: 'Другое имя' } })
+    expect(renamed.status).toBe(403)
+    expect(await renamed.json()).toEqual({ detail: 'Название клиники меняет администратор' })
+    expect((await call('PATCH', '/users/me', { token, body: { full_name: 5 } })).status).toBe(403)
+    expect(await (await call('GET', '/users/me', { token })).json()).toMatchObject({ full_name: 'ВетДоктор' })
+  })
+
   it('новый код восстановления: только владелец и только с верным паролем', async () => {
     const owner = await accessToken('owner@example.com')
     expect(

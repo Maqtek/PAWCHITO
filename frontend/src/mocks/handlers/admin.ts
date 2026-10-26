@@ -176,7 +176,8 @@ export const adminHandlers = [
         email,
         password: temporaryPassword,
         role: 'clinic',
-        full_name: clinic.name,
+        // Имя не копируется: toUser берёт название клиники при каждом ответе (Р-35).
+        full_name: '',
         must_change_password: true,
         // Аккаунт скрытой клиники сразу заблокирован, как после скрытия.
         is_active: clinic.archived_at === null,
@@ -185,7 +186,7 @@ export const adminHandlers = [
       }
       state.nextUserId += 1
       state.accounts.push(created)
-      return HttpResponse.json({ user: toUser(created), temporary_password: temporaryPassword }, { status: 201 })
+      return HttpResponse.json({ user: toUser(state, created), temporary_password: temporaryPassword }, { status: 201 })
     })
   }),
 
