@@ -2,7 +2,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Reminder, ReminderMarked } from '../../api/schema'
-import { NBSP, pluralize } from '../../lib/format'
+import { formatDays } from '../../lib/format'
 import { dueDay, formatDue } from '../calendar/due'
 
 /** Отметка дела: следующее дело серии сервер создаёт сам (Р-61). */
@@ -28,7 +28,7 @@ export const canMark = (reminder: Reminder, today: string) => reminder.status ==
 
 /** «Каждый день», «Раз в 7 дней» (БП §7). */
 export function repeatLabel(days: number): string {
-  return days === 1 ? 'Каждый день' : `Раз в ${days}${NBSP}${pluralize(days, ['день', 'дня', 'дней'])}`
+  return days === 1 ? 'Каждый день' : `Раз в ${formatDays(days)}`
 }
 
 /** Текст статуса после отметки: что отмечено и когда следующее дело серии. */

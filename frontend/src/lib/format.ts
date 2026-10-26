@@ -88,6 +88,11 @@ export function greeting(date: Date): string {
 /** Неразрывный пробел: число не отрывается от слова при переносе. */
 export const NBSP = '\u00A0'
 
+/** «21 день», «3 дня»: длительность курса, интервал повтора. Число не отрывается от слова. */
+export function formatDays(days: number): string {
+  return `${days}${NBSP}${pluralize(days, ['день', 'дня', 'дней'])}`
+}
+
 /** Возраст по дате рождения «YYYY-MM-DD»: «4 года», «7 месяцев», «меньше месяца». Число не отрывается от слова. */
 export function formatAge(birthDate: string, today: Date): string {
   const [birthYear, birthMonth, birthDay] = birthDate.split('-').map(Number)

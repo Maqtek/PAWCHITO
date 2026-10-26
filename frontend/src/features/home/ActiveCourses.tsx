@@ -2,7 +2,7 @@ import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import type { HomeCourse } from '../../api/schema'
 import { Card, linkClass, ProgressBar } from '../../components/ui'
-import { progressText } from '../reminders/course'
+import { courseTitle, progressText } from '../reminders/course'
 
 /** Прогресс активных курсов (Р-64); дни и дозы — в разделе «Курс лечения». */
 export function ActiveCourses({ courses }: { courses: HomeCourse[] }) {
@@ -41,14 +41,12 @@ export function ActiveCourses({ courses }: { courses: HomeCourse[] }) {
 
 function CourseProgress({ course }: { course: HomeCourse }) {
   const titleId = useId()
-  // Название — как у дел курса: «препарат, дозировка» (Р-63).
-  const title = `${course.drug}, ${course.dosage}`
   const progress = progressText(course)
 
   return (
     <article aria-labelledby={titleId}>
       <h3 id={titleId} className="font-extrabold break-words">
-        {title}
+        {courseTitle(course)}
       </h3>
       <p className="mt-1 text-sm">{progress}</p>
       <ProgressBar className="mt-2" value={course.done} max={course.total} label={`Прогресс курса: ${progress}`} />

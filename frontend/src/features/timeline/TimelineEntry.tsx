@@ -4,9 +4,9 @@ import { Link } from 'react-router-dom'
 import type { Appointment, Observation, Prescription, TimelineItem, Vaccination } from '../../api/schema'
 import { Badge, linkClass, toneSoftClass } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { addDays } from '../../lib/dates'
-import { formatLongDate, formatTime, formatWeight, NBSP, pluralize } from '../../lib/format'
+import { formatDays, formatLongDate, formatTime, formatWeight } from '../../lib/format'
 import { dataSourceLabel, levelLabel, type Tone } from '../../lib/labels'
+import { courseLastDay } from '../reminders/course'
 
 interface TimelineEntryProps {
   item: TimelineItem
@@ -137,15 +137,13 @@ function AppointmentEntry({ appointment, dayId, date }: { appointment: Appointme
 }
 
 function CourseEntry({ prescription, dayId }: { prescription: Prescription; dayId: string }) {
-  const days = prescription.duration_days
-  const lastDay = addDays(prescription.start_date, days - 1)
   return (
     <Entry dayId={dayId} icon={Pill} tone="blush" title={`Курс: ${prescription.drug}`}>
       <Facts
         facts={[
           ['Дозировка', prescription.dosage],
           ['Время', prescription.times.join(', ')],
-          ['Срок', `${days}${NBSP}${pluralize(days, ['день', 'дня', 'дней'])}, по ${formatLongDate(lastDay)}`],
+          ['Срок', `${formatDays(prescription.duration_days)}, по ${formatLongDate(courseLastDay(prescription))}`],
         ]}
       />
       <p className="text-ink-muted">

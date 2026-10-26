@@ -5,7 +5,7 @@ import { petAppointmentsQuery, prescriptionProgressQuery } from '../../api/queri
 import { Card, EmptyState, LoadError, Spinner } from '../../components/ui'
 import { formatShortDate, moscowIsoDate } from '../../lib/format'
 import { ActiveCourse } from './ActiveCourse'
-import { petCourses, progressText, type Course } from './course'
+import { courseTitle, petCourses, progressText, type Course } from './course'
 
 interface PetCoursesProps {
   petId: number
@@ -65,9 +65,7 @@ function CompletedCourse({ course }: { course: Course }) {
   const progress = useQuery(prescriptionProgressQuery(prescription.id))
   return (
     <div className="rounded-xl border border-line p-4 text-sm">
-      <p className="font-extrabold break-words">
-        {prescription.drug}, {prescription.dosage}
-      </p>
+      <p className="font-extrabold break-words">{courseTitle(prescription)}</p>
       <p className="text-ink-muted">
         С {formatShortDate(prescription.start_date)} по {formatShortDate(lastDay)} · {appointment.clinic.name}
       </p>

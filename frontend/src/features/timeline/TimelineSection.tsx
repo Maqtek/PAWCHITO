@@ -5,7 +5,8 @@ import { timelineQuery } from '../../api/queries'
 import type { TimelineItem } from '../../api/schema'
 import { Button, Card, EmptyState, FormAlert, LoadError, Spinner } from '../../components/ui'
 import { formatLongDate } from '../../lib/format'
-import { groupByDate, timelineItemKey } from './timeline'
+import { groupBy } from '../../lib/group-by'
+import { timelineItemKey } from './timeline'
 import { TimelineEntry } from './TimelineEntry'
 
 /**
@@ -52,7 +53,8 @@ export function TimelineSection({ petId }: { petId: number }) {
     return (
       <>
         <ol ref={listRef} className="flex flex-col gap-5">
-          {groupByDate(items).map(([date, dayItems]) => (
+          {/* Дни ленты — в порядке сервера. */}
+          {groupBy(items, (item) => item.date).map(([date, dayItems]) => (
             <TimelineDay key={date} date={date} items={dayItems} />
           ))}
         </ol>

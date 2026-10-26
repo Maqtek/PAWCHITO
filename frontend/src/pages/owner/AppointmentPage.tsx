@@ -10,7 +10,8 @@ import { isCancellable } from '../../features/appointments/appointment-cache'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
 import { PageHeader } from '../../layouts/PageHeader'
-import { formatLongDate, formatTime, NBSP, pluralize } from '../../lib/format'
+import { courseTitle } from '../../features/reminders/course'
+import { formatDays, formatLongDate, formatTime } from '../../lib/format'
 import {
   appointmentReasonLabel,
   appointmentStatusLabel,
@@ -136,13 +137,10 @@ function OutcomeDetails({ outcome }: { outcome: AppointmentOutcome }) {
           <ul className="mt-2 flex flex-col gap-2">
             {outcome.prescriptions.map((prescription) => (
               <li key={prescription.id} className="rounded-xl border border-line p-3 text-sm">
-                <p className="font-bold break-words">
-                  {prescription.drug}, {prescription.dosage}
-                </p>
+                <p className="font-bold break-words">{courseTitle(prescription)}</p>
                 <p className="text-ink-muted">
-                  {prescription.times.join(', ')} · {prescription.duration_days}
-                  {NBSP}
-                  {pluralize(prescription.duration_days, ['день', 'дня', 'дней'])} с {formatLongDate(prescription.start_date)}
+                  {prescription.times.join(', ')} · {formatDays(prescription.duration_days)} с{' '}
+                  {formatLongDate(prescription.start_date)}
                 </p>
               </li>
             ))}

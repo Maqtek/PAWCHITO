@@ -4,11 +4,12 @@ import { Link } from 'react-router-dom'
 import { remindersQuery } from '../../api/queries'
 import type { Reminder } from '../../api/schema'
 import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from '../../components/ui'
-import { formatDayDate, formatShortDate, formatTime, NBSP, pluralize } from '../../lib/format'
+import { formatDayDate, formatDays, formatShortDate, formatTime } from '../../lib/format'
+import { groupBy } from '../../lib/group-by'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { dueDay, formatDue } from '../calendar/due'
-import { progressText, type Course } from './course'
+import { courseTitle, progressText, type Course } from './course'
 import { MarkActions } from './MarkActions'
 import { canMark, markedMessage } from './reminder-actions'
 import { ReminderConfirmModal } from './ReminderConfirmModal'
@@ -17,16 +18,6 @@ interface ActiveCourseProps {
   course: Course
   today: string
   onStatus: (message: string) => void
-}
-
-/** Дни курса с дозами по порядку: «YYYY-MM-DD» → дела этого дня. */
-function groupByDay(reminders: Reminder[]): [string, Reminder[]][] {
-  const days = new Map<string, Reminder[]>()
-  for (const reminder of reminders) {
-    const day = dueDay(reminder.due_at)
-    days.set(day, [...(days.get(day) ?? []), reminder])
-  }
-  return [...days]
 }
 
 /**
@@ -42,7 +33,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
   // После отметки кнопки дозы пропадают — фокус переходит на дни курса, а не на body.
   const [daysRef, focusDaysLater] = useFocusAfterRender<HTMLDivElement>()
 
-  const title = `${prescription.drug}, ${prescription.dosage}`
+  const title = courseTitle(prescription)
 
   function days() {
     if (reminders.isPending) return <Spinner label="Загружаем дни курса" />
@@ -53,7 +44,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
     // Показываем с сегодняшнего дня или с первой неотмеченной дозы, если она раньше.
     const firstPending = all.find((item) => item.status === 'pending')
     const from = firstPending && dueDay(firstPending.due_at) < today ? dueDay(firstPending.due_at) : today
-    const grouped = groupByDay(all)
+    // Дни курса с дозами по порядку.
+    const grouped = groupBy(all, (dose) => dueDay(dose.due_at))
     const past = grouped.filter(([day]) => day < from)
     const visible = showPast ? grouped : grouped.filter(([day]) => day >= from)
     return (
@@ -111,10 +103,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
           {title}
         </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          {prescription.times.join(', ')} · {prescription.duration_days}
-          {NBSP}
-          {pluralize(prescription.duration_days, ['день', 'дня', 'дней'])} · с {formatShortDate(prescription.start_date)} по{' '}
-          {formatShortDate(lastDay)}
+          {prescription.times.join(', ')} · {formatDays(prescription.duration_days)} · с{' '}
+          {formatShortDate(prescription.start_date)} по {formatShortDate(lastDay)}
         </p>
         <p className="text-sm text-ink-muted">
           Назначил {appointment.vet.full_name}, {appointment.clinic.name} ·{' '}
