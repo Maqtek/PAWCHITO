@@ -94,6 +94,19 @@ def get_current_user(user: UserAllowPasswordChange) -> User:
 CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
+def get_name_editor(user: CurrentUser) -> User:
+    """PATCH /users/me: клиника имя не меняет — это название клиники (Р-35).
+
+    Зависимость, а не проверка в эндпоинте: так 403 приходит раньше проверки тела (422).
+    """
+    if user.role == UserRole.clinic:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Название клиники меняет администратор")
+    return user
+
+
+NameEditor = Annotated[User, Depends(get_name_editor)]
+
+
 def require_role(*roles: UserRole) -> Callable[[User], User]:
     """Зависимость «текущий пользователь одной из ролей», иначе 403."""
 

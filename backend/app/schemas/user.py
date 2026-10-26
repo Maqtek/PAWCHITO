@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.models import UserRole
 from app.schemas.fields import FullName
@@ -12,7 +12,8 @@ class UserOut(BaseModel):
     id: int
     email: str
     role: UserRole
-    full_name: str | None  # у аккаунта клиники имени нет
+    # Читается из User.display_name: у клиники — её название (Р-35); в JSON поле — full_name
+    full_name: str | None = Field(validation_alias="display_name")
     must_change_password: bool
 
 

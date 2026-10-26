@@ -9,6 +9,7 @@ from app.models.base import Base, CreatedAtMixin, IdMixin
 from app.models.enums import UserRole, user_role
 
 if TYPE_CHECKING:
+    from app.models.clinic import Clinic
     from app.models.refresh_token import RefreshToken
 
 
@@ -35,6 +36,19 @@ class User(IdMixin, CreatedAtMixin, Base):
     refresh_tokens: Mapped[list["RefreshToken"]] = relationship(
         back_populates="user", passive_deletes=True
     )
+    # Клиника этого аккаунта — по clinics.user_id, отдельной колонки в users нет.
+    # У владельца и администратора — None
+    clinic: Mapped["Clinic | None"] = relationship(back_populates="account")
+
+    @property
+    def display_name(self) -> str | None:
+        """Имя в ответах API (Р-35): у клиники — название клиники, у остальных — full_name.
+
+        Роль проверяется первой: у владельца и админа запроса к clinics нет.
+        """
+        if self.role == UserRole.clinic and self.clinic is not None:
+            return self.clinic.name
+        return self.full_name
 
     def __repr__(self) -> str:
         return f"<User {self.id} {self.email} {self.role.value}>"

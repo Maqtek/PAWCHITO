@@ -1,15 +1,16 @@
 """Доступ: токен, роль, блокировка, временный пароль (контракты, «Общие правила»; БП §1)."""
 
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import jwt
 import pytest
 from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import User, UserRole
+from app.models import Clinic, User, UserRole
 from app.routers.deps import AdminUser, ClinicUser, OwnerUser
 from tests.conftest import ClientFactory, auth_headers
 
@@ -165,3 +166,61 @@ class TestProfile:
 
     def test_auth_checked_before_body(self, client: TestClient) -> None:
         assert client.patch("/api/users/me", json={"full_name": ""}).status_code == 401
+
+
+class TestClinicName:
+    """Р-35: имя аккаунта клиники — название клиники, его меняет только администратор."""
+
+    def _clinic(self, db: Session, account: User, name: str = "ВетДоктор") -> Clinic:
+        clinic = Clinic(
+            name=name,
+            address="ул. Ленина, 10",
+            phone="+79990000000",
+            opens_at=time(9),
+            closes_at=time(20),
+            work_days=[1, 2, 3, 4, 5],
+            user_id=account.id,
+        )
+        db.add(clinic)
+        db.flush()
+        return clinic
+
+    def test_full_name_is_clinic_name(
+        self, client: TestClient, db: Session, make_user: Callable[..., User]
+    ) -> None:
+        account = make_user(UserRole.clinic)
+        clinic = self._clinic(db, account)
+        headers = auth_headers(account)
+        assert client.get("/api/users/me", headers=headers).json()["full_name"] == "ВетДоктор"
+
+        clinic.name = "ВетДоктор на Ленина"  # переименовал администратор
+        db.flush()
+        db.expire_all()
+        assert client.get("/api/users/me", headers=headers).json()["full_name"] == (
+            "ВетДоктор на Ленина"
+        )
+
+    def test_clinic_cannot_rename_even_with_bad_body(
+        self, client: TestClient, db: Session, make_user: Callable[..., User]
+    ) -> None:
+        account = make_user(UserRole.clinic)
+        self._clinic(db, account)
+        for body in ({"full_name": "Другое"}, {"full_name": 5}, {}):
+            response = client.patch("/api/users/me", json=body, headers=auth_headers(account))
+            assert response.status_code == 403
+            assert response.json() == {"detail": "Название клиники меняет администратор"}
+        assert client.get("/api/users/me", headers=auth_headers(account)).json()["full_name"] == (
+            "ВетДоктор"
+        )
+
+    def test_owner_and_admin_still_rename(
+        self, client: TestClient, make_user: Callable[..., User]
+    ) -> None:
+        for role in (UserRole.owner, UserRole.admin):
+            response = client.patch(
+                "/api/users/me",
+                json={"full_name": "Новое имя"},
+                headers=auth_headers(make_user(role)),
+            )
+            assert response.status_code == 200
+            assert response.json()["full_name"] == "Новое имя"
