@@ -8,7 +8,7 @@ import { newPet, readServer, updateServer, type MockServerState } from '../serve
 const notFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
 
 /** Питомец владельца; питомец другого владельца — как несуществующий, 404 (Р-42). Архивный находится как обычно. */
-function findPet(state: MockServerState, ownerId: number, rawId: unknown): Pet | undefined {
+export function findPet(state: MockServerState, ownerId: number, rawId: unknown): Pet | undefined {
   const id = Number(rawId)
   return state.pets.find((pet) => pet.id === id && pet.owner_id === ownerId)
 }

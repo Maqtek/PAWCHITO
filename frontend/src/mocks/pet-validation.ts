@@ -1,12 +1,11 @@
 import { petLimits } from '../api/limits'
 import type { Sex, Species } from '../api/schema'
-import { moscowIsoDate } from '../lib/format'
 import { charCount, hasControlChars } from './auth-validation'
 import { textError } from './clinic-validation'
+import { pastDateError } from './date-validation'
 
 const SPECIES: readonly Species[] = ['dog', 'cat', 'other']
 const SEXES: readonly Sex[] = ['male', 'female', 'unknown']
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 
 export const petNameError = (value: unknown) => textError(value, 'Кличка', petLimits.nameMax)
 
@@ -29,14 +28,7 @@ export function breedError(value: unknown): string | null {
 
 /** Ровно YYYY-MM-DD и существующая дата, с 1900-01-01 по сегодня в Москве (Р-41); null — дата не указана. */
 export function birthDateError(value: unknown, today = new Date()): string | null {
-  if (value === null) return null
-  if (typeof value !== 'string' || !ISO_DATE.test(value)) return 'Дата рождения в формате ГГГГ-ММ-ДД'
-  // Строки одного формата сравниваются как даты. Граница — до разбора: Date.UTC читает годы 0–99 как 1900–1999.
-  if (value < petLimits.birthDateMin) return 'Дата рождения — не раньше 1900 года'
-  // Date.UTC переносит 30 февраля на 2 марта — такая дата не совпадёт со строкой и не пройдёт.
-  const [year, month, day] = value.split('-').map(Number)
-  if (new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10) !== value) return 'Такой даты нет'
-  return value > moscowIsoDate(today) ? 'Дата рождения — не позже сегодняшнего дня' : null
+  return value === null ? null : pastDateError(value, 'Дата рождения', today)
 }
 
 /** Пустая после обрезки порода хранится как null. */

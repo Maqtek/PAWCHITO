@@ -1,4 +1,4 @@
-import type { AdminClinic, Pet, Role, User, Vet } from '../api/schema'
+import type { AdminClinic, Condition, Observation, Pet, Role, User, Vaccination, Vet } from '../api/schema'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -44,6 +44,13 @@ export interface MockServerState {
   /** Питомцы всех владельцев; владелец видит только своих — по owner_id. */
   pets: Pet[]
   nextPetId: number
+  /** Записи здоровья всех питомцев; владелец видит только записи своих — по pet_id. */
+  conditions: Condition[]
+  nextConditionId: number
+  observations: Observation[]
+  nextObservationId: number
+  vaccinations: Vaccination[]
+  nextVaccinationId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -115,6 +122,13 @@ function seedVet(id: number, clinicId: number, fullName: string, specialization:
   }
 }
 
+/** Наблюдение дневника: незаданные поля — null (Р-45). */
+export function newObservation(
+  fields: Pick<Observation, 'id' | 'pet_id' | 'date' | 'source'> & Partial<Observation>,
+): Observation {
+  return { weight: null, appetite: null, energy: null, symptoms: null, note: null, ...fields }
+}
+
 /** Новый питомец: без фото и статуса ухода — их ставит только клиника (БП §6.3, §6.4). */
 export function newPet(fields: Pick<Pet, 'id' | 'owner_id' | 'name' | 'species'> & Partial<Pet>): Pet {
   return {
@@ -179,6 +193,40 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       newPet({ id: 13, owner_id: 12, name: 'Рекс', species: 'dog' }),
     ],
     nextPetId: 100,
+    // Записи клиники (source: clinic) владелец только видит (Р-47). Рекс — питомец другого владельца.
+    conditions: [
+      { id: 1, pet_id: 10, kind: 'allergy', title: 'Аллергия на курицу', description: 'Сыпь и зуд после корма с курицей', source: 'owner', archived_at: null },
+      { id: 2, pet_id: 10, kind: 'chronic', title: 'Дисплазия тазобедренных суставов', description: 'Лёгкая степень, нагрузку дозировать', source: 'clinic', archived_at: null },
+      { id: 3, pet_id: 10, kind: 'allergy', title: 'Аллергия на блох', description: null, source: 'owner', archived_at: '2026-06-01T12:00:00+03:00' },
+      { id: 4, pet_id: 13, kind: 'chronic', title: 'Артрит', description: null, source: 'owner', archived_at: null },
+    ],
+    nextConditionId: 100,
+    observations: [
+      // Вес с приёма в «ВетДокторе» (БП §3).
+      newObservation({ id: 1, pet_id: 10, date: '2026-10-10', weight: 31.5, source: 'clinic' }),
+      newObservation({
+        id: 2,
+        pet_id: 10,
+        date: '2026-10-20',
+        appetite: 'low',
+        energy: 'low',
+        symptoms: 'Хромает на заднюю лапу после прогулки',
+        source: 'owner',
+      }),
+      newObservation({ id: 3, pet_id: 10, date: '2026-10-24', weight: 31.2, appetite: 'normal', energy: 'normal', note: 'Гуляли час, бодрый', source: 'owner' }),
+      newObservation({ id: 4, pet_id: 11, date: '2026-10-22', appetite: 'normal', note: 'Спит больше обычного', source: 'owner' }),
+      newObservation({ id: 5, pet_id: 13, date: '2026-10-21', weight: 28, source: 'owner' }),
+    ],
+    nextObservationId: 100,
+    vaccinations: [
+      { id: 1, pet_id: 10, name: 'Нобивак Rabies', date: '2026-01-15', next_date: '2027-01-15', source: 'owner', appointment_id: null },
+      // Внесена клиникой при итоге приёма; приёмов в моках нет до этапа 9 — номер условный.
+      { id: 2, pet_id: 10, name: 'Нобивак DHPPi', date: '2026-10-10', next_date: '2027-10-10', source: 'clinic', appointment_id: 501 },
+      // Следующая уже прошла — прививка просрочена (Р-46).
+      { id: 3, pet_id: 11, name: 'Нобивак Tricat Trio', date: '2025-06-01', next_date: '2026-06-01', source: 'owner', appointment_id: null },
+      { id: 4, pet_id: 13, name: 'Нобивак Rabies', date: '2026-03-01', next_date: null, source: 'owner', appointment_id: null },
+    ],
+    nextVaccinationId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,
