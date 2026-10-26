@@ -84,6 +84,16 @@ export function ClinicAppointmentsPage() {
   const dialogAppointment =
     dialog.appointment && (current.data?.find((item) => item.id === dialog.appointment?.id) ?? dialog.appointment)
 
+  function openDialog(kind: Dialog['kind'], appointment: Appointment) {
+    setDialog({ kind, appointment, open: true })
+  }
+
+  // gone — запись ушла из вкладки вместе с кнопкой, открывшей окно: фокус переходит на список.
+  function closeDialog({ gone = false } = {}) {
+    if (gone) focusListLater()
+    setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+  }
+
   function update(changes: Record<string, string>) {
     setNotice('')
     setParams(
@@ -120,8 +130,8 @@ export function ClinicAppointmentsPage() {
               now={now}
               vetUnavailable={view === 'decision' ? vetAvailability.get(appointment.vet.id) : undefined}
               onStatus={setNotice}
-              onCancel={() => setDialog({ kind: 'cancel', appointment, open: true })}
-              onOutcome={() => setDialog({ kind: 'outcome', appointment, open: true })}
+              onCancel={() => openDialog('cancel', appointment)}
+              onOutcome={() => openDialog('outcome', appointment)}
             />
           </li>
         ))}
@@ -170,17 +180,16 @@ export function ClinicAppointmentsPage() {
       <ClinicCancelModal
         open={dialog.open && dialog.kind === 'cancel'}
         appointment={dialogAppointment}
-        onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
+        onClose={() => closeDialog()}
         onDone={(cancelled) => {
           setNotice(`Запись отменена: ${cancelled.pet.name}. Владелец получит уведомление с вашим комментарием.`)
-          focusListLater()
-          setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+          closeDialog({ gone: true })
         }}
       />
       <OutcomeFormModal
         open={dialog.open && dialog.kind === 'outcome'}
         appointment={dialogAppointment}
-        onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
+        onClose={() => closeDialog()}
         onDone={({ appointment, created_reminders: reminders }) => {
           const status = appointment.outcome ? careStatusLabel[appointment.outcome.care_status].toLowerCase() : ''
           setNotice(
@@ -189,8 +198,7 @@ export function ClinicAppointmentsPage() {
               ' Владелец получит уведомление.',
           )
           // Запись ушла из «Ждут итога» вместе с кнопкой, открывшей окно.
-          focusListLater()
-          setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+          closeDialog({ gone: true })
         }}
       />
     </>
