@@ -9,6 +9,8 @@ export interface FormActionsProps {
   submitting: boolean
   submitLabel: ReactNode
   submittingLabel: ReactNode
+  /** Отправлять пока рано (например, перечитываются данные для подтверждения): кнопка отправки выглядит выключенной. */
+  blocked?: boolean
   /** danger — для необратимого: архив, удаление, отмена записи. */
   variant?: 'primary' | 'danger'
   /** Без onCancel кнопки отмены нет. */
@@ -20,12 +22,14 @@ export interface FormActionsProps {
  * Подвал формы: ошибка, отмена и отправка — прямые дети формы, отступы между ними задаёт она сама.
  * Кнопки не disabled, а aria-disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm,
  * отмена во время запроса ничего не делает: отправленное не отменить, а окно должно дождаться ответа.
+ * blocked только помечает кнопку: отправку в это время отсекает сама форма.
  */
 export function FormActions({
   error,
   submitting,
   submitLabel,
   submittingLabel,
+  blocked = false,
   variant = 'primary',
   onCancel,
   cancelLabel = 'Отмена',
@@ -39,7 +43,7 @@ export function FormActions({
             {cancelLabel}
           </Button>
         )}
-        <Button type="submit" variant={variant} aria-disabled={submitting}>
+        <Button type="submit" variant={variant} aria-disabled={submitting || blocked}>
           {submitting ? submittingLabel : submitLabel}
         </Button>
       </div>

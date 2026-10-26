@@ -4,11 +4,14 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import type { Vaccination, VaccinationCreate, VaccinationUpdate } from '../../api/schema'
+import type { Vaccination, VaccinationCreate } from '../../api/schema'
 import { FormActions, Modal, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { requiredError } from '../auth/checks'
+import { dateError } from './date-error'
+import { saveRecord } from './health-cache'
 
 interface VaccinationFormModalProps {
   open: boolean
@@ -53,21 +56,6 @@ function toPayload(values: VaccinationValues): Required<VaccinationCreate> {
   return { name: values.name.trim(), date: values.date, next_date: values.next_date === '' ? null : values.next_date }
 }
 
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: Required<VaccinationCreate>, vaccination: Vaccination): VaccinationUpdate {
-  const update: VaccinationUpdate = {}
-  if (next.name !== vaccination.name) update.name = next.name
-  if (next.date !== vaccination.date) update.date = next.date
-  if (next.next_date !== vaccination.next_date) update.next_date = next.next_date
-  return update
-}
-
-function dateError(value: string, today: string): string | undefined {
-  if (value === '') return validationMessages.required
-  if (value > today) return validationMessages.dateFuture
-  return value < healthLimits.dateMin ? validationMessages.dateTooEarly : undefined
-}
-
 interface VaccinationFormProps {
   petId: number
   vaccination?: Vaccination
@@ -85,7 +73,7 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
   const form = useForm({
     initial: initialValues(baseline),
     validate: (values) => ({
-      name: values.name.trim() ? undefined : validationMessages.required,
+      name: requiredError(values.name),
       date: dateError(values.date, today),
       // Следующая может быть и в прошлом — тогда прививка просрочена (Р-46); главное — позже самой прививки.
       next_date:
@@ -111,11 +99,7 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
               }),
             )
           : unwrap(api.POST('/pets/{pet_id}/vaccinations', { params: { path: { pet_id: petId } }, body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchAfterFailure(queryClient, queryKey)
-        throw error
-      })
-      storeRecord(queryClient, queryKey, saved, { prepend: true })
+      const saved = await saveRecord(queryClient, queryKey, request, { prepend: true })
       onSaved(saved)
     },
   })

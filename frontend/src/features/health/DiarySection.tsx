@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
-import { useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { observationsQuery } from '../../api/queries'
 import type { Observation } from '../../api/schema'
 import { Badge, Button } from '../../components/ui'
@@ -24,7 +24,6 @@ interface DiarySectionProps {
 export function DiarySection({ petId, onStatus }: DiarySectionProps) {
   const list = useQuery(observationsQuery(petId))
   const [dialog, setDialog] = useState<Dialog>({ open: false })
-  const listRef = useRef<HTMLDivElement>(null)
   // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
   const dialogObservation =
     dialog.observation && (list.data?.find((item) => item.id === dialog.observation?.id) ?? dialog.observation)
@@ -35,13 +34,16 @@ export function DiarySection({ petId, onStatus }: DiarySectionProps) {
     setDialog({ observation, open: true })
   }
 
+  function closeDialog() {
+    setDialog((current) => ({ ...current, open: false }))
+  }
+
   return (
     <>
       <HealthSection
         title="Дневник"
         addLabel="Новое наблюдение"
         onAdd={() => openDialog()}
-        listRef={listRef}
         list={list}
         loadingLabel="Загружаем дневник"
         errorTitle="Не удалось загрузить дневник"
@@ -64,10 +66,10 @@ export function DiarySection({ petId, onStatus }: DiarySectionProps) {
         open={dialog.open}
         petId={petId}
         observation={dialogObservation}
-        onClose={() => setDialog((current) => ({ ...current, open: false }))}
+        onClose={closeDialog}
         onSaved={() => {
           onStatus(dialog.observation ? 'Наблюдение сохранено.' : 'Наблюдение добавлено.')
-          setDialog((current) => ({ ...current, open: false }))
+          closeDialog()
         }}
       />
     </>

@@ -52,11 +52,16 @@ export function ClinicAppointmentCard({
     </span>
   )
 
+  // Старое сообщение и ошибка не висят над новым действием, а тот же текст после него озвучится заново.
+  function startAction() {
+    onStatus('')
+    setError(null)
+  }
+
   // Подтверждение — без окна: его можно исправить отменой, а заявок у клиники много.
   async function confirm() {
     if (confirming) return
-    onStatus('')
-    setError(null)
+    startAction()
     setConfirming(true)
     try {
       await unwrap(
@@ -120,8 +125,7 @@ export function ClinicAppointmentCard({
               size="sm"
               icon={ClipboardCheck}
               onClick={() => {
-                onStatus('')
-                setError(null)
+                startAction()
                 onOutcome()
               }}
             >
@@ -140,8 +144,7 @@ export function ClinicAppointmentCard({
             size="sm"
             icon={X}
             onClick={() => {
-              onStatus('')
-              setError(null)
+              startAction()
               onCancel()
             }}
           >

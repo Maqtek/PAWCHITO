@@ -7,8 +7,8 @@ interface HealthSectionProps<T> {
   /** Видимая подпись кнопки добавления; для скринридера к ней добавляется название раздела. */
   addLabel: string
   onAdd: () => void
-  /** Сюда уходит фокус, когда запись пропала из списка вместе с кнопкой, открывшей окно. */
-  listRef: Ref<HTMLDivElement>
+  /** Сюда уходит фокус, когда запись пропала из списка вместе с кнопкой, открывшей окно; дневнику не нужен. */
+  listRef?: Ref<HTMLDivElement>
   list: { data: T[] | undefined; isPending: boolean; refetch: () => unknown }
   loadingLabel: string
   errorTitle: string

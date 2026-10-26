@@ -6,7 +6,7 @@ import { errorMessage } from '../../api/error-messages'
 import { unwrap } from '../../api/queries'
 import type { Vet } from '../../api/schema'
 import { Badge, Button, FormAlert } from '../../components/ui'
-import { refetchVetsAfterFailure, storeVet } from './vet-cache'
+import { saveVet } from './vet-cache'
 import type { ArchiveAction } from './VetArchiveModal'
 
 interface VetCardProps {
@@ -36,20 +36,21 @@ export function VetCard({ vet, onStatus, onEdit, onArchiveAction }: VetCardProps
     startAction()
     setToggling(true)
     try {
-      const saved = await unwrap(
-        api.PATCH('/clinic/vets/{id}', {
-          params: { path: { id: vet.id } },
-          body: { on_vacation: !vet.on_vacation },
-        }),
+      const saved = await saveVet(
+        queryClient,
+        unwrap(
+          api.PATCH('/clinic/vets/{id}', {
+            params: { path: { id: vet.id } },
+            body: { on_vacation: !vet.on_vacation },
+          }),
+        ),
       )
-      storeVet(queryClient, saved)
       onStatus(
         saved.on_vacation
           ? 'Отпуск отмечен: врач не предлагается для записи. Его будущие записи не отменяются.'
           : 'Отпуск снят: врач снова доступен для записи.',
       )
     } catch (failure) {
-      refetchVetsAfterFailure(queryClient)
       setError(errorMessage(failure, 'vet'))
     } finally {
       setToggling(false)

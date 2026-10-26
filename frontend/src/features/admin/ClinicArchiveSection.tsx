@@ -5,11 +5,11 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { adminClinicQuery, unwrap } from '../../api/queries'
 import type { AdminClinic } from '../../api/schema'
-import { Button, Card, FormAlert, Modal } from '../../components/ui'
+import { Button, Card, FormActions, FormAlert, Modal } from '../../components/ui'
 import { pluralize } from '../../lib/format'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeClinic } from './clinic-cache'
+import { saveClinic } from './clinic-cache'
 
 interface ClinicArchiveSectionProps {
   clinic: AdminClinic
@@ -38,17 +38,19 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
     setRestoreError(null)
     onStatus('')
     try {
-      const saved = await unwrap(
-        api.POST('/admin/clinics/{id}/restore', {
-          params: { path: { id: clinic.id } },
-        }),
+      await saveClinic(
+        queryClient,
+        unwrap(
+          api.POST('/admin/clinics/{id}/restore', {
+            params: { path: { id: clinic.id } },
+          }),
+        ),
+        clinic.id,
       )
       focusHeadingLater()
-      storeClinic(queryClient, saved)
       onStatus('Клиника возвращена.')
     } catch (error) {
-      refetchAfterFailure(queryClient, clinic.id)
-      setRestoreError(errorMessage(error, 'clinic'))
+      setRestoreError(errorMessage(error))
     } finally {
       setRestoring(false)
     }
@@ -125,23 +127,18 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
   const form = useForm({
     initial: {},
     validate: () => ({}),
-    context: 'clinic',
+    onBusyChange,
     onSubmit: async () => {
-      onBusyChange(true)
-      try {
-        const result = await unwrap(
+      const result = await saveClinic(
+        queryClient,
+        unwrap(
           api.POST('/admin/clinics/{id}/archive', {
             params: { path: { id: clinic.id } },
           }),
-        ).catch((error: unknown) => {
-          refetchAfterFailure(queryClient, clinic.id)
-          throw error
-        })
-        storeClinic(queryClient, result.clinic)
-        onArchived(result.cancelled_appointments)
-      } finally {
-        onBusyChange(false)
-      }
+        ),
+        clinic.id,
+      )
+      onArchived(result.cancelled_appointments)
     },
   })
 
@@ -152,11 +149,6 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
       return
     }
     void form.handleSubmit(event)
-  }
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
   }
 
   function appointmentsText(): string {
@@ -171,15 +163,15 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
       <p className="text-sm">{appointmentsText()}</p>
       {clinic.account && <p className="text-sm">Аккаунт клиники будет заблокирован, её сессии завершатся.</p>}
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        <Button type="submit" variant="danger" aria-disabled={form.submitting || isFetching}>
-          {form.submitting ? 'Скрываем…' : 'Скрыть'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        blocked={isFetching}
+        submitLabel="Скрыть"
+        submittingLabel="Скрываем…"
+        variant="danger"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

@@ -1,23 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Archive, Pencil } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useId } from 'react'
 import { api } from '../../api/client'
 import { conditionsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Condition } from '../../api/schema'
 import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { Badge, Button } from '../../components/ui'
-import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
-import { useFocusAfterRender } from '../../lib/use-focus-after-render'
+import { conditionKindLabel, conditionKindTone, dataSourceLabel } from '../../lib/labels'
 import { ConditionFormModal } from './ConditionFormModal'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
-
-interface Dialog {
-  kind: 'add' | 'edit' | 'archive'
-  condition?: Condition
-  /** Закрытое окно хранит свои данные до следующего открытия — заголовок не меняется, пока окно закрывается. */
-  open: boolean
-}
+import { useRecordDialog } from './use-record-dialog'
 
 interface ConditionsSectionProps {
   petId: number
@@ -27,38 +20,23 @@ interface ConditionsSectionProps {
 export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
   const queryClient = useQueryClient()
   const list = useQuery(conditionsQuery(petId))
-  const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
-  // Запись ушла в архив вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
-
-  // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
-  const dialogCondition = dialog.condition && (list.data?.find((item) => item.id === dialog.condition?.id) ?? dialog.condition)
-
-  function openDialog(kind: Dialog['kind'], condition?: Condition) {
-    // Старое сообщение не висит над открытым окном, а тот же текст после следующего действия озвучится заново.
-    onStatus('')
-    setDialog({ kind, condition, open: true })
-  }
-
-  function closeDialog({ gone = false } = {}) {
-    if (dialog.condition && (gone || !list.data?.some((item) => item.id === dialog.condition?.id))) focusListLater()
-    setDialog((current) => ({ ...current, open: false }))
-  }
+  // Запись ушла в архив вместе с кнопкой, открывшей окно, — фокус уходит на список.
+  const dialog = useRecordDialog<'add' | 'edit' | 'archive', Condition>(list.data, onStatus)
 
   async function archive() {
-    if (!dialogCondition) return
-    const queryKey = queryKeys.conditions(petId)
-    const saved = await unwrap(
-      api.POST('/pets/{pet_id}/conditions/{id}/archive', {
-        params: { path: { pet_id: petId, id: dialogCondition.id } },
-      }),
-    ).catch((error: unknown) => {
-      refetchAfterFailure(queryClient, queryKey)
-      throw error
-    })
-    storeRecord(queryClient, queryKey, saved, { remove: true })
+    if (!dialog.record) return
+    await saveRecord(
+      queryClient,
+      queryKeys.conditions(petId),
+      unwrap(
+        api.POST('/pets/{pet_id}/conditions/{id}/archive', {
+          params: { path: { pet_id: petId, id: dialog.record.id } },
+        }),
+      ),
+      { remove: true },
+    )
     onStatus('Особенность здоровья перенесена в архив.')
-    closeDialog({ gone: true })
+    dialog.close({ gone: true })
   }
 
   return (
@@ -66,8 +44,8 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
       <HealthSection
         title="Особенности здоровья"
         addLabel="Добавить"
-        onAdd={() => openDialog('add')}
-        listRef={listRef}
+        onAdd={() => dialog.open('add')}
+        listRef={dialog.listRef}
         list={list}
         loadingLabel="Загружаем особенности здоровья"
         errorTitle="Не удалось загрузить особенности здоровья"
@@ -82,8 +60,8 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
               <li key={condition.id}>
                 <ConditionItem
                   condition={condition}
-                  onEdit={() => openDialog('edit', condition)}
-                  onArchive={() => openDialog('archive', condition)}
+                  onEdit={() => dialog.open('edit', condition)}
+                  onArchive={() => dialog.open('archive', condition)}
                 />
               </li>
             ))}
@@ -91,26 +69,26 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
         )}
       </HealthSection>
       <ConditionFormModal
-        open={dialog.open && (dialog.kind === 'add' || dialog.kind === 'edit')}
+        open={dialog.isOpen && (dialog.kind === 'add' || dialog.kind === 'edit')}
         petId={petId}
-        condition={dialog.kind === 'edit' ? dialogCondition : undefined}
-        onClose={() => closeDialog()}
+        condition={dialog.kind === 'edit' ? dialog.record : undefined}
+        onClose={() => dialog.close()}
         onSaved={() => {
           onStatus(dialog.kind === 'add' ? 'Особенность здоровья добавлена.' : 'Особенность здоровья сохранена.')
-          closeDialog()
+          dialog.close()
         }}
       />
       <ConfirmActionModal
-        open={dialog.open && dialog.kind === 'archive'}
+        open={dialog.isOpen && dialog.kind === 'archive'}
         title="Перенести в архив"
         submitLabel="В архив"
         submittingLabel="Переносим…"
         context="health"
         onConfirm={archive}
-        onClose={() => closeDialog()}
+        onClose={() => dialog.close()}
       >
         <p className="text-sm">
-          <span className="font-bold break-words">{dialogCondition?.title}</span> пропадёт из особенностей здоровья
+          <span className="font-bold break-words">{dialog.record?.title}</span> пропадёт из особенностей здоровья
           питомца, клиника её больше не увидит. Вернуть запись из архива пока нельзя.
         </p>
       </ConfirmActionModal>
@@ -133,7 +111,7 @@ function ConditionItem({ condition, onEdit, onArchive }: ConditionItemProps) {
   return (
     <article aria-labelledby={titleId} className="rounded-xl border border-line p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Badge tone={condition.kind === 'allergy' ? 'coral' : 'lilac'}>{conditionKindLabel[condition.kind]}</Badge>
+        <Badge tone={conditionKindTone[condition.kind]}>{conditionKindLabel[condition.kind]}</Badge>
         {fromClinic && <Badge tone="sky">{dataSourceLabel.clinic}</Badge>}
       </div>
       <h3 id={titleId} className="mt-2 font-extrabold break-words">

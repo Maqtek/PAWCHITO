@@ -2,14 +2,15 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
-import { errorMessage, validationMessages } from '../../api/error-messages'
+import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { meQuery, unwrap } from '../../api/queries'
 import type { User } from '../../api/schema'
 import { signInWith } from '../../api/session'
-import { Button, FormAlert, linkClass, PasswordField, Spinner, TextField } from '../../components/ui'
-import { emailError, newPasswordErrors } from '../../features/auth/checks'
+import { Button, FormAlert, linkClass, TextField } from '../../components/ui'
+import { EmailField, NewPasswordFields } from '../../features/auth/AuthFields'
+import { emailError, newPasswordErrors, requiredError } from '../../features/auth/checks'
 import { RecoveryCodeScreen } from '../../features/auth/RecoveryCodeScreen'
 import { useRedirectSignedIn } from '../../features/session/useRedirectSignedIn'
 import { AuthLayout } from '../../layouts/AuthLayout'
@@ -32,7 +33,7 @@ export function RegisterPage() {
     validate: (values) => {
       const passwords = newPasswordErrors(values.password, values.password_repeat)
       return {
-        full_name: values.full_name.trim() ? undefined : validationMessages.required,
+        full_name: requiredError(values.full_name),
         email: emailError(values.email),
         password: passwords.password,
         password_repeat: passwords.repeat,
@@ -80,50 +81,23 @@ export function RegisterPage() {
   }
 
   return (
-    <AuthLayout title="Регистрация">
-      {checking && !form.submitting ? (
-        <div className="mt-6">
-          <Spinner label="Проверяем вход" />
-        </div>
-      ) : (
-        <>
-          <form noValidate onSubmit={form.handleSubmit} className="mt-6 flex flex-col gap-4">
-            <TextField label="Имя" autoComplete="name" maxLength={authLimits.fullNameMax} {...form.field('full_name')} />
-            <TextField
-              label="Email"
-              type="email"
-              autoComplete="email"
-              inputMode="email"
-              maxLength={authLimits.emailMax}
-              {...form.field('email')}
-            />
-            <PasswordField
-              label="Пароль"
-              hint="Не короче 8 символов"
-              autoComplete="new-password"
-              maxLength={authLimits.passwordMax}
-              {...form.field('password')}
-            />
-            <PasswordField
-              label="Повтор пароля"
-              autoComplete="new-password"
-              maxLength={authLimits.passwordMax}
-              {...form.field('password_repeat')}
-            />
-            <FormAlert message={form.formError} />
-            {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-            <Button type="submit" fullWidth aria-disabled={form.submitting}>
-              {form.submitting ? 'Регистрируем…' : 'Зарегистрироваться'}
-            </Button>
-          </form>
-          <p className="mt-6 text-sm text-ink-muted">
-            Уже есть аккаунт?{' '}
-            <Link to="/login" className={linkClass}>
-              Войти
-            </Link>
-          </p>
-        </>
-      )}
+    <AuthLayout title="Регистрация" checking={checking && !form.submitting}>
+      <form noValidate onSubmit={form.handleSubmit} className="mt-6 flex flex-col gap-4">
+        <TextField label="Имя" autoComplete="name" maxLength={authLimits.fullNameMax} {...form.field('full_name')} />
+        <EmailField {...form.field('email')} />
+        <NewPasswordFields label="Пароль" password={form.field('password')} repeat={form.field('password_repeat')} />
+        <FormAlert message={form.formError} />
+        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
+        <Button type="submit" fullWidth aria-disabled={form.submitting}>
+          {form.submitting ? 'Регистрируем…' : 'Зарегистрироваться'}
+        </Button>
+      </form>
+      <p className="mt-6 text-sm text-ink-muted">
+        Уже есть аккаунт?{' '}
+        <Link to="/login" className={linkClass}>
+          Войти
+        </Link>
+      </p>
     </AuthLayout>
   )
 }
