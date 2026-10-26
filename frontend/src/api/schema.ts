@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.10).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.11).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -302,6 +302,15 @@ export interface components {
     /** next — следующее дело серии; у разового дела и дела курса — null. */
     ReminderMarked: { reminder: components['schemas']['Reminder']; next: components['schemas']['Reminder'] | null }
     PrescriptionProgress: { prescription_id: number; total: number; done: number; skipped: number; pending: number }
+    /** Активный курс на главной: дозировка — чтобы курс назывался так же, как его дела (Р-64). */
+    HomeCourse: { prescription_id: number; drug: string; dosage: string; total: number; done: number; skipped: number }
+    /** Сводка главной (Р-64): today — дела на сегодня вместе с просроченными, по времени. */
+    HomeSummary: {
+      pet: components['schemas']['Pet']
+      active_courses: components['schemas']['HomeCourse'][]
+      today: components['schemas']['Reminder'][]
+      next_appointment: components['schemas']['Appointment'] | null
+    }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
     ValidationError: { loc: (string | number)[]; msg: string; type: string }
@@ -794,6 +803,20 @@ export interface paths {
       }
     }
   }
+  '/home/summary': {
+    parameters: NoParams
+    get: {
+      parameters: { query: { pet_id: number }; header?: never; path?: never; cookie?: never }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['HomeSummary']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
   '/notifications/unread-count': {
     parameters: NoParams
     get: {
@@ -1193,6 +1216,8 @@ export type Reminder = Schemas['Reminder']
 export type ReminderCreate = Schemas['ReminderCreate']
 export type ReminderMarked = Schemas['ReminderMarked']
 export type PrescriptionProgress = Schemas['PrescriptionProgress']
+export type HomeCourse = Schemas['HomeCourse']
+export type HomeSummary = Schemas['HomeSummary']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']
 export type RegisterRequest = Schemas['RegisterRequest']

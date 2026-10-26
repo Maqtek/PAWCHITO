@@ -3,6 +3,7 @@ import { appointmentHandlers } from './appointments'
 import { authHandlers } from './auth'
 import { clinicAppointmentHandlers } from './clinic-appointments'
 import { healthHandlers } from './health'
+import { homeHandlers } from './home'
 import { networkHandlers } from './network'
 import { notificationHandlers } from './notifications'
 import { outcomeHandlers } from './outcome'
@@ -22,5 +23,6 @@ export const handlers = [
   ...clinicAppointmentHandlers,
   ...outcomeHandlers,
   ...reminderHandlers,
+  ...homeHandlers,
   ...notificationHandlers,
 ]
