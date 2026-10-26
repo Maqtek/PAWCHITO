@@ -12,6 +12,7 @@ export type ErrorContext =
   | 'clinic'
   | 'clinic-account'
   | 'vet'
+  | 'pet'
   | 'default'
 
 const NETWORK = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
@@ -27,6 +28,7 @@ const byContext: Partial<Record<ErrorContext, Partial<Record<number, string>>>> 
   'recovery-code': { 400: 'Неверный текущий пароль.' },
   'clinic-account': { 409: 'У клиники уже есть аккаунт или email занят.' },
   vet: { 404: 'Врач не найден. Список врачей обновлён.' },
+  pet: { 404: 'Питомец не найден. Список питомцев обновлён.' },
 }
 
 /** Текст ошибки запроса для пользователя. Ошибки полей 422 — в ApiError.fieldErrors. */
@@ -45,7 +47,7 @@ function tooManyAttempts(retryAfter: number | null): string {
   return `Слишком много попыток. Попробуйте через ${minutes}\u00A0${pluralize(minutes, ['минуту', 'минуты', 'минут'])}.`
 }
 
-/** Клиентские проверки форм (#29, #30, админка клиник). */
+/** Клиентские проверки форм (#29, #30, админка клиник, питомцы). */
 export const validationMessages = {
   required: 'Заполните поле',
   email: 'Введите email в формате name@example.com',
@@ -55,6 +57,9 @@ export const validationMessages = {
   phone: 'Телефон: +7 и 10 цифр',
   closesAfterOpens: 'Закрытие — позже открытия',
   workDays: 'Выберите хотя бы один рабочий день',
+  species: 'Выберите вид',
+  birthDateFuture: 'Дата рождения — не позже сегодняшнего дня',
+  birthDateTooEarly: 'Дата рождения — не раньше 1900 года',
 } as const
 
 /** Почему пользователь оказался на экране входа. */
