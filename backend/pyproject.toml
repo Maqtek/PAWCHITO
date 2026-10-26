@@ -18,3 +18,8 @@ ignore_missing_imports = true
 exclude = ["^alembic/"]
 # Settings() без аргументов: значения берутся из окружения.
 plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# app импортируется из папки backend, как при запуске uvicorn
+pythonpath = ["."]
