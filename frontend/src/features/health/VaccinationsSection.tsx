@@ -1,24 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Pencil, Trash2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { queryKeys, unwrap, vaccinationsQuery } from '../../api/queries'
 import type { Vaccination } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
+import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { Badge, Button } from '../../components/ui'
 import { formatLongDate, moscowIsoDate } from '../../lib/format'
 import { dataSourceLabel } from '../../lib/labels'
-import { ConfirmActionModal } from './ConfirmActionModal'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
+import { useRecordDialog } from './use-record-dialog'
 import { VaccinationFormModal } from './VaccinationFormModal'
-
-interface Dialog {
-  kind: 'add' | 'edit' | 'delete'
-  vaccination?: Vaccination
-  /** Закрытое окно хранит свои данные до следующего открытия — заголовок не меняется, пока окно закрывается. */
-  open: boolean
-}
 
 interface VaccinationsSectionProps {
   petId: number
@@ -28,50 +21,25 @@ interface VaccinationsSectionProps {
 export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProps) {
   const queryClient = useQueryClient()
   const list = useQuery(vaccinationsQuery(petId))
-  const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
+  // Прививка удалена вместе с кнопкой, открывшей окно, — фокус уходит на список.
+  const dialog = useRecordDialog<'add' | 'edit' | 'delete', Vaccination>(list.data, onStatus)
   const [today] = useState(() => moscowIsoDate(new Date()))
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
-  // Прививка удалена вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
-
-  // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
-  const dialogVaccination =
-    dialog.vaccination && (list.data?.find((item) => item.id === dialog.vaccination?.id) ?? dialog.vaccination)
-
-  function openDialog(kind: Dialog['kind'], vaccination?: Vaccination) {
-    // Старое сообщение не висит над открытым окном, а тот же текст после следующего действия озвучится заново.
-    onStatus('')
-    setDialog({ kind, vaccination, open: true })
-  }
-
-  function closeDialog({ gone = false } = {}) {
-    if (dialog.vaccination && (gone || !list.data?.some((item) => item.id === dialog.vaccination?.id))) {
-      focusList.current = true
-    }
-    setDialog((current) => ({ ...current, open: false }))
-  }
 
   async function remove() {
-    if (!dialogVaccination) return
-    const queryKey = queryKeys.vaccinations(petId)
-    await unwrap(
-      api.DELETE('/pets/{pet_id}/vaccinations/{id}', {
-        params: { path: { pet_id: petId, id: dialogVaccination.id } },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      }),
-    ).catch((error: unknown) => {
-      refetchAfterFailure(queryClient, queryKey)
-      throw error
-    })
-    storeRecord(queryClient, queryKey, dialogVaccination, { remove: true })
+    const vaccination = dialog.record
+    if (!vaccination) return
+    await saveRecord(
+      queryClient,
+      queryKeys.vaccinations(petId),
+      unwrap(
+        api.DELETE('/pets/{pet_id}/vaccinations/{id}', {
+          params: { path: { pet_id: petId, id: vaccination.id } },
+        }),
+      ).then(() => vaccination),
+      { remove: true },
+    )
     onStatus('Прививка удалена.')
-    closeDialog({ gone: true })
+    dialog.close({ gone: true })
   }
 
   return (
@@ -79,8 +47,8 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
       <HealthSection
         title="Прививки"
         addLabel="Внести из ветпаспорта"
-        onAdd={() => openDialog('add')}
-        listRef={listRef}
+        onAdd={() => dialog.open('add')}
+        listRef={dialog.listRef}
         list={list}
         loadingLabel="Загружаем прививки"
         errorTitle="Не удалось загрузить прививки"
@@ -96,8 +64,8 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
                 <VaccinationItem
                   vaccination={vaccination}
                   today={today}
-                  onEdit={() => openDialog('edit', vaccination)}
-                  onDelete={() => openDialog('delete', vaccination)}
+                  onEdit={() => dialog.open('edit', vaccination)}
+                  onDelete={() => dialog.open('delete', vaccination)}
                 />
               </li>
             ))}
@@ -105,26 +73,27 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
         )}
       </HealthSection>
       <VaccinationFormModal
-        open={dialog.open && (dialog.kind === 'add' || dialog.kind === 'edit')}
+        open={dialog.isOpen && (dialog.kind === 'add' || dialog.kind === 'edit')}
         petId={petId}
-        vaccination={dialog.kind === 'edit' ? dialogVaccination : undefined}
-        onClose={() => closeDialog()}
+        vaccination={dialog.kind === 'edit' ? dialog.record : undefined}
+        onClose={() => dialog.close()}
         onSaved={() => {
           onStatus(dialog.kind === 'add' ? 'Прививка добавлена.' : 'Прививка сохранена.')
-          closeDialog()
+          dialog.close()
         }}
       />
       <ConfirmActionModal
-        open={dialog.open && dialog.kind === 'delete'}
+        open={dialog.isOpen && dialog.kind === 'delete'}
         title="Удалить прививку"
-        submit="Удалить"
-        submitting="Удаляем…"
+        submitLabel="Удалить"
+        submittingLabel="Удаляем…"
+        context="health"
         onConfirm={remove}
-        onClose={() => closeDialog()}
+        onClose={() => dialog.close()}
       >
         <p className="text-sm">
-          Прививка <span className="font-bold break-words">{dialogVaccination?.name}</span>
-          {dialogVaccination && ` от ${formatLongDate(dialogVaccination.date)}`} будет удалена, а следующая пропадёт из
+          Прививка <span className="font-bold break-words">{dialog.record?.name}</span>
+          {dialog.record && ` от ${formatLongDate(dialog.record.date)}`} будет удалена, а следующая пропадёт из
           календаря. Вернуть её нельзя — только внести заново.
         </p>
       </ConfirmActionModal>

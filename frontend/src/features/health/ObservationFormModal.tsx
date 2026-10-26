@@ -4,18 +4,19 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import type { Level, Observation, ObservationCreate, ObservationUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, FormAlert, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import type { Level, Observation, ObservationCreate } from '../../api/schema'
+import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
-import { levelLabel } from '../../lib/labels'
+import { labelOptions, levelLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { dateError } from './date-error'
+import { saveRecord } from './health-cache'
 import { parseWeight, weightText } from './weight'
 
 const levelOptions: SelectOption[] = [
   { value: '', label: 'Не отмечено' },
-  ...(['low', 'normal', 'high'] as const).map((value) => ({ value, label: levelLabel[value] })),
+  ...labelOptions(levelLabel, ['low', 'normal', 'high']),
 ]
 
 interface ObservationFormModalProps {
@@ -74,21 +75,6 @@ function toPayload(values: ObservationValues): Required<ObservationCreate> {
   }
 }
 
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: Required<ObservationCreate>, observation: Observation): ObservationUpdate {
-  const update: ObservationUpdate = {}
-  for (const field of ['date', 'weight', 'appetite', 'energy', 'symptoms', 'note'] as const) {
-    if (next[field] !== observation[field]) Object.assign(update, { [field]: next[field] })
-  }
-  return update
-}
-
-function dateError(value: string, today: string): string | undefined {
-  if (value === '') return validationMessages.required
-  if (value > today) return validationMessages.dateFuture
-  return value < healthLimits.dateMin ? validationMessages.dateTooEarly : undefined
-}
-
 interface ObservationFormProps {
   petId: number
   observation?: Observation
@@ -115,6 +101,7 @@ function ObservationForm({ petId, observation, onSaved, onCancel, onBusyChange }
       }
     },
     context: 'health',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -122,35 +109,19 @@ function ObservationForm({ petId, observation, onSaved, onCancel, onBusyChange }
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        const request =
-          baseline && update
-            ? unwrap(
-                api.PATCH('/pets/{pet_id}/observations/{id}', {
-                  params: { path: { pet_id: petId, id: baseline.id } },
-                  body: update,
-                  signal,
-                }),
-              )
-            : unwrap(api.POST('/pets/{pet_id}/observations', { params: { path: { pet_id: petId } }, body: payload, signal }))
-        const saved = await request.catch((error: unknown) => {
-          refetchAfterFailure(queryClient, queryKey)
-          throw error
-        })
-        storeRecord(queryClient, queryKey, saved, { prepend: true })
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(
+              api.PATCH('/pets/{pet_id}/observations/{id}', {
+                params: { path: { pet_id: petId, id: baseline.id } },
+                body: update,
+              }),
+            )
+          : unwrap(api.POST('/pets/{pet_id}/observations', { params: { path: { pet_id: petId } }, body: payload }))
+      const saved = await saveRecord(queryClient, queryKey, request, { prepend: true })
+      onSaved(saved)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -162,16 +133,13 @@ function ObservationForm({ petId, observation, onSaved, onCancel, onBusyChange }
       </div>
       <TextareaField label="Симптомы" rows={2} maxLength={healthLimits.symptomsMax} {...form.field('symptoms')} />
       <TextareaField label="Заметка" rows={3} maxLength={healthLimits.noteMax} {...form.field('note')} />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

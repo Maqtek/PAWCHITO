@@ -18,16 +18,18 @@ interface FieldOwnProps {
   error?: ReactNode
 }
 
-function useField({ hint, error }: Pick<FieldOwnProps, 'hint' | 'error'>) {
+/** Связь подписи, подсказки и ошибки с полем: frame — для FieldFrame, control — для самого поля. */
+function useField({ label, hint, error }: FieldOwnProps) {
   const id = useId()
   const hintId = hint ? `${id}-hint` : undefined
   const errorId = error ? `${id}-error` : undefined
   return {
-    id,
-    hintId,
-    errorId,
-    describedBy: [errorId, hintId].filter(Boolean).join(' ') || undefined,
-    invalid: error ? true : undefined,
+    frame: { id, label, hint, hintId, error, errorId },
+    control: {
+      id,
+      'aria-invalid': error ? true : undefined,
+      'aria-describedby': [errorId, hintId].filter(Boolean).join(' ') || undefined,
+    },
   }
 }
 
@@ -60,16 +62,10 @@ function FieldFrame({ id, label, hint, hintId, error, errorId, children }: Field
 }
 
 export function TextField({ label, hint, error, className, ...props }: FieldOwnProps & InputHTMLAttributes<HTMLInputElement>) {
-  const field = useField({ hint, error })
+  const field = useField({ label, hint, error })
   return (
-    <FieldFrame id={field.id} label={label} hint={hint} hintId={field.hintId} error={error} errorId={field.errorId}>
-      <input
-        id={field.id}
-        aria-invalid={field.invalid}
-        aria-describedby={field.describedBy}
-        className={cn(controlClass, className)}
-        {...props}
-      />
+    <FieldFrame {...field.frame}>
+      <input {...field.control} className={cn(controlClass, className)} {...props} />
     </FieldFrame>
   )
 }
@@ -82,16 +78,14 @@ export function PasswordField({
   className,
   ...props
 }: FieldOwnProps & Omit<InputHTMLAttributes<HTMLInputElement>, 'type'>) {
-  const field = useField({ hint, error })
+  const field = useField({ label, hint, error })
   const [visible, setVisible] = useState(false)
   return (
-    <FieldFrame id={field.id} label={label} hint={hint} hintId={field.hintId} error={error} errorId={field.errorId}>
+    <FieldFrame {...field.frame}>
       <div className="relative">
         <input
-          id={field.id}
+          {...field.control}
           type={visible ? 'text' : 'password'}
-          aria-invalid={field.invalid}
-          aria-describedby={field.describedBy}
           // Свой глаз Edge рисовался бы рядом с нашей кнопкой.
           className={cn(controlClass, 'pr-11 [&::-ms-reveal]:hidden', className)}
           {...props}
@@ -135,16 +129,10 @@ export function TextareaField({
   className,
   ...props
 }: FieldOwnProps & TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const field = useField({ hint, error })
+  const field = useField({ label, hint, error })
   return (
-    <FieldFrame id={field.id} label={label} hint={hint} hintId={field.hintId} error={error} errorId={field.errorId}>
-      <textarea
-        id={field.id}
-        aria-invalid={field.invalid}
-        aria-describedby={field.describedBy}
-        className={cn(controlClass, 'min-h-24 resize-y', className)}
-        {...props}
-      />
+    <FieldFrame {...field.frame}>
+      <textarea {...field.control} className={cn(controlClass, 'min-h-24 resize-y', className)} {...props} />
     </FieldFrame>
   )
 }
@@ -163,16 +151,10 @@ export function SelectField({
   className,
   ...props
 }: FieldOwnProps & SelectHTMLAttributes<HTMLSelectElement> & { options: SelectOption[]; placeholder?: string }) {
-  const field = useField({ hint, error })
+  const field = useField({ label, hint, error })
   return (
-    <FieldFrame id={field.id} label={label} hint={hint} hintId={field.hintId} error={error} errorId={field.errorId}>
-      <select
-        id={field.id}
-        aria-invalid={field.invalid}
-        aria-describedby={field.describedBy}
-        className={cn(controlClass, className)}
-        {...props}
-      >
+    <FieldFrame {...field.frame}>
+      <select {...field.control} className={cn(controlClass, className)} {...props}>
         {placeholder && (
           <option value="" disabled>
             {placeholder}

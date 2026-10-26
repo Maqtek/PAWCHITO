@@ -2,14 +2,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../../api/client'
-import { validationMessages } from '../../api/error-messages'
 import { authLimits } from '../../api/limits'
 import { meQuery, unwrap } from '../../api/queries'
 import type { User } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, IconButton, TextField } from '../../components/ui'
 import { displayName } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../../lib/checks'
 
 /**
  * Имя в профиле: текст с карандашом, по нажатию — поле с «Сохранить» и «Отмена».
@@ -70,18 +69,14 @@ function NameForm({ name, onDone }: { name: string; onDone: (message?: string) =
   const queryClient = useQueryClient()
   const form = useForm({
     initial: { full_name: name },
-    validate: (values) => ({ full_name: values.full_name.trim() ? undefined : validationMessages.required }),
-    context: 'profile',
+    validate: (values) => ({ full_name: requiredError(values.full_name) }),
     onSubmit: async ({ full_name }) => {
       const trimmed = full_name.trim()
       if (trimmed === name) {
         onDone()
         return
       }
-      // Правка до ответа не закрывается — без таймаута на зависшей сети она ждала бы вечно.
-      const user = await unwrap(
-        api.PATCH('/users/me', { body: { full_name: trimmed }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
-      )
+      const user = await unwrap(api.PATCH('/users/me', { body: { full_name: trimmed } }))
       // Ответ — свежий пользователь: имя сразу и здесь, и в меню, без перезапроса.
       queryClient.setQueryData(meQuery.queryKey, user)
       onDone('Имя сохранено')

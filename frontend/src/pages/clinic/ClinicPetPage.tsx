@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { clinicPetObservationsQuery, clinicPetQuery } from '../../api/queries'
 import { PetCard } from '../../components/pet/PetCard'
-import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
+import { Badge, Card, EmptyState, LoadError, PageStatus, Spinner, linkClass } from '../../components/ui'
 import { formatSlot } from '../../features/appointments/format'
 import { PetPhotoUpload } from '../../features/clinic-appointments/PetPhotoUpload'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -15,6 +15,7 @@ import {
   appointmentStatusLabel,
   appointmentStatusTone,
   conditionKindLabel,
+  conditionKindTone,
   dataSourceLabel,
   levelLabel,
 } from '../../lib/labels'
@@ -65,15 +66,7 @@ export function ClinicPetPage() {
       )
     }
     if (card.isPending) return <Spinner label="Загружаем карточку питомца" />
-    if (!card.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить карточку"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void card.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!card.data) return <LoadError title="Не удалось загрузить карточку" onRetry={() => void card.refetch()} />
     const { pet, conditions, vaccinations, appointments } = card.data
     return (
       <div className="flex flex-col gap-4">
@@ -84,7 +77,7 @@ export function ClinicPetPage() {
           {conditions.map((condition) => (
             <li key={condition.id} className="rounded-xl border border-line p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={condition.kind === 'allergy' ? 'coral' : 'lilac'}>{conditionKindLabel[condition.kind]}</Badge>
+                <Badge tone={conditionKindTone[condition.kind]}>{conditionKindLabel[condition.kind]}</Badge>
                 <span className="text-xs text-ink-muted">
                   {condition.source === 'clinic' ? dataSourceLabel.clinic : ownerSource}
                 </span>
@@ -157,10 +150,7 @@ export function ClinicPetPage() {
         description="Данные, особенности здоровья, прививки, дневник и приёмы в вашей клинике. После приёма можно загрузить фото питомца."
       />
       <div className="mb-4">{back}</div>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       <div className="max-w-3xl">{content()}</div>
     </>
   )

@@ -4,7 +4,7 @@ import { useDeferredValue, useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { adminClinicQuery } from '../../api/queries'
-import { Badge, Button, EmptyState, linkClass, Spinner } from '../../components/ui'
+import { Badge, EmptyState, linkClass, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { ClinicAccountSection } from '../../features/admin/ClinicAccountSection'
 import { ClinicArchiveSection } from '../../features/admin/ClinicArchiveSection'
 import { ClinicDetailsSection } from '../../features/admin/ClinicDetailsSection'
@@ -55,14 +55,7 @@ export function AdminClinicPage() {
   } else if (isPending) {
     content = <Spinner label="Загружаем клинику" />
   } else if (!clinic) {
-    content = (
-      <EmptyState
-        className="mt-6"
-        title="Не удалось загрузить клинику"
-        description="Проверьте соединение и попробуйте ещё раз."
-        action={<Button onClick={() => void refetch()}>Повторить</Button>}
-      />
-    )
+    content = <LoadError className="mt-6" title="Не удалось загрузить клинику" onRetry={() => void refetch()} />
   } else {
     message = status
     header = (
@@ -93,14 +86,10 @@ export function AdminClinicPage() {
   // такой скринридер не озвучит. Первый рендер даёт пустой регион, текст приходит следующим.
   const shownMessage = useDeferredValue(message, '')
 
-  // Регион статуса смонтирован в любом состоянии страницы и на одном месте среди соседей:
-  // сообщение, появившееся в уже существующем регионе, скринридер озвучит.
   return (
     <>
       {header}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {shownMessage}
-      </p>
+      <PageStatus message={shownMessage} />
       {content}
     </>
   )

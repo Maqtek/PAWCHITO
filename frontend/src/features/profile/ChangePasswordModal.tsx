@@ -1,4 +1,4 @@
-import { Button, Modal } from '../../components/ui'
+import { Modal } from '../../components/ui'
 import { ChangePasswordForm } from '../auth/ChangePasswordForm'
 
 interface ChangePasswordModalProps {
@@ -11,17 +11,7 @@ export function ChangePasswordModal({ open, onClose, onChanged }: ChangePassword
   return (
     <Modal open={open} onClose={onClose} title="Смена пароля">
       {/* Форма монтируется при каждом открытии — поля пустые, прошлые ошибки не остаются. */}
-      {open && (
-        <ChangePasswordForm
-          currentLabel="Текущий пароль"
-          onSuccess={onChanged}
-          secondaryAction={
-            <Button variant="secondary" onClick={onClose}>
-              Отмена
-            </Button>
-          }
-        />
-      )}
+      {open && <ChangePasswordForm currentLabel="Текущий пароль" onSuccess={onChanged} onCancel={onClose} />}
     </Modal>
   )
 }

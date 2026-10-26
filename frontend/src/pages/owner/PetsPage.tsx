@@ -1,15 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
 import { PawPrint, Plus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { petsQuery } from '../../api/queries'
+import { useState } from 'react'
 import type { Pet, PetArchived } from '../../api/schema'
-import { Button, EmptyState, Spinner } from '../../components/ui'
+import { Button, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { PetArchiveModal } from '../../features/pets/PetArchiveModal'
 import { PetFormModal } from '../../features/pets/PetFormModal'
 import { PetListItem } from '../../features/pets/PetListItem'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { NBSP, pluralize } from '../../lib/format'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 interface Dialog {
   kind: 'add' | 'edit' | 'archive'
@@ -31,24 +30,15 @@ function archivedMessage({ cancelled_appointments: cancelled, deleted_reminders:
 }
 
 export function PetsPage() {
-  const { data: pets, isPending, refetch } = useQuery(petsQuery)
-  const { pet: selectedPet, select } = useSelectedPet()
+  const { pets, pet: selectedPet, select, isPending, isError, refetch } = useSelectedPet()
   const [now] = useState(() => new Date())
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const [status, setStatus] = useState('')
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Питомец ушёл в архив вместе с кнопкой, открывшей окно, — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, список получает его последним.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   // Данные питомца в окне — из свежего списка; пропал из списка — последние известные.
-  const dialogPet = dialog.pet && (pets?.find((pet) => pet.id === dialog.pet?.id) ?? dialog.pet)
+  const dialogPet = dialog.pet && (pets.find((pet) => pet.id === dialog.pet?.id) ?? dialog.pet)
 
   function openDialog(kind: Dialog['kind'], pet?: Pet) {
     // Старое сообщение не висит над открытым окном, а тот же текст после следующего действия озвучится заново.
@@ -58,7 +48,7 @@ export function PetsPage() {
 
   function closeDialog({ petGone = false } = {}) {
     // Питомца нет в списке: ушёл в архив после подтверждения или после ошибки, когда архивирование всё же применилось.
-    if (dialog.pet && (petGone || !pets?.some((pet) => pet.id === dialog.pet?.id))) focusList.current = true
+    if (dialog.pet && (petGone || !pets.some((pet) => pet.id === dialog.pet?.id))) focusListLater()
     setDialog((current) => ({ ...current, open: false }))
   }
 
@@ -70,15 +60,7 @@ export function PetsPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pets) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (pets.length === 0 && isError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
     if (pets.length === 0) {
       return (
         <EmptyState
@@ -115,12 +97,9 @@ export function PetsPage() {
       <PageHeader
         title="Питомцы"
         description="Добавляйте питомцев, меняйте их данные и переносите в архив."
-        actions={pets && pets.length > 0 ? addButton : undefined}
+        actions={pets.length > 0 ? addButton : undefined}
       />
-      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда питомец пропал из списка вместе со своей кнопкой. */}
       <div ref={listRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}

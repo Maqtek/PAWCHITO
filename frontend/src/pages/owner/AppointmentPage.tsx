@@ -1,16 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { X } from 'lucide-react'
+import { useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
 import { ApiError } from '../../api/errors'
 import type { AppointmentOutcome } from '../../api/schema'
-import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, LoadError, PageStatus, Spinner, linkClass } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
-import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
+import { AllAppointmentsLink } from '../../features/appointments/AppointmentLinks'
+import { CancelAppointmentModal, CANCELLED_STATUS } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
+import { courseTitle } from '../../features/reminders/course'
 import { PageHeader } from '../../layouts/PageHeader'
-import { formatLongDate, formatTime, NBSP, pluralize } from '../../lib/format'
+import { formatDays, formatLongDate, formatTime } from '../../lib/format'
 import {
   appointmentReasonLabel,
   appointmentStatusLabel,
@@ -18,6 +20,7 @@ import {
   cancelledByLabel,
   careStatusLabel,
 } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 /** Запись владельца: сюда ведут мастер записи и уведомления (`link: /appointments/20`). */
 export function AppointmentPage() {
@@ -27,37 +30,15 @@ export function AppointmentPage() {
   const [status, setStatus] = useState(() => (location.state as { status?: string } | null)?.status ?? '')
   const [cancelOpen, setCancelOpen] = useState(false)
   const [now] = useState(() => new Date())
-  const cardRef = useRef<HTMLDivElement>(null)
-  const focusCard = useRef(false)
-
   // После отмены кнопки «Отменить запись» больше нет — фокус переходит на карточку, а не на body.
-  useEffect(() => {
-    if (!focusCard.current) return
-    focusCard.current = false
-    cardRef.current?.focus()
-  })
-
-  const back = (
-    <Link to="/appointments" className={linkClass}>
-      <ArrowLeft aria-hidden className="mr-1 inline size-4" />
-      Все записи
-    </Link>
-  )
+  const [cardRef, focusCardLater] = useFocusAfterRender<HTMLDivElement>()
 
   function content() {
     if (!Number.isInteger(id) || (error instanceof ApiError && error.status === 404)) {
-      return <EmptyState title="Запись не найдена" description="Возможно, ссылка устарела." action={back} />
+      return <EmptyState title="Запись не найдена" description="Возможно, ссылка устарела." action={<AllAppointmentsLink />} />
     }
     if (isPending) return <Spinner label="Загружаем запись" />
-    if (!appointment) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить запись"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!appointment) return <LoadError title="Не удалось загрузить запись" onRetry={() => void refetch()} />
     const rows: [string, string][] = [
       ['Питомец', appointment.pet.name],
       ['Клиника', appointment.clinic.name],
@@ -112,11 +93,10 @@ export function AppointmentPage() {
   return (
     <>
       <PageHeader eyebrow="Ветеринар" title="Запись к врачу" description="Когда, куда и к кому, и что с записью сейчас." />
-      <div className="mb-4">{back}</div>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <div className="mb-4">
+        <AllAppointmentsLink />
+      </div>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда кнопка отмены пропала вместе с возможностью отменить. */}
       <div ref={cardRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}
@@ -126,8 +106,8 @@ export function AppointmentPage() {
         appointment={appointment}
         onClose={() => setCancelOpen(false)}
         onDone={() => {
-          setStatus('Запись отменена. Клиника получит уведомление.')
-          focusCard.current = true
+          setStatus(CANCELLED_STATUS)
+          focusCardLater()
           setCancelOpen(false)
         }}
       />
@@ -153,13 +133,10 @@ function OutcomeDetails({ outcome }: { outcome: AppointmentOutcome }) {
           <ul className="mt-2 flex flex-col gap-2">
             {outcome.prescriptions.map((prescription) => (
               <li key={prescription.id} className="rounded-xl border border-line p-3 text-sm">
-                <p className="font-bold break-words">
-                  {prescription.drug}, {prescription.dosage}
-                </p>
+                <p className="font-bold break-words">{courseTitle(prescription)}</p>
                 <p className="text-ink-muted">
-                  {prescription.times.join(', ')} · {prescription.duration_days}
-                  {NBSP}
-                  {pluralize(prescription.duration_days, ['день', 'дня', 'дней'])} с {formatLongDate(prescription.start_date)}
+                  {prescription.times.join(', ')} · {formatDays(prescription.duration_days)} с{' '}
+                  {formatLongDate(prescription.start_date)}
                 </p>
               </li>
             ))}

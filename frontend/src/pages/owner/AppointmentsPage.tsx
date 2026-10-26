@@ -1,15 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, ClipboardList, PawPrint } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { CalendarPlus, ClipboardList } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { AppointmentCard } from '../../features/appointments/AppointmentCard'
-import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
+import { CancelAppointmentModal, CANCELLED_STATUS } from '../../features/appointments/CancelAppointmentModal'
+import { PetRequired } from '../../features/pets/PetRequired'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 interface Dialog {
   appointment?: Appointment
@@ -25,36 +27,7 @@ const bookLink = (
 )
 
 export function AppointmentsPage() {
-  const { pet, isPending: petsPending, isError: petsError, refetch: refetchPets } = useSelectedPet()
-
-  function content() {
-    if (petsPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && petsError) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetchPets()}>Повторить</Button>}
-        />
-      )
-    }
-    if (!pet) {
-      return (
-        <EmptyState
-          icon={PawPrint}
-          title="Сначала добавьте питомца"
-          description="Запись к врачу делается для конкретного питомца."
-          action={
-            <Link to="/pets" className={buttonClass()}>
-              Добавить питомца
-            </Link>
-          }
-        />
-      )
-    }
-    // key: при смене питомца список и окно начинают с чистого листа.
-    return <PetAppointments key={pet.id} petId={pet.id} petName={pet.name} />
-  }
+  const { pet } = useSelectedPet()
 
   return (
     <>
@@ -64,7 +37,10 @@ export function AppointmentsPage() {
         description={pet ? `Записи питомца ${pet.name}: предстоящие и прошедшие.` : 'Запись в клинику и ваши записи.'}
         actions={pet ? bookLink : undefined}
       />
-      {content()}
+      {/* key: при смене питомца список и окно начинают с чистого листа. */}
+      <PetRequired description="Запись к врачу делается для конкретного питомца.">
+        {(pet) => <PetAppointments key={pet.id} petId={pet.id} petName={pet.name} />}
+      </PetRequired>
     </>
   )
 }
@@ -74,15 +50,8 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
   const [status, setStatus] = useState('')
   const [dialog, setDialog] = useState<Dialog>({ open: false })
   const [now] = useState(() => new Date())
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отменённая запись уходит в «Прошедшие» вместе с кнопкой, открывшей окно, — фокус переходит на список.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   const upcoming = (appointments ?? [])
     .filter((item) => isCancellable(item, now))
@@ -94,15 +63,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
 
   function content() {
     if (isPending) return <Spinner label="Загружаем записи" />
-    if (!appointments) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить записи"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!appointments) return <LoadError title="Не удалось загрузить записи" onRetry={() => void refetch()} />
     if (appointments.length === 0) {
       return (
         <EmptyState
@@ -157,10 +118,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
 
   return (
     <>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда отменённая запись ушла из предстоящих вместе со своей кнопкой. */}
       <div ref={listRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}
@@ -170,8 +128,8 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
         appointment={dialogAppointment}
         onClose={() => setDialog((current) => ({ ...current, open: false }))}
         onDone={() => {
-          setStatus('Запись отменена. Клиника получит уведомление.')
-          focusList.current = true
+          setStatus(CANCELLED_STATUS)
+          focusListLater()
           setDialog((current) => ({ ...current, open: false }))
         }}
       />

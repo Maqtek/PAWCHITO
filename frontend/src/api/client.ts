@@ -3,7 +3,14 @@ import { getAccessToken } from './auth-token'
 import { apiBaseUrl } from './base-url'
 import { NetworkError } from './errors'
 import type { paths } from './schema'
-import { endSession, ensureSession, isRestoreUnavailable, refreshAccessToken, requirePasswordChange } from './session'
+import {
+  endSession,
+  ensureSession,
+  isRestoreUnavailable,
+  refreshAccessToken,
+  REQUEST_TIMEOUT_MS,
+  requirePasswordChange,
+} from './session'
 
 /** Запросы, которые сами управляют сессией: токен к ним не добавляем и не обновляем. */
 const SESSION_PATHS = new Set([
@@ -38,6 +45,19 @@ async function isPasswordChangeRequired(response: Response): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Изменяющие запросы — с таймаутом: окно или форма ждут их ответа и не дают уйти, на зависшей сети ждали бы вечно.
+ * Свой signal запроса (вход, смена пароля) тоже действует: запрос прервётся по первому из двух.
+ * GET не трогаем: загрузка экран не держит, с неё можно уйти.
+ */
+const timeoutMiddleware: Middleware = {
+  onRequest({ request }) {
+    if (request.method === 'GET') return undefined
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
+    return new Request(request, { signal })
+  },
 }
 
 const authMiddleware: Middleware = {
@@ -91,4 +111,5 @@ export const api = createClient<paths>({
   fetch: (request) => globalThis.fetch(request),
 })
 
-api.use(authMiddleware)
+// Таймаут — раньше авторизации: она сохраняет копию запроса для повтора после обмена токена, и копия идёт с тем же сигналом.
+api.use(timeoutMiddleware, authMiddleware)

@@ -1,15 +1,15 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { EyeOff, RotateCcw } from 'lucide-react'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { adminClinicQuery, unwrap } from '../../api/queries'
 import type { AdminClinic } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, Card, FormAlert, Modal } from '../../components/ui'
+import { Button, Card, FormActions, FormAlert, Modal } from '../../components/ui'
 import { pluralize } from '../../lib/format'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeClinic } from './clinic-cache'
+import { saveClinic } from './clinic-cache'
 
 interface ClinicArchiveSectionProps {
   clinic: AdminClinic
@@ -22,21 +22,13 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
   const [busy, setBusy] = useState(false)
   const [restoring, setRestoring] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
-  const headingRef = useRef<HTMLHeadingElement>(null)
-  const focusHeading = useRef(false)
-  const archived = clinic.archived_at !== null
-
   // Кнопка, с которой начали, исчезает — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, заголовок получает его последним.
-  useEffect(() => {
-    if (!focusHeading.current) return
-    focusHeading.current = false
-    headingRef.current?.focus()
-  })
+  const [headingRef, focusHeadingLater] = useFocusAfterRender<HTMLHeadingElement>()
+  const archived = clinic.archived_at !== null
 
   function closeConfirm() {
     // Клиника успела скрыться (ответ не дошёл, страница перечитана) — кнопки «Скрыть клинику» уже нет.
-    if (archived) focusHeading.current = true
+    if (archived) focusHeadingLater()
     setConfirming(false)
   }
 
@@ -46,18 +38,19 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
     setRestoreError(null)
     onStatus('')
     try {
-      const saved = await unwrap(
-        api.POST('/admin/clinics/{id}/restore', {
-          params: { path: { id: clinic.id } },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        }),
+      await saveClinic(
+        queryClient,
+        unwrap(
+          api.POST('/admin/clinics/{id}/restore', {
+            params: { path: { id: clinic.id } },
+          }),
+        ),
+        clinic.id,
       )
-      focusHeading.current = true
-      storeClinic(queryClient, saved)
+      focusHeadingLater()
       onStatus('Клиника возвращена.')
     } catch (error) {
-      refetchAfterFailure(queryClient, clinic.id)
-      setRestoreError(errorMessage(error, 'clinic'))
+      setRestoreError(errorMessage(error))
     } finally {
       setRestoring(false)
     }
@@ -107,7 +100,7 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
             onBusyChange={setBusy}
             onCancel={closeConfirm}
             onArchived={(cancelled) => {
-              focusHeading.current = true
+              focusHeadingLater()
               setConfirming(false)
               onStatus(`Клиника скрыта. Отменено записей: ${cancelled}.`)
             }}
@@ -134,25 +127,18 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
   const form = useForm({
     initial: {},
     validate: () => ({}),
-    context: 'clinic',
+    onBusyChange,
     onSubmit: async () => {
-      onBusyChange(true)
-      try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
-        const result = await unwrap(
+      const result = await saveClinic(
+        queryClient,
+        unwrap(
           api.POST('/admin/clinics/{id}/archive', {
             params: { path: { id: clinic.id } },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
-        ).catch((error: unknown) => {
-          refetchAfterFailure(queryClient, clinic.id)
-          throw error
-        })
-        storeClinic(queryClient, result.clinic)
-        onArchived(result.cancelled_appointments)
-      } finally {
-        onBusyChange(false)
-      }
+        ),
+        clinic.id,
+      )
+      onArchived(result.cancelled_appointments)
     },
   })
 
@@ -163,11 +149,6 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
       return
     }
     void form.handleSubmit(event)
-  }
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
   }
 
   function appointmentsText(): string {
@@ -182,15 +163,15 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
     <form noValidate onSubmit={submit} className="flex flex-col gap-4">
       <p className="text-sm">{appointmentsText()}</p>
       {clinic.account && <p className="text-sm">Аккаунт клиники будет заблокирован, её сессии завершатся.</p>}
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        <Button type="submit" variant="danger" aria-disabled={form.submitting || isFetching}>
-          {form.submitting ? 'Скрываем…' : 'Скрыть'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        blocked={isFetching}
+        submitLabel="Скрыть"
+        submittingLabel="Скрываем…"
+        variant="danger"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

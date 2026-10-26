@@ -6,7 +6,6 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { unwrap } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button, FormAlert, linkClass } from '../../components/ui'
 import { appointmentReasonLabel, appointmentStatusLabel, appointmentStatusTone, cancelledByLabel } from '../../lib/labels'
 import { formatSlot } from '../appointments/format'
@@ -53,17 +52,21 @@ export function ClinicAppointmentCard({
     </span>
   )
 
+  // Старое сообщение и ошибка не висят над новым действием, а тот же текст после него озвучится заново.
+  function startAction() {
+    onStatus('')
+    setError(null)
+  }
+
   // Подтверждение — без окна: его можно исправить отменой, а заявок у клиники много.
   async function confirm() {
     if (confirming) return
-    onStatus('')
-    setError(null)
+    startAction()
     setConfirming(true)
     try {
       await unwrap(
         api.POST('/clinic/appointments/{id}/confirm', {
           params: { path: { id: appointment.id } },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
       onStatus(`Запись подтверждена: ${appointment.pet.name}, ${when}. Владелец получит уведомление.`)
@@ -122,8 +125,7 @@ export function ClinicAppointmentCard({
               size="sm"
               icon={ClipboardCheck}
               onClick={() => {
-                onStatus('')
-                setError(null)
+                startAction()
                 onOutcome()
               }}
             >
@@ -142,8 +144,7 @@ export function ClinicAppointmentCard({
             size="sm"
             icon={X}
             onClick={() => {
-              onStatus('')
-              setError(null)
+              startAction()
               onCancel()
             }}
           >

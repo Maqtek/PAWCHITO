@@ -26,6 +26,7 @@ import {
   appointmentStatusTone,
   eventCategoryLabel,
   eventCategoryTone,
+  labelOptions,
 } from '../../lib/labels'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -62,18 +63,20 @@ export function UiKitPage() {
         <CareStatusScale status="treatment" />
         <CareStatusScale status={null} />
         <div className="flex flex-wrap gap-2">
-          {Object.entries(eventCategoryLabel).map(([key, label]) => (
-            <Badge key={key} tone={eventCategoryTone[key as keyof typeof eventCategoryTone]}>
+          {labelOptions(eventCategoryLabel, ['treatment', 'routine', 'prevention']).map(({ value, label }) => (
+            <Badge key={value} tone={eventCategoryTone[value]}>
               {label}
             </Badge>
           ))}
         </div>
         <div className="flex flex-wrap gap-2">
-          {Object.entries(appointmentStatusLabel).map(([key, label]) => (
-            <Badge key={key} tone={appointmentStatusTone[key as keyof typeof appointmentStatusTone]}>
-              {label}
-            </Badge>
-          ))}
+          {labelOptions(appointmentStatusLabel, ['requested', 'confirmed', 'completed', 'cancelled']).map(
+            ({ value, label }) => (
+              <Badge key={value} tone={appointmentStatusTone[value]}>
+                {label}
+              </Badge>
+            ),
+          )}
           <CountBadge count={3} label="Счётчик: 3" />
         </div>
       </Section>

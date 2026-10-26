@@ -8,5 +8,5 @@ import { queryKeys } from '../../api/queries'
  */
 export function refetchClinicAppointments(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.clinicAppointments })
-  void queryClient.invalidateQueries({ queryKey: ['clinic', 'pets'] })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allClinicPets })
 }

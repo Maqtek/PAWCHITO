@@ -1,18 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
 import { ClipboardList } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { validationMessages } from '../../api/error-messages'
 import { clinicAppointmentsQuery, clinicVetsQuery, type ClinicAppointmentFilters } from '../../api/queries'
 import type { Appointment, AppointmentStatus } from '../../api/schema'
-import { Button, EmptyState, SelectField, Spinner, Tabs, TextField, type SelectOption } from '../../components/ui'
+import { EmptyState, LoadError, SelectField, Spinner, Tabs, TextField, type SelectOption } from '../../components/ui'
 import { ClinicAppointmentCard, type VetAvailability } from '../../features/clinic-appointments/ClinicAppointmentCard'
 import { ClinicCancelModal } from '../../features/clinic-appointments/ClinicCancelModal'
 import { OutcomeFormModal } from '../../features/clinic-appointments/OutcomeFormModal'
 import { PageHeader } from '../../layouts/PageHeader'
 import { addDays } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { appointmentStatusLabel, careStatusLabel } from '../../lib/labels'
+import { appointmentStatusLabel, careStatusLabel, labelOptions } from '../../lib/labels'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 
 type View = 'schedule' | 'awaiting' | 'decision'
 
@@ -21,7 +22,7 @@ const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'compl
 
 const statusOptions: SelectOption[] = [
   { value: '', label: 'Все статусы' },
-  ...STATUSES.map((value) => ({ value, label: appointmentStatusLabel[value] })),
+  ...labelOptions(appointmentStatusLabel, STATUSES),
 ]
 
 interface Dialog {
@@ -63,15 +64,8 @@ export function ClinicAppointmentsPage() {
 
   const [notice, setNotice] = useState('')
   const [dialog, setDialog] = useState<Dialog>({ kind: 'cancel', open: false })
-  const listRef = useRef<HTMLDivElement>(null)
-  const focusList = useRef(false)
-
   // Отменённая запись уходит из вкладки вместе с кнопкой, открывшей окно, — фокус переходит на список.
-  useEffect(() => {
-    if (!focusList.current) return
-    focusList.current = false
-    listRef.current?.focus()
-  })
+  const [listRef, focusListLater] = useFocusAfterRender<HTMLDivElement>()
 
   const current = view === 'schedule' ? schedule : view === 'awaiting' ? awaiting : decision
   const vetAvailability = new Map<number, VetAvailability>()
@@ -89,6 +83,16 @@ export function ClinicAppointmentsPage() {
   // Данные записи в окне — из свежего списка; пропала из списка — последние известные.
   const dialogAppointment =
     dialog.appointment && (current.data?.find((item) => item.id === dialog.appointment?.id) ?? dialog.appointment)
+
+  function openDialog(kind: Dialog['kind'], appointment: Appointment) {
+    setDialog({ kind, appointment, open: true })
+  }
+
+  // gone — запись ушла из вкладки вместе с кнопкой, открывшей окно: фокус переходит на список.
+  function closeDialog({ gone = false } = {}) {
+    if (gone) focusListLater()
+    setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+  }
 
   function update(changes: Record<string, string>) {
     setNotice('')
@@ -108,15 +112,7 @@ export function ClinicAppointmentsPage() {
   function content() {
     if (view === 'schedule' && rangeInvalid) return <p className="text-sm">{validationMessages.dateRange}.</p>
     if (current.isPending) return <Spinner label="Загружаем записи" />
-    if (!current.data) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить записи"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void current.refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!current.data) return <LoadError title="Не удалось загрузить записи" onRetry={() => void current.refetch()} />
     if (current.data.length === 0) {
       const empty = {
         schedule: { title: 'Записей нет', description: 'На эти даты с такими фильтрами записей нет.' },
@@ -134,8 +130,8 @@ export function ClinicAppointmentsPage() {
               now={now}
               vetUnavailable={view === 'decision' ? vetAvailability.get(appointment.vet.id) : undefined}
               onStatus={setNotice}
-              onCancel={() => setDialog({ kind: 'cancel', appointment, open: true })}
-              onOutcome={() => setDialog({ kind: 'outcome', appointment, open: true })}
+              onCancel={() => openDialog('cancel', appointment)}
+              onOutcome={() => openDialog('outcome', appointment)}
             />
           </li>
         ))}
@@ -184,17 +180,16 @@ export function ClinicAppointmentsPage() {
       <ClinicCancelModal
         open={dialog.open && dialog.kind === 'cancel'}
         appointment={dialogAppointment}
-        onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
+        onClose={() => closeDialog()}
         onDone={(cancelled) => {
           setNotice(`Запись отменена: ${cancelled.pet.name}. Владелец получит уведомление с вашим комментарием.`)
-          focusList.current = true
-          setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+          closeDialog({ gone: true })
         }}
       />
       <OutcomeFormModal
         open={dialog.open && dialog.kind === 'outcome'}
         appointment={dialogAppointment}
-        onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
+        onClose={() => closeDialog()}
         onDone={({ appointment, created_reminders: reminders }) => {
           const status = appointment.outcome ? careStatusLabel[appointment.outcome.care_status].toLowerCase() : ''
           setNotice(
@@ -203,8 +198,7 @@ export function ClinicAppointmentsPage() {
               ' Владелец получит уведомление.',
           )
           // Запись ушла из «Ждут итога» вместе с кнопкой, открывшей окно.
-          focusList.current = true
-          setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+          closeDialog({ gone: true })
         }}
       />
     </>

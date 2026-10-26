@@ -2,9 +2,9 @@ import type { Pet } from '../../api/schema'
 import { cn } from '../../lib/cn'
 import { formatAge, formatShortDate } from '../../lib/format'
 import { careStatusLabel, careStatusTone, speciesLabel } from '../../lib/labels'
-import { PetIllustration } from '../illustrations/PetIllustration'
 import { Card, toneInkClass } from '../ui'
 import { CareStatusScale } from './CareStatusScale'
+import { PetImage } from './PetImage'
 
 export interface PetCardProps {
   pet: Pet
@@ -21,11 +21,7 @@ export function PetCard({ pet, today }: PetCardProps) {
   return (
     <Card className="overflow-hidden">
       <div className="flex items-start gap-4 p-5 sm:gap-6 sm:p-6">
-        {pet.photo_url ? (
-          <img src={pet.photo_url} alt={pet.name} className="size-20 shrink-0 rounded-3xl object-cover sm:size-28" />
-        ) : (
-          <PetIllustration species={pet.species} name={pet.name} size="lg" className="size-20 sm:size-28" />
-        )}
+        <PetImage pet={pet} size="lg" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-extrabold tracking-tight sm:text-3xl">{pet.name}</h2>

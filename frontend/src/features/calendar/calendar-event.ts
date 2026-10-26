@@ -1,7 +1,6 @@
 import type { Calendar, CalendarReminderEvent, Reminder } from '../../api/schema'
-import { addDays, moscowLocal } from '../../lib/dates'
-import { formatDayDate, formatShortDate, formatTime } from '../../lib/format'
-import { formatDue } from '../reminders/reminder-actions'
+import { addDays } from '../../lib/dates'
+import { formatDayDate, formatShortDate } from '../../lib/format'
 
 /** Календарь показывает события с сегодня по сегодня + 30 дней; дела дальше — отдельным списком (Р-65). */
 export const CALENDAR_DAYS = 30
@@ -17,9 +16,8 @@ export const calendarGroups: readonly { key: CalendarGroupKey; title: string }[]
 
 /** День группы: «среда, 28 октября», у «Позже» — «с 30 октября по 27 ноября». */
 export function groupPeriod(key: CalendarGroupKey, today: string): string {
-  const dayDate = (day: string) => formatDayDate(new Date(`${day}T12:00:00+03:00`))
-  if (key === 'today') return dayDate(today)
-  if (key === 'tomorrow') return dayDate(addDays(today, 1))
+  if (key === 'today') return formatDayDate(today)
+  if (key === 'tomorrow') return formatDayDate(addDays(today, 1))
   return `с ${formatShortDate(addDays(today, 2))} по ${formatShortDate(addDays(today, CALENDAR_DAYS))}`
 }
 
@@ -43,22 +41,4 @@ export function eventReminder(event: CalendarReminderEvent, petId: number): Remi
     repeat_interval_days,
     series_id: null,
   }
-}
-
-/** Срок прививки «YYYY-MM-DD»: «сегодня», «завтра», иначе «пятница, 30 октября». */
-export function formatDueDay(day: string, today: string): string {
-  if (day === today) return 'сегодня'
-  if (day === addDays(today, 1)) return 'завтра'
-  return formatDayDate(new Date(`${day}T12:00:00+03:00`))
-}
-
-/**
- * Как formatDue, но дело дальше 30 дней в другом году — с годом: свои дела бывают и на год вперёд (Р-59), и
- * «20 октября» в списке дальних дел иначе читается как прошедшая дата.
- */
-export function formatDueWithYear(dueAt: string, today: string): string {
-  const day = moscowLocal(new Date(dueAt)).date
-  const year = day.slice(0, 4)
-  if (day <= addDays(today, CALENDAR_DAYS) || year === today.slice(0, 4)) return formatDue(dueAt, today)
-  return `${formatDayDate(new Date(dueAt))} ${year}, ${formatTime(dueAt)}`
 }

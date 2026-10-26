@@ -6,18 +6,14 @@ import { ApiError } from '../../api/errors'
 import { reminderLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { EventCategory, Reminder, ReminderCreate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, FormAlert, Modal, SelectField, TextField, type SelectOption } from '../../components/ui'
+import { FormActions, Modal, SelectField, TextField, type SelectOption } from '../../components/ui'
 import { addDays, moscowDateTime, moscowLocal } from '../../lib/dates'
-import { eventCategoryLabel } from '../../lib/labels'
+import { eventCategoryLabel, labelOptions } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
 import { refetchReminders, repeatLabel } from './reminder-actions'
 
 const CUSTOM = 'custom'
-const categoryOptions: SelectOption[] = (['routine', 'treatment', 'prevention'] as const).map((value) => ({
-  value,
-  label: eventCategoryLabel[value],
-}))
+const categoryOptions = labelOptions(eventCategoryLabel, ['routine', 'treatment', 'prevention'])
 const repeatOptions: SelectOption[] = [
   { value: '', label: 'Не повторять' },
   ...reminderLimits.repeatPresets.map((days) => ({ value: String(days), label: repeatLabel(days) })),
@@ -102,6 +98,7 @@ function ReminderForm({ petId, petName, onSaved, onCancel, onBusyChange }: Remin
         form: pet ? 'Питомец в архиве — дела ему не добавить.' : errorMessage(error, 'reminder'),
       }
     },
+    onBusyChange,
     onSubmit: async (values) => {
       const payload: ReminderCreate = {
         pet_id: petId,
@@ -110,21 +107,14 @@ function ReminderForm({ petId, petName, onSaved, onCancel, onBusyChange }: Remin
         category: values.category as EventCategory,
         repeat_interval_days: repeatDays(values),
       }
-      onBusyChange(true)
       try {
-        onSaved(await unwrap(api.POST('/reminders', { body: payload, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })))
+        onSaved(await unwrap(api.POST('/reminders', { body: payload })))
       } finally {
-        onBusyChange(false)
         // И после ошибки: ответ мог не дойти, а дело — сохраниться.
         refetchReminders(queryClient)
       }
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -159,16 +149,13 @@ function ReminderForm({ petId, petName, onSaved, onCancel, onBusyChange }: Remin
           {...form.field('customDays')}
         />
       )}
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Добавляем…' : 'Добавить дело'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel="Добавить дело"
+        submittingLabel="Добавляем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

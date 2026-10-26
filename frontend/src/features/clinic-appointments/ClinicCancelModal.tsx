@@ -5,8 +5,7 @@ import { validationMessages } from '../../api/error-messages'
 import { appointmentLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, FormAlert, Modal, TextareaField } from '../../components/ui'
+import { FormActions, Modal, TextareaField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { formatSlot } from '../appointments/format'
 import { refetchClinicAppointments } from './clinic-appointment-cache'
@@ -46,27 +45,17 @@ function CancelForm({ appointment, onBusyChange, onCancel, onDone }: CancelFormP
     initial: { comment: '' },
     validate: (values) => ({ comment: values.comment.trim() ? undefined : validationMessages.clinicComment }),
     context: 'clinic-appointment',
+    onBusyChange,
     onSubmit: async ({ comment }) => {
-      onBusyChange(true)
-      try {
-        const cancelled = await unwrap(
-          api.POST('/clinic/appointments/{id}/cancel', {
-            params: { path: { id: appointment.id } },
-            body: { comment: comment.trim() },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-          }),
-        ).finally(() => refetchClinicAppointments(queryClient))
-        onDone(cancelled)
-      } finally {
-        onBusyChange(false)
-      }
+      const cancelled = await unwrap(
+        api.POST('/clinic/appointments/{id}/cancel', {
+          params: { path: { id: appointment.id } },
+          body: { comment: comment.trim() },
+        }),
+      ).finally(() => refetchClinicAppointments(queryClient))
+      onDone(cancelled)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -85,16 +74,15 @@ function CancelForm({ appointment, onBusyChange, onCancel, onDone }: CancelFormP
         maxLength={appointmentLimits.reasonCommentMax}
         {...form.field('comment')}
       />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Не отменять
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" variant="danger" aria-disabled={form.submitting}>
-          {form.submitting ? 'Отменяем…' : 'Отменить запись'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel="Отменить запись"
+        submittingLabel="Отменяем…"
+        variant="danger"
+        onCancel={onCancel}
+        cancelLabel="Не отменять"
+      />
     </form>
   )
 }

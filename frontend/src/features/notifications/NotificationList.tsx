@@ -3,12 +3,12 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
-import { notificationsQuery, unwrap } from '../../api/queries'
+import { notificationsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Notification } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Spinner } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { formatShortDate, formatTime } from '../../lib/format'
+import { markNotificationRead } from './mark-read'
+import { NotificationRowContent } from './NotificationRowContent'
 
 /** Список уведомлений в выпадающей панели колокольчика: последние 50, от новых к старым (БП §9). */
 export function NotificationList({ onClose }: { onClose: () => void }) {
@@ -20,16 +20,11 @@ export function NotificationList({ onClose }: { onClose: () => void }) {
 
   /** Список и счётчик в шапке — под общим ключом ['notifications']. */
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.allNotifications })
   }
 
-  // Переход по уведомлению отмечает его прочитанным; переход не ждёт ответа — отметку подхватит следующий опрос.
   function open(notification: Notification) {
-    if (notification.read_at === null) {
-      void api
-        .POST('/notifications/{id}/read', { params: { path: { id: notification.id } } })
-        .finally(refresh)
-    }
+    markNotificationRead(queryClient, notification)
     onClose()
     navigate(notification.link)
   }
@@ -39,7 +34,7 @@ export function NotificationList({ onClose }: { onClose: () => void }) {
     setError(null)
     setMarkingAll(true)
     try {
-      await unwrap(api.POST('/notifications/read-all', { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
+      await unwrap(api.POST('/notifications/read-all'))
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {
@@ -63,34 +58,20 @@ export function NotificationList({ onClose }: { onClose: () => void }) {
     if (data.items.length === 0) return <p className="px-3 py-4 text-sm text-ink-muted">Уведомлений пока нет.</p>
     return (
       <ul className="flex flex-col">
-        {data.items.map((notification) => {
-          const unread = notification.read_at === null
-          return (
-            <li key={notification.id}>
-              <button
-                type="button"
-                onClick={() => open(notification)}
-                className={cn(
-                  'flex w-full cursor-pointer gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-surface-muted',
-                  unread ? 'font-bold text-ink' : 'text-ink-muted',
-                )}
-              >
-                <span
-                  aria-hidden
-                  className={cn('mt-1.5 size-2 shrink-0 rounded-full', unread ? 'bg-primary' : 'bg-transparent')}
-                />
-                <span className="min-w-0 flex-1">
-                  {/* Пробел — отдельным узлом: конечный пробел внутри span при сборке доступного имени теряется. */}
-                  {unread && <span className="sr-only">Новое:</span>}{' '}
-                  <span className="block break-words">{notification.text}</span>
-                  <span className="mt-0.5 block text-xs font-semibold text-ink-muted">
-                    {formatShortDate(notification.created_at)}, {formatTime(notification.created_at)}
-                  </span>
-                </span>
-              </button>
-            </li>
-          )
-        })}
+        {data.items.map((notification) => (
+          <li key={notification.id}>
+            <button
+              type="button"
+              onClick={() => open(notification)}
+              className={cn(
+                'flex w-full cursor-pointer gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-surface-muted',
+                notification.read_at === null ? 'font-bold text-ink' : 'text-ink-muted',
+              )}
+            >
+              <NotificationRowContent notification={notification} />
+            </button>
+          </li>
+        ))}
       </ul>
     )
   }

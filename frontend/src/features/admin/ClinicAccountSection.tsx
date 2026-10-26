@@ -1,7 +1,8 @@
 import { KeyRound, UserPlus } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { AdminClinic } from '../../api/schema'
 import { Button, Card } from '../../components/ui'
+import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { TemporaryPasswordModal } from './TemporaryPasswordModal'
 
 type Dialog = 'create' | 'reset' | null
@@ -18,20 +19,12 @@ interface ClinicAccountSectionProps {
 
 export function ClinicAccountSection({ clinic, onStatus }: ClinicAccountSectionProps) {
   const [dialog, setDialog] = useState<Dialog>(null)
-  const headingRef = useRef<HTMLHeadingElement>(null)
-  const focusHeading = useRef(false)
+  // Кнопка, открывшая окно, исчезла — без этого фокус упадёт на body.
+  const [headingRef, focusHeadingLater] = useFocusAfterRender<HTMLHeadingElement>()
   const archived = clinic.archived_at !== null
   const account = clinic.account
   // Какое окно открывает кнопка карточки сейчас; у скрытой клиники кнопок нет.
   const opener: Dialog = archived ? null : account ? 'reset' : 'create'
-
-  // Кнопка, открывшая окно, исчезла — без этого фокус упадёт на body.
-  // Эффект Modal (дочерний) уже закрыл окно и вернул фокус, заголовок получает его последним.
-  useEffect(() => {
-    if (!focusHeading.current) return
-    focusHeading.current = false
-    headingRef.current?.focus()
-  })
 
   function open(next: Exclude<Dialog, null>) {
     onStatus('')
@@ -39,7 +32,7 @@ export function ClinicAccountSection({ clinic, onStatus }: ClinicAccountSectionP
   }
 
   function close(openerGone: boolean) {
-    if (openerGone) focusHeading.current = true
+    if (openerGone) focusHeadingLater()
     setDialog(null)
   }
 

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { adminClinicsQuery } from '../../api/queries'
 import type { AdminClinic } from '../../api/schema'
-import { Button, EmptyState, Spinner, Tabs, TextField } from '../../components/ui'
+import { Button, EmptyState, LoadError, Spinner, Tabs, TextField } from '../../components/ui'
 import { ClinicFormModal } from '../../features/admin/ClinicFormModal'
 import { ClinicListItem } from '../../features/admin/ClinicListItem'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -37,15 +37,7 @@ export function AdminClinicsPage() {
 
   function content() {
     if (isPending) return <Spinner label="Загружаем клиники" />
-    if (!clinics) {
-      return (
-        <EmptyState
-          title="Не удалось загрузить клиники"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      )
-    }
+    if (!clinics) return <LoadError title="Не удалось загрузить клиники" onRetry={() => void refetch()} />
     return (
       <div className="flex flex-col gap-4">
         <Tabs

@@ -13,16 +13,29 @@ function invalidateList(queryClient: QueryClient, queryKey: HealthListKey): void
   if (queryKey[2] !== 'conditions') void queryClient.invalidateQueries({ queryKey: queryKeys.timeline(queryKey[1]) })
 }
 
+interface StoreOptions {
+  /** Запись ушла из списка: в архив или удалена. */
+  remove?: boolean
+  /** Новую запись — в начало списка: там новые даты. */
+  prepend?: boolean
+}
+
 /**
- * Ответ сервера — свежая запись здоровья: заменяет прежнюю, новую добавляет, архивную или удалённую убирает.
- * Список перечитывается: сервер знает порядок (новые даты сверху), а в другой вкладке могли поменять другие записи.
+ * Изменение записи здоровья. Ответ сервера — свежая запись: заменяет прежнюю, новую добавляет, архивную или удалённую
+ * убирает. Список перечитывается и после успеха (сервер знает порядок, а в другой вкладке могли поменять другие записи),
+ * и после сбоя: запрос упал или не дождался ответа, а на сервере изменение могло примениться.
+ * У удаления ответа нет — request возвращает удалённую запись сам.
  */
-export function storeRecord<T extends { id: number }>(
+export async function saveRecord<T extends { id: number }>(
   queryClient: QueryClient,
   queryKey: HealthListKey,
-  record: T,
-  { remove = false, prepend = false }: { remove?: boolean; prepend?: boolean } = {},
-): void {
+  request: Promise<T>,
+  { remove = false, prepend = false }: StoreOptions = {},
+): Promise<T> {
+  const record = await request.catch((error: unknown) => {
+    invalidateList(queryClient, queryKey)
+    throw error
+  })
   queryClient.setQueryData<T[]>(queryKey, (list) => {
     if (!list) return list
     if (remove) return list.filter((item) => item.id !== record.id)
@@ -30,9 +43,5 @@ export function storeRecord<T extends { id: number }>(
     return prepend ? [record, ...list] : [...list, record]
   })
   invalidateList(queryClient, queryKey)
-}
-
-/** Запрос изменения упал или не дождался ответа, а на сервере изменение могло примениться — перечитываем список. */
-export function refetchAfterFailure(queryClient: QueryClient, queryKey: HealthListKey): void {
-  invalidateList(queryClient, queryKey)
+  return record
 }

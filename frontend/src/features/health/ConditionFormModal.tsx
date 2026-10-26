@@ -4,17 +4,13 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import type { Condition, ConditionCreate, ConditionKind, ConditionUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
-import { Button, FormAlert, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
-import { conditionKindLabel } from '../../lib/labels'
+import type { Condition, ConditionCreate, ConditionKind } from '../../api/schema'
+import { FormActions, Modal, SelectField, TextareaField, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
+import { conditionKindOptions } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
-
-const kindOptions: SelectOption[] = (['allergy', 'chronic'] as const).map((value) => ({
-  value,
-  label: conditionKindLabel[value],
-}))
+import { requiredError } from '../../lib/checks'
+import { saveRecord } from './health-cache'
 
 interface ConditionFormModalProps {
   open: boolean
@@ -54,15 +50,6 @@ function toPayload(values: ConditionValues): ConditionCreate {
   return { kind: values.kind as ConditionKind, title: values.title.trim(), description: description === '' ? null : description }
 }
 
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: ConditionCreate, condition: Condition): ConditionUpdate {
-  const update: ConditionUpdate = {}
-  if (next.kind !== condition.kind) update.kind = next.kind
-  if (next.title !== condition.title) update.title = next.title
-  if (next.description !== condition.description) update.description = next.description
-  return update
-}
-
 interface ConditionFormProps {
   petId: number
   condition?: Condition
@@ -81,9 +68,10 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
     initial: initialValues(baseline),
     validate: (values) => ({
       kind: values.kind ? undefined : validationMessages.conditionKind,
-      title: values.title.trim() ? undefined : validationMessages.required,
+      title: requiredError(values.title),
     }),
     context: 'health',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -91,39 +79,23 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
-        const request =
-          baseline && update
-            ? unwrap(
-                api.PATCH('/pets/{pet_id}/conditions/{id}', {
-                  params: { path: { pet_id: petId, id: baseline.id } },
-                  body: update,
-                  signal,
-                }),
-              )
-            : unwrap(api.POST('/pets/{pet_id}/conditions', { params: { path: { pet_id: petId } }, body: payload, signal }))
-        const saved = await request.catch((error: unknown) => {
-          refetchAfterFailure(queryClient, queryKey)
-          throw error
-        })
-        storeRecord(queryClient, queryKey, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(
+              api.PATCH('/pets/{pet_id}/conditions/{id}', {
+                params: { path: { pet_id: petId, id: baseline.id } },
+                body: update,
+              }),
+            )
+          : unwrap(api.POST('/pets/{pet_id}/conditions', { params: { path: { pet_id: petId } }, body: payload }))
+      const saved = await saveRecord(queryClient, queryKey, request)
+      onSaved(saved)
     },
   })
 
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
-
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
-      <SelectField label="Тип" options={kindOptions} placeholder="Выберите тип" {...form.field('kind')} />
+      <SelectField label="Тип" options={conditionKindOptions} placeholder="Выберите тип" {...form.field('kind')} />
       <TextField
         label="Название"
         hint="Например, «Аллергия на курицу»"
@@ -138,16 +110,13 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
         maxLength={healthLimits.conditionDescriptionMax}
         {...form.field('description')}
       />
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }
