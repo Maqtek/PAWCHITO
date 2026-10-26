@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { remindersQuery } from '../../api/queries'
 import type { Reminder } from '../../api/schema'
-import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from '../../components/ui'
+import { Badge, Button, LoadError, ProgressBar, SectionCard, Spinner, linkClass } from '../../components/ui'
 import { formatDayDate, formatDays, formatShortDate, formatTime } from '../../lib/format'
 import { groupBy } from '../../lib/group-by'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
@@ -25,7 +25,6 @@ interface ActiveCourseProps {
  */
 export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
   const { prescription, appointment, lastDay } = course
-  const headingId = useId()
   const reminders = useQuery(remindersQuery({ prescription_id: prescription.id }))
   const [showPast, setShowPast] = useState(false)
   // После отметки кнопки дозы пропадают — фокус переходит на дни курса, а не на body.
@@ -89,11 +88,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
   }
 
   return (
-    <section aria-labelledby={headingId}>
-      <Card className="p-5 sm:p-6">
-        <h2 id={headingId} className="text-lg font-extrabold break-words">
-          {title}
-        </h2>
+    <>
+      <SectionCard title={title}>
         <p className="mt-1 text-sm text-ink-muted">
           {prescription.times.join(', ')} · {formatDays(prescription.duration_days)} · с{' '}
           {formatShortDate(prescription.start_date)} по {formatShortDate(lastDay)}
@@ -108,8 +104,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
         <div ref={daysRef} tabIndex={-1} className="mt-4 outline-none">
           {days()}
         </div>
-      </Card>
+      </SectionCard>
       {skipModal}
-    </section>
+    </>
   )
 }

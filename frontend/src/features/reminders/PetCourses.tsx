@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Route } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { petAppointmentsQuery, prescriptionProgressQuery } from '../../api/queries'
-import { Card, EmptyState, LoadError, Spinner } from '../../components/ui'
+import { EmptyState, LoadError, SectionCard, Spinner } from '../../components/ui'
 import { formatShortDate, moscowIsoDate } from '../../lib/format'
 import { ActiveCourse } from './ActiveCourse'
 import { courseTitle, petCourses, progressText, type Course } from './course'
@@ -16,7 +16,6 @@ interface PetCoursesProps {
 export function PetCourses({ petId, onStatus }: PetCoursesProps) {
   const appointments = useQuery(petAppointmentsQuery(petId))
   const [today] = useState(() => moscowIsoDate(new Date()))
-  const completedId = useId()
 
   if (appointments.isPending) return <Spinner label="Загружаем курсы лечения" />
   if (!appointments.data) {
@@ -41,20 +40,15 @@ export function PetCourses({ petId, onStatus }: PetCoursesProps) {
         <ActiveCourse key={course.prescription.id} course={course} today={today} onStatus={onStatus} />
       ))}
       {completed.length > 0 && (
-        <section aria-labelledby={completedId}>
-          <Card className="p-5 sm:p-6">
-            <h2 id={completedId} className="text-lg font-extrabold">
-              Завершённые курсы
-            </h2>
-            <ul className="mt-4 flex flex-col gap-3">
-              {completed.map((course) => (
-                <li key={course.prescription.id}>
-                  <CompletedCourse course={course} />
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </section>
+        <SectionCard title="Завершённые курсы">
+          <ul className="mt-4 flex flex-col gap-3">
+            {completed.map((course) => (
+              <li key={course.prescription.id}>
+                <CompletedCourse course={course} />
+              </li>
+            ))}
+          </ul>
+        </SectionCard>
       )}
     </div>
   )

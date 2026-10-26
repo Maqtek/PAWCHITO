@@ -1,10 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
 import { latestNotificationsQuery, queryKeys } from '../../api/queries'
 import type { Notification } from '../../api/schema'
-import { Button, Card, Spinner } from '../../components/ui'
+import { Button, SectionCard, Spinner } from '../../components/ui'
 import { cn } from '../../lib/cn'
 import { formatShortDate, formatTime } from '../../lib/format'
 
@@ -13,7 +12,6 @@ const LATEST = 5
 
 /** Последние уведомления: переход по ссылке отмечает уведомление прочитанным, как в колокольчике (БП §9). */
 export function LatestNotifications() {
-  const headingId = useId()
   const queryClient = useQueryClient()
   const { data, isPending, refetch } = useQuery(latestNotificationsQuery(LATEST))
 
@@ -72,14 +70,5 @@ export function LatestNotifications() {
     )
   }
 
-  return (
-    <section aria-labelledby={headingId}>
-      <Card className="p-5 sm:p-6">
-        <h2 id={headingId} className="text-lg font-extrabold">
-          Уведомления
-        </h2>
-        {content()}
-      </Card>
-    </section>
-  )
+  return <SectionCard title="Уведомления">{content()}</SectionCard>
 }

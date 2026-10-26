@@ -1,8 +1,7 @@
 import { CalendarCheck } from 'lucide-react'
-import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import type { Reminder } from '../../api/schema'
-import { Card, EmptyState, linkClass } from '../../components/ui'
+import { EmptyState, linkClass, SectionCard } from '../../components/ui'
 import { ReminderItem } from '../reminders/ReminderItem'
 import { useReminderMarking } from '../reminders/useReminderMarking'
 
@@ -16,20 +15,18 @@ interface TodayRemindersProps {
 
 /** Дела на сегодня вместе с просроченными: отметка — как в разделе «Дела», удаление — только там. */
 export function TodayReminders({ reminders, today, onStatus }: TodayRemindersProps) {
-  const headingId = useId()
   const { listRef, marked, skip, skipModal } = useReminderMarking<HTMLDivElement>(today, onStatus)
 
   return (
-    <section aria-labelledby={headingId}>
-      <Card className="p-5 sm:p-6">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <h2 id={headingId} className="text-lg font-extrabold">
-            Сегодня
-          </h2>
+    <>
+      <SectionCard
+        title="Сегодня"
+        action={
           <Link to="/tasks" className={`${linkClass} text-sm`}>
             Все дела
           </Link>
-        </div>
+        }
+      >
         {/* tabIndex -1: сюда уходит фокус, когда отмеченное дело пропало из списка. */}
         <div ref={listRef} tabIndex={-1} className="mt-4 outline-none">
           {reminders.length === 0 ? (
@@ -54,8 +51,8 @@ export function TodayReminders({ reminders, today, onStatus }: TodayRemindersPro
             </ul>
           )}
         </div>
-      </Card>
+      </SectionCard>
       {skipModal}
-    </section>
+    </>
   )
 }
