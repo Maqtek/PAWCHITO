@@ -61,7 +61,7 @@ function findRecord<T extends { id: number; pet_id: number }>(list: T[], petId: 
 const sent = (raw: Record<string, unknown>, field: string) => field in raw
 
 /** Новые даты сверху; в один день — последняя добавленная (Р-45, Р-46). */
-const newestFirst = <T extends { id: number; date: string }>(a: T, b: T) =>
+export const newestFirst = <T extends { id: number; date: string }>(a: T, b: T) =>
   a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1
 
 // Как у бэкенда: доступ (401/403), тело (422), поиск питомца и записи (404), источник записи (403).
@@ -156,30 +156,11 @@ export const healthHandlers = [
     const state = readServer()
     const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
-    const query = new URL(request.url).searchParams
-    const from = query.get('date_from')
-    const to = query.get('date_to')
-    const fromError = from === null ? null : isoDateError(from, 'Начало периода')
-    const toError = to === null ? null : isoDateError(to, 'Конец периода')
-    const orderError = !fromError && !toError && from !== null && to !== null && from > to
-    const detail = [
-      fromError && { field: 'date_from', msg: fromError },
-      (toError ?? orderError) && { field: 'date_to', msg: toError ?? 'Конец периода — не раньше начала' },
-    ].filter((item): item is { field: string; msg: string } => typeof item === 'object' && item !== null)
-    if (detail.length > 0) {
-      // Ошибка параметра запроса — в loc ["query", …], как у FastAPI.
-      return HttpResponse.json(
-        { detail: detail.map(({ field, msg }) => ({ loc: ['query', field], msg, type: 'value_error' })) },
-        { status: 422 },
-      )
-    }
+    const period = readPeriod(request)
+    if (period instanceof Response) return period
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
-    return HttpResponse.json(
-      state.observations
-        .filter((item) => item.pet_id === pet.id && (from === null || item.date >= from) && (to === null || item.date <= to))
-        .sort(newestFirst),
-    )
+    return HttpResponse.json(observationsInPeriod(state, pet.id, period))
   }),
 
   http.post('*/api/pets/:petId/observations', async ({ request, params }) => {
@@ -323,6 +304,38 @@ export const healthHandlers = [
     }),
   ),
 ]
+
+interface Period {
+  from: string | null
+  to: string | null
+}
+
+/** Период дневника из параметров date_from / date_to или готовый ответ 422 (Р-45); его же читает карточка клиники (Р-54). */
+export function readPeriod(request: Request): Period | Response {
+  const query = new URL(request.url).searchParams
+  const from = query.get('date_from')
+  const to = query.get('date_to')
+  const fromError = from === null ? null : isoDateError(from, 'Начало периода')
+  const toError = to === null ? null : isoDateError(to, 'Конец периода')
+  const orderError = !fromError && !toError && from !== null && to !== null && from > to
+  const detail = [
+    fromError && { field: 'date_from', msg: fromError },
+    (toError ?? orderError) && { field: 'date_to', msg: toError ?? 'Конец периода — не раньше начала' },
+  ].filter((item): item is { field: string; msg: string } => typeof item === 'object' && item !== null)
+  if (detail.length === 0) return { from, to }
+  // Ошибка параметра запроса — в loc ["query", …], как у FastAPI.
+  return HttpResponse.json(
+    { detail: detail.map(({ field, msg }) => ({ loc: ['query', field], msg, type: 'value_error' })) },
+    { status: 422 },
+  )
+}
+
+/** Наблюдения питомца за период, границы включительно: новые даты сверху. */
+export function observationsInPeriod(state: MockServerState, petId: number, { from, to }: Period): Observation[] {
+  return state.observations
+    .filter((item) => item.pet_id === petId && (from === null || item.date >= from) && (to === null || item.date <= to))
+    .sort(newestFirst)
+}
 
 /** Проверки полей наблюдения: в POST дата обязательна, в PATCH — только присланные поля, null в дате — 422. */
 function observationChecks(raw: Record<string, unknown>, { creating }: { creating: boolean }) {

@@ -8,7 +8,7 @@ import { normalizeSpecialization, specializationError, vacationError, vetNameErr
 const notFound = () => HttpResponse.json({ detail: 'Врач не найден' }, { status: 404 })
 
 /** Клиника аккаунта из access-токена или готовый ответ 401/403. */
-function authorizeClinic(state: MockServerState, request: Request): number | Response {
+export function authorizeClinic(state: MockServerState, request: Request): number | Response {
   const account = authorizeAccount(state, request, { allowed: ['clinic'] })
   if (account instanceof Response) return account
   // У аккаунта клиники clinic_id есть всегда; без него — как без прав.

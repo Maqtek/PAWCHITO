@@ -13,6 +13,10 @@ from app.routers.health import router as health_router
 from app.routers.users import router as users_router
 from app.services.rate_limit import TooManyAttemptsError
 
+# Префикс /api: прокси фронта шлёт запросы как есть, cookie выставлена на /api/auth.
+# export_openapi выносит его в servers, чтобы пути в openapi.json совпадали с клиентом фронта.
+API_PREFIX = "/api"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -27,6 +31,5 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(TooManyAttemptsError, too_many_attempts_handler)
 
 app.include_router(health_router)
-# Префикс /api: прокси фронта шлёт запросы как есть, cookie выставлена на /api/auth
-app.include_router(auth_router, prefix="/api")
-app.include_router(users_router, prefix="/api")
+app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(users_router, prefix=API_PREFIX)

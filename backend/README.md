@@ -54,3 +54,13 @@ python -m app.cli reset-admin-password admin@example.com
 ```
 
 В Docker — `docker compose exec backend python -m app.cli reset-admin-password admin@example.com`. Пароль спрашивается дважды; для скриптов — `--password-stdin`. Все сессии администратора завершаются, пауза после неудачных попыток снимается.
+
+## OpenAPI для фронта
+
+Фронт генерирует типы из `backend/openapi.json` (`pnpm gen:api`). После любого изменения эндпоинтов или схем обновите файл и закоммитьте его вместе с кодом:
+
+```bash
+python -m app.export_openapi
+```
+
+Пути в файле — без `/api` (префикс в `servers`). CI проверяет актуальность: `python -m app.export_openapi --check`.

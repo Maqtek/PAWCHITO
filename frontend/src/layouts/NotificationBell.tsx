@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { unreadCountQuery } from '../api/queries'
 import { CountBadge, Dropdown } from '../components/ui'
+import { NotificationList } from '../features/notifications/NotificationList'
 
 export function NotificationBell() {
   const { data } = useQuery(unreadCountQuery)
@@ -18,9 +19,7 @@ export function NotificationBell() {
         </span>
       }
     >
-      {() => (
-        <p className="w-64 px-3 py-4 text-sm text-ink-muted">Список уведомлений появится на этапе 8 роадмапа.</p>
-      )}
+      {(close) => <NotificationList onClose={close} />}
     </Dropdown>
   )
 }
