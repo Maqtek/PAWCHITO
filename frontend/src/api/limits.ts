@@ -26,3 +26,14 @@ export const vetLimits = {
   fullNameMax: 100,
   specializationMax: 100,
 } as const
+
+/**
+ * Лимиты полей питомца (контракты, раздел 2 «Лимиты полей питомца»).
+ * Длина — в символах Unicode (code points), как у authLimits. Порода и дата рождения необязательны (Р-41).
+ */
+export const petLimits = {
+  nameMax: 50,
+  breedMax: 100,
+  /** Раньше — опечатка вроде 0202; позже сегодняшнего дня по Москве дата тоже не проходит. */
+  birthDateMin: '1900-01-01',
+} as const
