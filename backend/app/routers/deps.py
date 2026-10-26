@@ -14,6 +14,7 @@ from app.db.session import get_db
 from app.models import User, UserRole
 from app.repositories.user import UserRepository
 from app.services.auth import AuthService
+from app.services.clinics import ClinicService
 from app.services.rate_limit import AttemptLimiter
 from app.services.users import UserService
 
@@ -32,6 +33,13 @@ def get_auth_service(db: DbSession, limiter: AttemptLimiterDep) -> AuthService:
 
 
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def get_clinic_service(db: DbSession) -> ClinicService:
+    return ClinicService(db)
+
+
+ClinicServiceDep = Annotated[ClinicService, Depends(get_clinic_service)]
 
 
 def get_user_service(db: DbSession) -> UserService:

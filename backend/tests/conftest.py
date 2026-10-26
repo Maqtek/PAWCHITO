@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password
-from app.db.session import get_db
+from app.db.session import ENGINE_CONNECT_ARGS, get_db
 from app.main import app
 from app.models import User, UserRole
 from app.routers.deps import get_attempt_limiter
@@ -63,7 +63,7 @@ def engine() -> Iterator[Engine]:
     )
     command.upgrade(config, "head")
 
-    test_engine = create_engine(url)
+    test_engine = create_engine(url, connect_args=ENGINE_CONNECT_ARGS)
     yield test_engine
     test_engine.dispose()
 
