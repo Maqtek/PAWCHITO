@@ -50,7 +50,7 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
       focusHeadingLater()
       onStatus('Клиника возвращена.')
     } catch (error) {
-      setRestoreError(errorMessage(error, 'clinic'))
+      setRestoreError(errorMessage(error))
     } finally {
       setRestoring(false)
     }
@@ -127,7 +127,6 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
   const form = useForm({
     initial: {},
     validate: () => ({}),
-    context: 'clinic',
     onBusyChange,
     onSubmit: async () => {
       const result = await saveClinic(

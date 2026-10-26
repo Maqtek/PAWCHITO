@@ -70,7 +70,6 @@ function NameForm({ name, onDone }: { name: string; onDone: (message?: string) =
   const form = useForm({
     initial: { full_name: name },
     validate: (values) => ({ full_name: requiredError(values.full_name) }),
-    context: 'profile',
     onSubmit: async ({ full_name }) => {
       const trimmed = full_name.trim()
       if (trimmed === name) {

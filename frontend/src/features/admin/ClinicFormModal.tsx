@@ -91,7 +91,6 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
       closes_at: values.opens_at < values.closes_at ? undefined : validationMessages.closesAfterOpens,
       work_days: parseWorkDays(values.work_days).length > 0 ? undefined : validationMessages.workDays,
     }),
-    context: 'clinic',
     onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)

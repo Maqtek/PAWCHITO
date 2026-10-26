@@ -8,8 +8,6 @@ export type ErrorContext =
   | 'recover'
   | 'change-password'
   | 'recovery-code'
-  | 'profile'
-  | 'clinic'
   | 'clinic-account'
   | 'vet'
   | 'pet'
