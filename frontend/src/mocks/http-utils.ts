@@ -1,6 +1,6 @@
 import { HttpResponse } from 'msw'
 import type { Role } from '../api/schema'
-import { accountFromAuthorization, readServer, type MockAccount, type MockServerState } from './server-state'
+import { accountFromAuthorization, type MockAccount, type MockServerState } from './server-state'
 
 export const unauthorized = () => HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
 export const forbidden = (detail = 'Недостаточно прав') => HttpResponse.json({ detail }, { status: 403 })
@@ -30,10 +30,4 @@ export function authorizeAccount(
   if (account.must_change_password && !allowPasswordChange) return forbidden('password_change_required')
   if (allowed && !allowed.includes(account.role)) return forbidden()
   return account
-}
-
-/** Роль из access-токена или готовый ответ 401/403 — для обработчиков разделов. */
-export function authorize(request: Request, allowed: Role[]): Role | Response {
-  const account = authorizeAccount(readServer(), request, { allowed })
-  return account instanceof Response ? account : account.role
 }

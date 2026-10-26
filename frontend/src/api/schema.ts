@@ -55,7 +55,6 @@ export interface components {
       | 'appointment_rescheduled'
     /** UserOut из openapi.json. full_name схема допускает null — имя показывать через displayName. */
     User: Generated['UserOut']
-    RegisterResponse: Generated['RegisterOut']
     ClinicRef: { id: number; name: string }
     Pet: {
       id: number
@@ -153,7 +152,7 @@ export interface components {
       /** YYYY-MM-DD */
       start_date: string
     }
-    /** Итог приёма — только у завершённой записи; форма итога — этап 9. */
+    /** Итог приёма — только у завершённой записи (Р-56). */
     AppointmentOutcome: {
       conclusion: string
       recommendations: string | null
@@ -382,16 +381,6 @@ interface ManualPaths {
   }
   '/pets/{pet_id}': {
     parameters: PetPath
-    get: {
-      parameters: PetPath
-      requestBody?: never
-      responses: {
-        200: Json<Schemas['Pet']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        404: Json<Schemas['Error']>
-      }
-    }
     patch: {
       parameters: PetPath
       requestBody: Body<Schemas['PetUpdate']>
@@ -895,17 +884,6 @@ interface ManualPaths {
         404: Json<Schemas['Error']>
       }
     }
-    patch: {
-      parameters: PetPath
-      requestBody: Body<Schemas['ClinicPetUpdate']>
-      responses: {
-        200: Json<Schemas['Pet']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        404: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
   }
   '/clinic/appointments/{id}/outcome': {
     parameters: AppointmentPath
@@ -918,34 +896,6 @@ interface ManualPaths {
         403: Json<Schemas['Error']>
         404: Json<Schemas['Error']>
         409: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
-  '/clinic/pets/{pet_id}/weight': {
-    parameters: PetPath
-    post: {
-      parameters: PetPath
-      requestBody: Body<Schemas['WeightCreate']>
-      responses: {
-        201: Json<Schemas['Observation']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        404: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
-  '/clinic/pets/{pet_id}/conditions': {
-    parameters: PetPath
-    post: {
-      parameters: PetPath
-      requestBody: Body<Schemas['ConditionCreate']>
-      responses: {
-        201: Json<Schemas['Condition']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        404: Json<Schemas['Error']>
         422: Json<Schemas['HTTPValidationError']>
       }
     }
@@ -1150,7 +1100,6 @@ export type EventCategory = Schemas['EventCategory']
 export type AppointmentStatus = Schemas['AppointmentStatus']
 export type User = Schemas['User']
 export type Token = Generated['TokenOut']
-export type ClinicRef = Schemas['ClinicRef']
 export type Pet = Schemas['Pet']
 export type PetCreate = Schemas['PetCreate']
 export type PetUpdate = Schemas['PetUpdate']
@@ -1176,20 +1125,15 @@ export type Appointment = Schemas['Appointment']
 export type AppointmentCreate = Schemas['AppointmentCreate']
 export type TimelineItemType = Schemas['TimelineItemType']
 export type TimelineItem = Schemas['TimelineItem']
-export type UnreadCount = Schemas['UnreadCount']
 export type NotificationType = Schemas['NotificationType']
 export type Notification = Schemas['Notification']
 export type NotificationList = Schemas['NotificationList']
 export type ClinicAppointmentCancel = Schemas['ClinicAppointmentCancel']
 export type ClinicPetCard = Schemas['ClinicPetCard']
-export type PrescriptionCreate = Schemas['PrescriptionCreate']
-export type PetUpdateByClinic = Schemas['PetUpdateByClinic']
 export type OutcomeCreate = Schemas['OutcomeCreate']
 export type OutcomeResult = Schemas['OutcomeResult']
 export type ClinicPetUpdate = Schemas['ClinicPetUpdate']
 export type WeightCreate = Schemas['WeightCreate']
-export type PetPhoto = Schemas['PetPhoto']
-export type ReminderSource = Schemas['ReminderSource']
 export type ReminderStatus = Schemas['ReminderStatus']
 export type Reminder = Schemas['Reminder']
 export type ReminderCreate = Schemas['ReminderCreate']
@@ -1202,26 +1146,18 @@ export type CalendarAppointmentEvent = Schemas['CalendarAppointmentEvent']
 export type CalendarVaccinationEvent = Schemas['CalendarVaccinationEvent']
 export type CalendarEvent = Schemas['CalendarEvent']
 export type Calendar = Schemas['Calendar']
-export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Generated['LoginIn']
 export type RegisterRequest = Generated['RegisterIn']
-export type RegisterResponse = Schemas['RegisterResponse']
 export type RecoverRequest = Generated['RecoverIn']
-export type RecoveryCode = Generated['RecoveryCodeOut']
 export type ChangePasswordRequest = Generated['ChangePasswordIn']
 export type UserUpdate = Generated['UserUpdate']
 export type RecoveryCodeRequest = Generated['RecoveryCodeIn']
 export type ValidationError = Generated['ValidationError']
-export type HTTPValidationError = Generated['HTTPValidationError']
 export type Clinic = Schemas['Clinic']
-export type ClinicAccount = Schemas['ClinicAccount']
 export type AdminClinic = Schemas['AdminClinic']
 export type ClinicCreate = Schemas['ClinicCreate']
 export type ClinicUpdate = Schemas['ClinicUpdate']
 export type ClinicAccountCreate = Schemas['ClinicAccountCreate']
-export type ClinicAccountCreated = Schemas['ClinicAccountCreated']
-export type TemporaryPassword = Schemas['TemporaryPassword']
-export type ClinicArchived = Schemas['ClinicArchived']
 export type Vet = Schemas['Vet']
 export type VetCreate = Schemas['VetCreate']
 export type VetUpdate = Schemas['VetUpdate']

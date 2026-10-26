@@ -156,7 +156,7 @@ describe('питомцы: архив', () => {
     const response = await call('POST', '/pets/10/archive', { token })
     expect(response.status).toBe(200)
     const result = (await response.json()) as PetArchived
-    // У Майло в seed две предстоящие записи — «Подтверждена» и «Заявка» (этап 7).
+    // У Майло в seed две предстоящие записи — «Подтверждена» и «Заявка».
     expect(result).toMatchObject({ pet: { id: 10 }, cancelled_appointments: 2, deleted_reminders: planned })
     expect(result.pet.archived_at).not.toBeNull()
     const list = (await (await call('GET', '/pets', { token })).json()) as Pet[]

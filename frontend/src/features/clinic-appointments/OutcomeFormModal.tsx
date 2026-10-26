@@ -246,7 +246,6 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
       setSubmitting(false)
       onBusyChange(false)
       refetchClinicAppointments(queryClient)
-      void queryClient.invalidateQueries({ queryKey: ['clinic', 'pets', appointment.pet.id] })
     }
   }
 

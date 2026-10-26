@@ -2,13 +2,13 @@ import { moscowLocal } from '../lib/dates'
 import { formatShortDate, formatTime } from '../lib/format'
 
 /** «Петров Павел Петрович» → «Петров П. П.»; одно слово остаётся как есть. */
-export function shortName(fullName: string): string {
+function shortName(fullName: string): string {
   const [last, ...rest] = fullName.trim().split(/\s+/)
   return rest.length > 0 ? `${last} ${rest.map((part) => `${part[0]}.`).join(' ')}` : last
 }
 
 /** «30 октября в 10:00» — время записи по Москве. */
-export const noticeWhen = (slotStart: string) => `${formatShortDate(slotStart)} в ${formatTime(slotStart)}`
+const noticeWhen = (slotStart: string) => `${formatShortDate(slotStart)} в ${formatTime(slotStart)}`
 
 /** Ссылка клинике — список записей на день приёма: отдельной страницы записи у клиники нет (Р-55). */
 export function clinicDayLink(slotStart: string): string {

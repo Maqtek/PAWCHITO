@@ -55,8 +55,8 @@ function parseRetryAfter(value: string | null): number | null {
 
 /** Сервер недоступен: нет сети, таймаут или сбой при обновлении токена. Сессию не завершает (БП §1). */
 export class NetworkError extends Error {
-  constructor(message = 'Нет связи с сервером') {
-    super(message)
+  constructor() {
+    super('Нет связи с сервером')
     this.name = 'NetworkError'
   }
 }

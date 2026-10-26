@@ -4,7 +4,7 @@ import { clinicDayLink, noticeText } from './notification-texts'
 import type { MockAppointment, MockServerState } from './server-state'
 
 /** Событие записи и кому о нём сообщить (БП §9): автор действия уведомление не получает (Р-55). */
-export type AppointmentEvent =
+type AppointmentEvent =
   | 'requested'
   | 'cancelledByOwner'
   | 'cancelledPetArchived'

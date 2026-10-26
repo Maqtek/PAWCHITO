@@ -6,7 +6,7 @@ import { formatDue } from '../reminders/reminder-actions'
 /** Календарь показывает события с сегодня по сегодня + 30 дней; дела дальше — отдельным списком (Р-65). */
 export const CALENDAR_DAYS = 30
 
-export type CalendarGroupKey = keyof Calendar
+type CalendarGroupKey = keyof Calendar
 
 /** Группы по порядку (БП §8). */
 export const calendarGroups: readonly { key: CalendarGroupKey; title: string }[] = [

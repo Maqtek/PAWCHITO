@@ -70,7 +70,7 @@ export function PetPhotoUpload({ petId, onStatus }: { petId: number; onStatus: (
         onChange={(event) => void upload(event)}
       />
       <p className="text-xs text-ink-muted">JPEG, PNG или WebP до 5 МБ — заменит прежнее фото.</p>
-      {error && <FormAlert message={error} />}
+      <FormAlert message={error} />
     </div>
   )
 }

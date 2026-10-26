@@ -91,8 +91,6 @@ describe('TasksPage', () => {
     expect(within(group('Позже')).queryByRole('button', { name: /^Выполнено/ })).not.toBeInTheDocument()
 
     expect(screen.queryByRole('region', { name: 'Дальше 30 дней' })).not.toBeInTheDocument()
-    expect(screen.queryByText(/Появится на этапе/)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Показать ещё неделю' })).not.toBeInTheDocument()
   })
 
   it('записи — время, причина, клиника и врач, статус и ссылка на запись', async () => {

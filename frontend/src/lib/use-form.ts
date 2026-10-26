@@ -12,7 +12,7 @@ export interface FormFailure<V extends FormValues> {
   form?: string
 }
 
-export interface UseFormOptions<V extends FormValues> {
+interface UseFormOptions<V extends FormValues> {
   initial: V
   /** Ошибки полей; у верного поля — undefined или ключа нет. */
   validate: (values: V) => Partial<Record<keyof V, string | undefined>>
