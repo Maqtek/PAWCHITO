@@ -14,10 +14,12 @@ import { ClinicPetPage } from '../pages/clinic/ClinicPetPage'
 import { ClinicVetsPage } from '../pages/clinic/ClinicVetsPage'
 import { NotFoundPage } from '../pages/common/NotFoundPage'
 import { ProfilePage } from '../pages/common/ProfilePage'
+import { AppointmentPage } from '../pages/owner/AppointmentPage'
 import { AppointmentsPage } from '../pages/owner/AppointmentsPage'
 import { CoursePage } from '../pages/owner/CoursePage'
 import { HistoryPage } from '../pages/owner/HistoryPage'
 import { HomePage } from '../pages/owner/HomePage'
+import { NewAppointmentPage } from '../pages/owner/NewAppointmentPage'
 import { PetsPage } from '../pages/owner/PetsPage'
 import { TasksPage } from '../pages/owner/TasksPage'
 
@@ -59,6 +61,8 @@ export function AppRoutes() {
           <Route path="course" element={<CoursePage />} />
           <Route path="history" element={<HistoryPage />} />
           <Route path="appointments" element={<AppointmentsPage />} />
+          <Route path="appointments/new" element={<NewAppointmentPage />} />
+          <Route path="appointments/:appointmentId" element={<AppointmentPage />} />
           <Route path="pets" element={<PetsPage />} />
         </Route>
         <Route

@@ -1,0 +1,113 @@
+import { screen, within } from '@testing-library/react'
+import { http, HttpResponse } from 'msw'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AppRoutes } from '../../app/routes'
+import { server } from '../../mocks/node'
+import { readServer } from '../../mocks/server-state'
+import { loginMockAs, resetMockServer } from '../../mocks/session'
+import { renderWithProviders } from '../../test/render'
+
+/** role="status" есть и у спиннеров, поэтому статус страницы ищем по тексту и проверяем, что он в live-регионе. */
+async function findStatus(text: string) {
+  const message = await screen.findByText(text)
+  expect(message.closest('[role="status"]')).not.toBeNull()
+  return message
+}
+
+const section = (name: string) => screen.getByRole('region', { name })
+const headings = (name: string) =>
+  within(section(name))
+    .queryAllByRole('article')
+    .map((item) => within(item).getByRole('heading').textContent)
+
+// Среда, 28 октября 2026, 09:00 по Москве; seed записей пересчитан от этой даты.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
+  resetMockServer()
+  loginMockAs('owner')
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe('AppointmentsPage', () => {
+  it('предстоящие — по времени, прошедшие и отменённые — отдельно; отмена клиникой с комментарием, итог', async () => {
+    renderWithProviders(<AppRoutes />, { route: '/appointments' })
+    expect(await screen.findByRole('region', { name: 'Предстоящие' })).toBeInTheDocument()
+    expect(headings('Предстоящие')).toEqual(['пятница, 30 октября, 10:00', 'понедельник, 2 ноября, 15:30'])
+    expect(headings('Прошедшие и отменённые')).toEqual(['пятница, 23 октября, 12:00', 'понедельник, 12 октября, 11:00'])
+
+    const cancelled = screen.getByRole('article', { name: 'пятница, 23 октября, 12:00' })
+    expect(within(cancelled).getByText('Клиника отменила запись: «Врач заболела, перезапишитесь, пожалуйста»')).toBeInTheDocument()
+    expect(within(cancelled).queryByRole('button', { name: /^Отменить/ })).not.toBeInTheDocument()
+    const completed = screen.getByRole('article', { name: 'понедельник, 12 октября, 11:00' })
+    expect(within(completed).getByText('Итог: Растяжение связок задней лапы')).toBeInTheDocument()
+
+    const vaccination = screen.getByRole('article', { name: 'пятница, 30 октября, 10:00' })
+    expect(within(vaccination).getByText('Подтверждена')).toBeInTheDocument()
+    expect(within(vaccination).getByText('ВетДоктор · Петров Павел Петрович')).toBeInTheDocument()
+    expect(within(vaccination).getByText('Вакцинация: Плановая от бешенства')).toBeInTheDocument()
+    expect(within(vaccination).getByRole('link', { name: 'Подробнее, запись на пятница, 30 октября, 10:00' })).toHaveAttribute(
+      'href',
+      '/appointments/20',
+    )
+  })
+
+  it('отмена с подтверждением: запись уходит в прошедшие, статус, фокус на списке', async () => {
+    const { user } = renderWithProviders(<AppRoutes />, { route: '/appointments' })
+    await user.click(await screen.findByRole('button', { name: 'Отменить, запись на понедельник, 2 ноября, 15:30' }))
+    const dialog = screen.getByRole('dialog', { name: 'Отменить запись' })
+    expect(within(dialog).getByText(/будет отменена/)).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Отменить запись' }))
+    await findStatus('Запись отменена. Клиника получит уведомление.')
+    expect(headings('Предстоящие')).toEqual(['пятница, 30 октября, 10:00'])
+    expect(within(screen.getByRole('article', { name: 'понедельник, 2 ноября, 15:30' })).getByText('Вы отменили запись')).toBeInTheDocument()
+    expect(section('Предстоящие').parentElement?.parentElement).toHaveFocus()
+    expect(readServer().appointments.find((item) => item.id === 21)?.cancelled_by).toBe('owner')
+  })
+
+  it('приём начался, пока окно было открыто, — 409 в окне, запись на месте', async () => {
+    server.use(
+      http.post('*/api/appointments/:id/cancel', () => HttpResponse.json({ detail: 'Приём уже начался' }, { status: 409 })),
+    )
+    const { user } = renderWithProviders(<AppRoutes />, { route: '/appointments' })
+    await user.click(await screen.findByRole('button', { name: 'Отменить, запись на пятница, 30 октября, 10:00' }))
+    const dialog = screen.getByRole('dialog', { name: 'Отменить запись' })
+    await user.click(within(dialog).getByRole('button', { name: 'Отменить запись' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Запись уже нельзя отменить')
+  })
+
+  it('у питомца без записей — приглашение записаться', async () => {
+    const { user } = renderWithProviders(<AppRoutes />, { route: '/appointments' })
+    await screen.findByRole('region', { name: 'Предстоящие' })
+    await user.click(screen.getByRole('button', { name: /^Питомец: Майло/ }))
+    await user.click(screen.getByRole('button', { name: /Барсик/ }))
+    // У Барсика одна заявка на завтра.
+    expect(await screen.findByRole('article', { name: 'четверг, 29 октября, 09:00' })).toBeInTheDocument()
+  })
+})
+
+describe('AppointmentPage', () => {
+  it('подробности записи и отмена прямо со страницы', async () => {
+    const { user } = renderWithProviders(<AppRoutes />, { route: '/appointments/21' })
+    expect(await screen.findByText('Повторный приём')).toBeInTheDocument()
+    expect(screen.getByText('Клиника ещё не подтвердила запись.')).toBeInTheDocument()
+    expect(screen.getByText('Ким Елена Викторовна')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Отменить запись' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Отменить запись' }))
+    await findStatus('Запись отменена. Клиника получит уведомление.')
+    expect(screen.getByText('Вы отменили запись')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Отменить запись' })).not.toBeInTheDocument()
+  })
+
+  it('итог завершённой записи; чужая или несуществующая — «Запись не найдена»', async () => {
+    const view = renderWithProviders(<AppRoutes />, { route: '/appointments/22' })
+    expect(await screen.findByRole('heading', { name: 'Итог приёма' })).toBeInTheDocument()
+    expect(screen.getByText('Статус ухода: На лечении')).toBeInTheDocument()
+    view.unmount()
+    renderWithProviders(<AppRoutes />, { route: '/appointments/25' })
+    expect(await screen.findByText('Запись не найдена')).toBeInTheDocument()
+  })
+})
