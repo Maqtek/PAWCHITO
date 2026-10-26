@@ -1,46 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
 import type { Vet } from '../../api/schema'
-import { readServer, SEED_PASSWORD, updateServer } from '../server-state'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const clinic = () => accessToken('clinic@example.com')
-
-async function fieldsOf(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc[1]).sort()
-}
+import { accessToken, bodyFields, call, clinic } from '../../test/mock-api'
+import { addZoovetAccount } from '../../test/mock-state'
+import { readServer } from '../server-state'
 
 const vetInState = (id: number) => readServer().vets.find((vet) => vet.id === id)
-
-/** Аккаунт клиники «Зоовет» (4): в seed его нет, а врач у клиники есть. */
-function addZoovetAccount() {
-  updateServer((state) => {
-    state.accounts.push({
-      id: state.nextUserId,
-      email: 'zoovet@example.com',
-      password: SEED_PASSWORD,
-      role: 'clinic',
-      full_name: '',
-      must_change_password: false,
-      is_active: true,
-      recovery_code: null,
-      clinic_id: 4,
-    })
-    state.nextUserId += 1
-  })
-}
 
 describe('врачи: доступ', () => {
   it('гость — 401, владелец и администратор — 403', async () => {
@@ -89,21 +53,17 @@ describe('врачи: добавление', () => {
       body: { full_name: '   ', specialization: 'х'.repeat(101) },
     })
     expect(response.status).toBe(422)
-    expect(await fieldsOf(response)).toEqual(['full_name', 'specialization'])
+    expect(await bodyFields(response)).toEqual(['full_name', 'specialization'])
   })
 
   it('не строки, управляющие символы, тело не JSON — 422', async () => {
     const token = await clinic()
     const types = await call('POST', '/clinic/vets', { token, body: { full_name: 5, specialization: false } })
-    expect(await fieldsOf(types)).toEqual(['full_name', 'specialization'])
+    expect(await bodyFields(types)).toEqual(['full_name', 'specialization'])
     const control = await call('POST', '/clinic/vets', { token, body: { full_name: 'Петров\u0007', specialization: 'тера\nпевт' } })
-    expect(await fieldsOf(control)).toEqual(['full_name', 'specialization'])
-    const notJson = await fetch(`${apiBaseUrl()}/clinic/vets`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: '{',
-    })
-    expect(await fieldsOf(notJson)).toEqual(['full_name'])
+    expect(await bodyFields(control)).toEqual(['full_name', 'specialization'])
+    const notJson = await call('POST', '/clinic/vets', { token, raw: '{' })
+    expect(await bodyFields(notJson)).toEqual(['full_name'])
   })
 
   it('длина — в символах Unicode: 100 эмодзи проходят, 101 — нет', async () => {
@@ -154,7 +114,7 @@ describe('врачи: изменение', () => {
     expect(((await cleared.json()) as Vet).specialization).toBeNull()
     const nulls = await call('PATCH', '/clinic/vets/4', { token, body: { full_name: null, on_vacation: null } })
     expect(nulls.status).toBe(422)
-    expect(await fieldsOf(nulls)).toEqual(['full_name', 'on_vacation'])
+    expect(await bodyFields(nulls)).toEqual(['full_name', 'on_vacation'])
     for (const value of ['true', 1, 0]) {
       const response = await call('PATCH', '/clinic/vets/4', { token, body: { on_vacation: value } })
       expect(response.status).toBe(422)

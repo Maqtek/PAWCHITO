@@ -1,25 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
-import { readServer, SEED_PASSWORD, updateServer, writeMockCookie } from '../server-state'
+import type { AdminClinic, components, User } from '../../api/schema'
+import { accessToken, admin, bodyFields, call, login, refresh } from '../../test/mock-api'
+import { readServer, updateServer, writeMockCookie } from '../server-state'
 import { readMockCookie } from '../session'
 
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-const login = (email: string, password = SEED_PASSWORD) => call('POST', '/auth/login', { body: { email, password } })
-const refresh = () => call('POST', '/auth/refresh')
-
-async function accessToken(email: string, password = SEED_PASSWORD): Promise<string> {
-  const response = await login(email, password)
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const admin = () => accessToken('admin@example.com')
+type Schemas = components['schemas']
 
 const NEW_CLINIC = {
   name: 'Лапа',
@@ -42,13 +27,7 @@ describe('админка: доступ', () => {
 
 describe('админка: клиники', () => {
   it('список со скрытыми, аккаунтами и числом будущих записей', async () => {
-    const list = (await (await call('GET', '/admin/clinics', { token: await admin() })).json()) as {
-      id: number
-      name: string
-      archived_at: string | null
-      account: { id: number; email: string; is_active: boolean } | null
-      future_appointments_count: number
-    }[]
+    const list = (await (await call('GET', '/admin/clinics', { token: await admin() })).json()) as AdminClinic[]
     expect(list.map((clinic) => clinic.name)).toEqual(['ВетДоктор', 'Клиника «Новая»', 'Зоовет', 'Айболит'])
     expect(list[0]).toMatchObject({
       id: 2,
@@ -68,8 +47,7 @@ describe('админка: клиники', () => {
       body: { name: ' ', address: 'а'.repeat(201), phone: '8999', opens_at: '09:15', closes_at: 'x', work_days: [] },
     })
     expect(bad.status).toBe(422)
-    const fields = ((await bad.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc[1])
-    expect(fields.sort()).toEqual(['address', 'closes_at', 'name', 'opens_at', 'phone', 'work_days'])
+    expect(await bodyFields(bad)).toEqual(['address', 'closes_at', 'name', 'opens_at', 'phone', 'work_days'])
 
     const order = await call('POST', '/admin/clinics', { token, body: { ...NEW_CLINIC, opens_at: '18:00', closes_at: '09:00' } })
     expect(order.status).toBe(422)
@@ -101,10 +79,10 @@ describe('админка: клиники', () => {
 
     const archived = await call('POST', '/admin/clinics/2/archive', { token })
     expect(archived.status).toBe(200)
-    const body = (await archived.json()) as { clinic: { archived_at: string | null; account: { is_active: boolean } }; cancelled_appointments: number }
+    const body = (await archived.json()) as Schemas['ClinicArchived']
     expect(body.cancelled_appointments).toBe(7)
     expect(body.clinic.archived_at).not.toBeNull()
-    expect(body.clinic.account.is_active).toBe(false)
+    expect(body.clinic.account?.is_active).toBe(false)
 
     expect((await call('GET', '/notifications/unread-count', { token: clinicToken })).status).toBe(403)
     expect((await login('clinic@example.com')).status).toBe(403)
@@ -112,7 +90,7 @@ describe('админка: клиники', () => {
     expect((await refresh()).status).toBe(401)
 
     const again = await call('POST', '/admin/clinics/2/archive', { token })
-    expect(((await again.json()) as { cancelled_appointments: number }).cancelled_appointments).toBe(0)
+    expect(((await again.json()) as Schemas['ClinicArchived']).cancelled_appointments).toBe(0)
   })
 
   it('возврат: аккаунт снова активен, вход работает, записи не возвращаются', async () => {
@@ -138,8 +116,7 @@ describe('админка: правила полей (контракты, раз�
     const token = await admin()
     const response = await call('POST', '/admin/clinics', { token, body: { ...NEW_CLINIC, opens_at: '9:00', closes_at: '10:00' } })
     expect(response.status).toBe(422)
-    const fields = ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc[1])
-    expect(fields).toEqual(['opens_at'])
+    expect(await bodyFields(response)).toEqual(['opens_at'])
   })
 
   it('дни — строгие целые 1–7 без повторов; ответ отсортирован', async () => {
@@ -149,7 +126,7 @@ describe('админка: правила полей (контракты, раз�
       expect(response.status).toBe(422)
     }
     const created = await call('POST', '/admin/clinics', { token, body: { ...NEW_CLINIC, work_days: [5, 1, 3] } })
-    expect(((await created.json()) as { work_days: number[] }).work_days).toEqual([1, 3, 5])
+    expect(((await created.json()) as AdminClinic).work_days).toEqual([1, 3, 5])
   })
 
   it('телефон сервер не нормализует; название не уникально', async () => {
@@ -175,7 +152,7 @@ describe('админка: аккаунт клиники', () => {
     const token = await admin()
     const created = await call('POST', '/admin/clinics/4/account', { token, body: { email: ' zoovet@example.com ' } })
     expect(created.status).toBe(201)
-    const body = (await created.json()) as { user: unknown; temporary_password: string }
+    const body = (await created.json()) as Schemas['ClinicAccountCreated']
     expect(body.user).toMatchObject({ email: 'zoovet@example.com', role: 'clinic', full_name: 'Зоовет', must_change_password: true })
     expect(body.temporary_password).toMatch(TEMPORARY)
 
@@ -197,7 +174,7 @@ describe('админка: аккаунт клиники', () => {
     const token = await admin()
     const reset = await call('POST', '/admin/clinics/2/account/reset-password', { token })
     expect(reset.status).toBe(200)
-    const { temporary_password: temporary } = (await reset.json()) as { temporary_password: string }
+    const { temporary_password: temporary } = (await reset.json()) as Schemas['TemporaryPassword']
     expect(temporary).toMatch(TEMPORARY)
 
     writeMockCookie(clinicCookie)
@@ -213,7 +190,7 @@ describe('админка: аккаунт клиники', () => {
     })
     const token = await admin()
     const reset = await call('POST', '/admin/clinics/2/account/reset-password', { token })
-    const { temporary_password: temporary } = (await reset.json()) as { temporary_password: string }
+    const { temporary_password: temporary } = (await reset.json()) as Schemas['TemporaryPassword']
     expect((await login('clinic@example.com', temporary)).status).toBe(200)
 
     const missing = await call('POST', '/admin/clinics/4/account/reset-password', { token })
@@ -223,8 +200,7 @@ describe('админка: аккаунт клиники', () => {
 
   it('имя аккаунта — название клиники: после переименования админом сразу новое в /users/me (Р-35)', async () => {
     const clinicToken = await accessToken('clinic@example.com')
-    const name = async () =>
-      ((await (await call('GET', '/users/me', { token: clinicToken })).json()) as { full_name: string }).full_name
+    const name = async () => ((await (await call('GET', '/users/me', { token: clinicToken })).json()) as User).full_name
     expect(await name()).toBe('ВетДоктор')
 
     await call('PATCH', '/admin/clinics/2', { token: await admin(), body: { name: 'ВетДоктор на Ленина' } })

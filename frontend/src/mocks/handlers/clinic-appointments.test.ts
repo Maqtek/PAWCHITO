@@ -1,44 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Appointment, ClinicPetCard, NotificationList, Observation } from '../../api/schema'
-import { readServer, SEED_PASSWORD, updateServer } from '../server-state'
-import { resetMockServer } from '../session'
+import { setSeedClock } from '../../test/clock'
+import { accessToken, call, clinic, locs, owner } from '../../test/mock-api'
+import { addZoovetAccount } from '../../test/mock-state'
+import { readServer, updateServer } from '../server-state'
 
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const clinic = () => accessToken('clinic@example.com')
-const owner = () => accessToken('owner@example.com')
 const ids = async (response: Response) => ((await response.json()) as Appointment[]).map((item) => item.id)
-
-async function fieldsOf(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc.join('.')).sort()
-}
 
 const notifications = async (token: string) => (await (await call('GET', '/notifications', { token })).json()) as NotificationList
 
 // Среда, 28 октября 2026, 09:00 по Москве. Записи «ВетДоктора»: №22 — 12.10 (итог), №23 — 23.10 (отменена клиникой),
 // №24 — четверг 29.10 09:00 (заявка Барсика к Ким), №20 и №25 — пятница 30.10 10:00 и 10:30 (подтверждены, Петров),
 // №21 — понедельник 02.11 15:30 (заявка Майло к Ким).
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('записи клиники: список и фильтры', () => {
   it('только своя клиника, от ранних к поздним; владелец — 403', async () => {
@@ -63,7 +37,7 @@ describe('записи клиники: список и фильтры', () => {
       ['vet_id=8', 'query.vet_id'],
       ['awaiting_outcome=yes', 'query.awaiting_outcome'],
     ]) {
-      expect(await fieldsOf(await call('GET', `/clinic/appointments?${query}`, { token }))).toEqual([field])
+      expect(await locs(await call('GET', `/clinic/appointments?${query}`, { token }))).toEqual([field])
     }
   })
 
@@ -109,11 +83,11 @@ describe('записи клиники: подтверждение и отмен�
 
   it('отмена: комментарий обязателен и до 500 символов; владельцу — текст с комментарием; конечный статус — 409', async () => {
     const token = await clinic()
-    expect(await fieldsOf(await call('POST', '/clinic/appointments/21/cancel', { token, body: { comment: '   ' } }))).toEqual([
+    expect(await locs(await call('POST', '/clinic/appointments/21/cancel', { token, body: { comment: '   ' } }))).toEqual([
       'body.comment',
     ])
     expect(
-      await fieldsOf(await call('POST', '/clinic/appointments/21/cancel', { token, body: { comment: 'х'.repeat(501) } })),
+      await locs(await call('POST', '/clinic/appointments/21/cancel', { token, body: { comment: 'х'.repeat(501) } })),
     ).toEqual(['body.comment'])
     const cancelled = await call('POST', '/clinic/appointments/21/cancel', {
       token,
@@ -132,20 +106,7 @@ describe('записи клиники: подтверждение и отмен�
   })
 
   it('запись другой клиники — 404', async () => {
-    updateServer((state) => {
-      state.accounts.push({
-        id: state.nextUserId,
-        email: 'zoovet@example.com',
-        password: SEED_PASSWORD,
-        role: 'clinic',
-        full_name: '',
-        must_change_password: false,
-        is_active: true,
-        recovery_code: null,
-        clinic_id: 4,
-      })
-      state.nextUserId += 1
-    })
+    addZoovetAccount()
     const zoovet = await accessToken('zoovet@example.com')
     expect((await call('POST', '/clinic/appointments/24/confirm', { token: zoovet })).status).toBe(404)
     expect(await ids(await call('GET', '/clinic/appointments', { token: zoovet }))).toEqual([])

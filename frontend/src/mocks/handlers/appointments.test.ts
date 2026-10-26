@@ -1,27 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Appointment, Clinic, Slot, Vet } from '../../api/schema'
-import { readServer, SEED_PASSWORD } from '../server-state'
-import { resetMockServer } from '../session'
-
-function call(method: string, path: string, { body, token }: { body?: unknown; token?: string } = {}) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  })
-}
-
-async function accessToken(email: string): Promise<string> {
-  const response = await call('POST', '/auth/login', { body: { email, password: SEED_PASSWORD } })
-  return ((await response.json()) as { access_token: string }).access_token
-}
-
-const owner = () => accessToken('owner@example.com')
-
-async function fieldsOf(response: Response): Promise<string[]> {
-  return ((await response.json()) as { detail: { loc: string[] }[] }).detail.map((item) => item.loc.join('.')).sort()
-}
+import { setSeedClock } from '../../test/clock'
+import { accessToken, call, locs, owner } from '../../test/mock-api'
+import { readServer } from '../server-state'
 
 const book = (token: string, body: Record<string, unknown>) =>
   call('POST', '/appointments', {
@@ -31,15 +12,7 @@ const book = (token: string, body: Record<string, unknown>) =>
 
 // Среда, 28 октября 2026, 09:00 по Москве. Seed записей считается от «сегодня»:
 // №20 и №25 — пятница 30.10 в 10:00 и 10:30 у Петрова, №21 — понедельник 02.11, №22 — 12.10 (итог), №23 — 23.10 (отмена).
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('запись: клиники и врачи', () => {
   it('только владелец; активные клиники по названию, без полей админки', async () => {
@@ -77,7 +50,7 @@ describe('запись: свободные слоты', () => {
     expect((await call('GET', '/clinics/2/vets/4/slots?date=2026-11-27', { token })).status).toBe(200)
     for (const date of ['2026-11-28', '2026-10-27', '28.10.2026']) {
       const response = await call('GET', `/clinics/2/vets/4/slots?date=${date}`, { token })
-      expect(await fieldsOf(response)).toEqual(['query.date'])
+      expect(await locs(response)).toEqual(['query.date'])
     }
   })
 
@@ -127,17 +100,17 @@ describe('запись: создание', () => {
       '2026-11-28T11:00:00+03:00',
       '30.10.2026 11:00',
     ]) {
-      expect(await fieldsOf(await book(token, { slot_start }))).toEqual(['body.slot_start'])
+      expect(await locs(await book(token, { slot_start }))).toEqual(['body.slot_start'])
     }
   })
 
   it('чужой или архивный питомец, недоступный врач, причина и комментарий — 422 у полей', async () => {
     const token = await owner()
-    expect(await fieldsOf(await book(token, { pet_id: 13 }))).toEqual(['body.pet_id'])
-    expect(await fieldsOf(await book(token, { pet_id: 12 }))).toEqual(['body.pet_id'])
-    expect(await fieldsOf(await book(token, { vet_id: 5 }))).toEqual(['body.vet_id'])
+    expect(await locs(await book(token, { pet_id: 13 }))).toEqual(['body.pet_id'])
+    expect(await locs(await book(token, { pet_id: 12 }))).toEqual(['body.pet_id'])
+    expect(await locs(await book(token, { vet_id: 5 }))).toEqual(['body.vet_id'])
     const invalid = await book(token, { reason: 'grooming', reason_comment: 'х'.repeat(501) })
-    expect(await fieldsOf(invalid)).toEqual(['body.reason', 'body.reason_comment'])
+    expect(await locs(invalid)).toEqual(['body.reason', 'body.reason_comment'])
   })
 })
 
@@ -172,7 +145,7 @@ describe('мои записи', () => {
     expect(all.map((item) => item.id)).toEqual([21, 20, 23, 22])
     const completed = (await (await call('GET', '/pets/10/appointments?status=completed', { token })).json()) as Appointment[]
     expect(completed.map((item) => [item.id, item.outcome?.conclusion])).toEqual([[22, 'Растяжение связок задней лапы']])
-    expect(await fieldsOf(await call('GET', '/pets/10/appointments?status=done', { token }))).toEqual(['query.status'])
+    expect(await locs(await call('GET', '/pets/10/appointments?status=done', { token }))).toEqual(['query.status'])
     expect((await call('GET', '/pets/13/appointments', { token })).status).toBe(404)
     expect((await call('GET', '/appointments/25', { token })).status).toBe(404)
     expect(await (await call('GET', '/appointments/23', { token })).json()).toMatchObject({

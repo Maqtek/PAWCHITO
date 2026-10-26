@@ -1,27 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { apiBaseUrl } from '../../api/base-url'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Calendar, CalendarEvent } from '../../api/schema'
-import { SEED_PASSWORD, updateServer, type MockAppointment, type MockReminder } from '../server-state'
-import { resetMockServer } from '../session'
-
-function call(method: string, path: string, token?: string) {
-  return fetch(`${apiBaseUrl()}${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-  })
-}
-
-async function accessToken(email = 'owner@example.com'): Promise<string> {
-  const response = await fetch(`${apiBaseUrl()}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password: SEED_PASSWORD }),
-  })
-  return ((await response.json()) as { access_token: string }).access_token
-}
+import { setSeedClock } from '../../test/clock'
+import { accessToken, call } from '../../test/mock-api'
+import { addAppointment, addReminder } from '../../test/mock-state'
+import { updateServer } from '../server-state'
 
 async function calendar(token: string, petId = 10): Promise<Calendar> {
-  const response = await call('GET', `/calendar?pet_id=${petId}`, token)
+  const response = await call('GET', `/calendar?pet_id=${petId}`, { token })
   expect(response.status).toBe(200)
   return (await response.json()) as Calendar
 }
@@ -29,42 +14,8 @@ async function calendar(token: string, petId = 10): Promise<Calendar> {
 /** Группы короче: «тип:id». */
 const brief = (events: CalendarEvent[]) => events.map((event) => `${event.type}:${event.id}`)
 
-function addReminder(id: number, dueAt: string, extra: Partial<MockReminder> = {}) {
-  updateServer((state) => {
-    state.reminders.push({
-      id,
-      pet_id: 10,
-      source: 'custom',
-      prescription_id: null,
-      title: `Дело ${id}`,
-      category: 'routine',
-      due_at: dueAt,
-      status: 'pending',
-      done_at: null,
-      repeat_interval_days: null,
-      series_id: null,
-      ...extra,
-    })
-  })
-}
-
-function addAppointment(id: number, slotStart: string, extra: Partial<MockAppointment> = {}) {
-  updateServer((state) => {
-    state.appointments.push({
-      id,
-      pet_id: 10,
-      vet_id: 4,
-      slot_start: slotStart,
-      reason: 'checkup',
-      reason_comment: null,
-      status: 'requested',
-      cancelled_by: null,
-      clinic_comment: null,
-      outcome: null,
-      ...extra,
-    })
-  })
-}
+/** Все события календаря, из всех групп, — «тип:id». */
+const allIds = (data: Calendar) => brief(Object.values(data).flat() as CalendarEvent[])
 
 function addVaccination(id: number, nextDate: string | null, petId = 10) {
   updateServer((state) => {
@@ -84,15 +35,7 @@ function addVaccination(id: number, nextDate: string | null, petId = 10) {
 // просрочена), «Купить корм» (№32) сегодня в 18:00, «Почистить зубы» (№31) завтра в 21:00; запись №20 — пятница 30.10
 // в 10:00 (вакцинация, подтверждена), №21 — понедельник 2.11 в 15:30 (повторный приём, заявка). Сроки прививок Майло —
 // в 2027 году, у Барсика — просрочен. У Барсика: запись №24 завтра в 09:00, «Капли от блох» (№33) 31.10 в 10:00.
-beforeEach(() => {
-  vi.useFakeTimers({ toFake: ['Date'] })
-  vi.setSystemTime(new Date('2026-10-28T06:00:00Z'))
-  resetMockServer()
-})
-
-afterEach(() => {
-  vi.useRealTimers()
-})
+beforeEach(() => setSeedClock())
 
 describe('календарь: события и группы', () => {
   it('по seed: просроченное — в «Сегодня», записи «Заявка» и «Подтверждена» — по дням, по времени', async () => {
@@ -165,8 +108,8 @@ describe('календарь: события и группы', () => {
     const all = Object.values(await calendar(token)).flat() as CalendarEvent[]
     expect(all.some((event) => event.type === 'reminder' && event.id === 30)).toBe(false)
     expect(all.some((event) => event.type === 'appointment' && (event.id === 22 || event.id === 23))).toBe(false)
-    await call('POST', '/reminders/16/done', token)
-    await call('POST', '/appointments/21/cancel', token)
+    await call('POST', '/reminders/16/done', { token })
+    await call('POST', '/appointments/21/cancel', { token })
     const after = await calendar(token)
     expect(brief(after.today)).toEqual(['reminder:32', 'reminder:17'])
     expect(brief(after.later)).not.toContain('appointment:21')
@@ -184,18 +127,18 @@ describe('календарь: события и группы', () => {
     expect(brief(milo.today)).toEqual(['reminder:16', 'vaccination_due:51', 'reminder:32', 'reminder:17'])
     expect(milo.today[1]).toEqual({ type: 'vaccination_due', id: 51, at: '2026-10-28', title: 'Прививка 51', category: 'prevention' })
     expect(brief(milo.later).at(-1)).toBe('vaccination_due:52')
-    const ids = (Object.values(milo).flat() as CalendarEvent[]).map((event) => `${event.type}:${event.id}`)
+    const ids = allIds(milo)
     for (const id of ['vaccination_due:50', 'vaccination_due:53', 'vaccination_due:54', 'vaccination_due:55']) {
       expect(ids).not.toContain(id)
     }
   })
 
   it('граница 30 дней: дело в последний день — в «Позже», на следующий — нет; давно просроченное — в «Сегодня»', async () => {
-    addReminder(60, '2026-11-27T23:30:00+03:00')
-    addReminder(61, '2026-11-28T00:00:00+03:00')
+    addReminder({ id: 60, due_at: '2026-11-27T23:30:00+03:00' })
+    addReminder({ id: 61, due_at: '2026-11-28T00:00:00+03:00' })
     // 21:30 UTC 27.11 — уже 28.11 по Москве.
-    addReminder(62, '2026-11-27T21:30:00Z')
-    addReminder(63, '2026-09-01T10:00:00+03:00')
+    addReminder({ id: 62, due_at: '2026-11-27T21:30:00Z' })
+    addReminder({ id: 63, due_at: '2026-09-01T10:00:00+03:00' })
     const milo = await calendar(await accessToken())
     expect(brief(milo.later).at(-1)).toBe('reminder:60')
     expect(brief(milo.later)).not.toContain('reminder:61')
@@ -204,16 +147,16 @@ describe('календарь: события и группы', () => {
   })
 
   it('запись на сегодня — до конца дня, даже если время прошло; вчерашняя без итога — нет', async () => {
-    addAppointment(70, '2026-10-28T08:00:00+03:00', { status: 'confirmed' })
-    addAppointment(71, '2026-10-27T15:00:00+03:00', { status: 'confirmed' })
-    addAppointment(72, '2026-11-28T10:00:00+03:00')
+    addAppointment({ id: 70, slot_start: '2026-10-28T08:00:00+03:00', status: 'confirmed' })
+    addAppointment({ id: 71, slot_start: '2026-10-27T15:00:00+03:00', status: 'confirmed' })
+    addAppointment({ id: 72, slot_start: '2026-11-28T10:00:00+03:00' })
     // Вечер того же дня: и запись, и дела дня ещё в «Сегодня».
     vi.setSystemTime(new Date('2026-10-28T20:59:00Z'))
     const token = await accessToken()
     const milo = await calendar(token)
     expect(brief(milo.today)).toEqual(['reminder:16', 'appointment:70', 'reminder:32', 'reminder:17'])
     expect(milo.today[1]).toMatchObject({ status: 'confirmed', title: 'Плановый осмотр', category: 'routine' })
-    const all = (Object.values(milo).flat() as CalendarEvent[]).map((event) => `${event.type}:${event.id}`)
+    const all = allIds(milo)
     expect(all).not.toContain('appointment:71')
     expect(all).not.toContain('appointment:72')
     // Наступил новый день — вчерашняя запись из календаря ушла, а вчерашние дела остались в «Сегодня» просроченными.
@@ -225,9 +168,9 @@ describe('календарь: события и группы', () => {
 
   it('при равном времени — дело, запись, прививка, затем id', async () => {
     addVaccination(80, '2026-11-05')
-    addAppointment(81, '2026-11-05T00:00:00+03:00')
-    addReminder(83, '2026-11-05T00:00:00+03:00')
-    addReminder(82, '2026-11-04T21:00:00Z')
+    addAppointment({ id: 81, slot_start: '2026-11-05T00:00:00+03:00' })
+    addReminder({ id: 83, due_at: '2026-11-05T00:00:00+03:00' })
+    addReminder({ id: 82, due_at: '2026-11-04T21:00:00Z' })
     const milo = await calendar(await accessToken())
     const day = brief(milo.later).filter((id) => ['80', '81', '82', '83'].includes(id.split(':')[1]))
     expect(day).toEqual(['reminder:82', 'reminder:83', 'appointment:81', 'vaccination_due:80'])
@@ -238,13 +181,13 @@ describe('календарь: питомец и доступ', () => {
   it('без pet_id или не числом — 422; чужой и несуществующий — 404; архивный — как обычно', async () => {
     const token = await accessToken()
     for (const query of ['', '?pet_id=', '?pet_id=abc', '?pet_id=1.5']) {
-      const response = await call('GET', `/calendar${query}`, token)
+      const response = await call('GET', `/calendar${query}`, { token })
       expect(response.status).toBe(422)
       const { detail } = (await response.json()) as { detail: { loc: string[] }[] }
       expect(detail.map((item) => item.loc)).toEqual([['query', 'pet_id']])
     }
-    expect((await call('GET', '/calendar?pet_id=13', token)).status).toBe(404)
-    expect((await call('GET', '/calendar?pet_id=999', token)).status).toBe(404)
+    expect((await call('GET', '/calendar?pet_id=13', { token })).status).toBe(404)
+    expect((await call('GET', '/calendar?pet_id=999', { token })).status).toBe(404)
     addVaccination(90, '2026-11-01', 12)
     expect(await calendar(token, 12)).toEqual({
       today: [],
@@ -255,6 +198,6 @@ describe('календарь: питомец и доступ', () => {
 
   it('гость — 401, клиника — 403', async () => {
     expect((await call('GET', '/calendar?pet_id=10')).status).toBe(401)
-    expect((await call('GET', '/calendar?pet_id=10', await accessToken('clinic@example.com'))).status).toBe(403)
+    expect((await call('GET', '/calendar?pet_id=10', { token: await accessToken('clinic@example.com') })).status).toBe(403)
   })
 })
