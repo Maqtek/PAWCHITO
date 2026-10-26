@@ -127,3 +127,10 @@ jobs:
         run: |
           docker build -t pawchito-backend ./backend
           docker build -t pawchito-frontend ./frontend
+
+      - name: Прод-образ Caddy и проверка Caddyfile
+        # Контекст — корень репозитория: в образ входят собранный фронт и deploy/caddy/Caddyfile
+        run: |
+          docker build -t pawchito-caddy -f deploy/caddy/Dockerfile .
+          docker run --rm -e DOMAIN=localhost -e ACME_EMAIL=ci@example.com pawchito-caddy \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
