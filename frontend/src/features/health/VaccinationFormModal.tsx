@@ -5,7 +5,7 @@ import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Vaccination, VaccinationCreate, VaccinationUpdate } from '../../api/schema'
-import { Button, FormAlert, Modal, TextField } from '../../components/ui'
+import { FormActions, Modal, TextField } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
 import { refetchAfterFailure, storeRecord } from './health-cache'
@@ -94,6 +94,7 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
           : undefined,
     }),
     context: 'health',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -101,33 +102,23 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const request =
-          baseline && update
-            ? unwrap(
-                api.PATCH('/pets/{pet_id}/vaccinations/{id}', {
-                  params: { path: { pet_id: petId, id: baseline.id } },
-                  body: update,
-                }),
-              )
-            : unwrap(api.POST('/pets/{pet_id}/vaccinations', { params: { path: { pet_id: petId } }, body: payload }))
-        const saved = await request.catch((error: unknown) => {
-          refetchAfterFailure(queryClient, queryKey)
-          throw error
-        })
-        storeRecord(queryClient, queryKey, saved, { prepend: true })
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(
+              api.PATCH('/pets/{pet_id}/vaccinations/{id}', {
+                params: { path: { pet_id: petId, id: baseline.id } },
+                body: update,
+              }),
+            )
+          : unwrap(api.POST('/pets/{pet_id}/vaccinations', { params: { path: { pet_id: petId } }, body: payload }))
+      const saved = await request.catch((error: unknown) => {
+        refetchAfterFailure(queryClient, queryKey)
+        throw error
+      })
+      storeRecord(queryClient, queryKey, saved, { prepend: true })
+      onSaved(saved)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -148,16 +139,13 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
           {...form.field('next_date')}
         />
       </div>
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

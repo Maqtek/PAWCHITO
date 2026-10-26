@@ -21,6 +21,11 @@ interface UseFormOptions<V extends FormValues> {
   context?: ErrorContext
   /** Особые ошибки (например, 409 у поля email); undefined — разбор по умолчанию. */
   onError?: (error: unknown, values: V) => FormFailure<V> | undefined
+  /**
+   * Запрос идёт (true перед onSubmit, false после): окно с формой нельзя закрыть, иначе изменение применится,
+   * а ответ или ошибку показать будет некому.
+   */
+  onBusyChange?: (busy: boolean) => void
 }
 
 function focusField(form: HTMLFormElement, name: string): void {
@@ -32,7 +37,14 @@ function focusField(form: HTMLFormElement, name: string): void {
  * Форма без зависимостей: ошибки полей появляются при отправке и дальше пересчитываются при вводе,
  * фокус — на первое неверное поле, 422 раскладывается по полям, повторная отправка во время запроса игнорируется.
  */
-export function useForm<V extends FormValues>({ initial, validate, onSubmit, context = 'default', onError }: UseFormOptions<V>) {
+export function useForm<V extends FormValues>({
+  initial,
+  validate,
+  onSubmit,
+  context = 'default',
+  onError,
+  onBusyChange,
+}: UseFormOptions<V>) {
   const [values, setValues] = useState(initial)
   const [submitted, setSubmitted] = useState(false)
   const [serverErrors, setServerErrors] = useState<FieldErrors<V>>({})
@@ -90,6 +102,7 @@ export function useForm<V extends FormValues>({ initial, validate, onSubmit, con
     // Ошибки сервера относились к прошлой отправке — новый ответ разложит свои.
     setServerErrors({})
     setSubmitting(true)
+    onBusyChange?.(true)
     try {
       await onSubmit(values)
     } catch (error) {
@@ -101,6 +114,7 @@ export function useForm<V extends FormValues>({ initial, validate, onSubmit, con
     } finally {
       inFlight.current = false
       setSubmitting(false)
+      onBusyChange?.(false)
     }
   }
 
