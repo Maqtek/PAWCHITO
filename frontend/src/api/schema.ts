@@ -311,6 +311,47 @@ export interface components {
       today: components['schemas']['Reminder'][]
       next_appointment: components['schemas']['Appointment'] | null
     }
+    /** Событие календаря — запланированное дело: поля для отметки и удаления без второго запроса (Р-65). */
+    CalendarReminderEvent: {
+      type: 'reminder'
+      id: number
+      at: string
+      title: string
+      category: components['schemas']['EventCategory']
+      status: components['schemas']['ReminderStatus']
+      is_overdue: boolean
+      source: components['schemas']['ReminderSource']
+      repeat_interval_days: number | null
+    }
+    /** Запись «Заявка» или «Подтверждена»: title — причина обращения, category — по причине (БП §5). */
+    CalendarAppointmentEvent: {
+      type: 'appointment'
+      id: number
+      at: string
+      title: string
+      category: components['schemas']['EventCategory']
+      status: components['schemas']['AppointmentStatus']
+      clinic: components['schemas']['ClinicRef']
+      vet: components['schemas']['VetRef']
+    }
+    /** Срок следующей прививки: id — прививки, at — дата YYYY-MM-DD, title — название, category — prevention. */
+    CalendarVaccinationEvent: {
+      type: 'vaccination_due'
+      id: number
+      at: string
+      title: string
+      category: components['schemas']['EventCategory']
+    }
+    CalendarEvent:
+      | components['schemas']['CalendarReminderEvent']
+      | components['schemas']['CalendarAppointmentEvent']
+      | components['schemas']['CalendarVaccinationEvent']
+    /** today — с просроченными делами, later — с послезавтра по сегодня + 30 дней (Р-65). */
+    Calendar: {
+      today: components['schemas']['CalendarEvent'][]
+      tomorrow: components['schemas']['CalendarEvent'][]
+      later: components['schemas']['CalendarEvent'][]
+    }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
     ValidationError: { loc: (string | number)[]; msg: string; type: string }
@@ -817,6 +858,20 @@ export interface paths {
       }
     }
   }
+  '/calendar': {
+    parameters: NoParams
+    get: {
+      parameters: { query: { pet_id: number }; header?: never; path?: never; cookie?: never }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Calendar']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
   '/notifications/unread-count': {
     parameters: NoParams
     get: {
@@ -1218,6 +1273,11 @@ export type ReminderMarked = Schemas['ReminderMarked']
 export type PrescriptionProgress = Schemas['PrescriptionProgress']
 export type HomeCourse = Schemas['HomeCourse']
 export type HomeSummary = Schemas['HomeSummary']
+export type CalendarReminderEvent = Schemas['CalendarReminderEvent']
+export type CalendarAppointmentEvent = Schemas['CalendarAppointmentEvent']
+export type CalendarVaccinationEvent = Schemas['CalendarVaccinationEvent']
+export type CalendarEvent = Schemas['CalendarEvent']
+export type Calendar = Schemas['Calendar']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']
 export type RegisterRequest = Schemas['RegisterRequest']

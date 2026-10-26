@@ -1,18 +1,19 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { CalendarPlus, Plus } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
-import { remindersQuery } from '../../api/queries'
-import type { Pet, Reminder } from '../../api/schema'
-import { Button, Card, EmptyState, Spinner } from '../../components/ui'
-import { addDays } from '../../lib/dates'
-import { formatShortDate, moscowIsoDate } from '../../lib/format'
-import { formatDue, markedMessage } from './reminder-actions'
+import { useEffect, useRef, useState } from 'react'
+import { calendarQuery } from '../../api/queries'
+import type { CalendarEvent, Pet, Reminder } from '../../api/schema'
+import { Button, EmptyState, Spinner } from '../../components/ui'
+import { moscowIsoDate } from '../../lib/format'
+import { AppointmentEventItem } from '../calendar/AppointmentEventItem'
+import { calendarGroups, eventReminder, formatDueWithYear, groupPeriod } from '../calendar/calendar-event'
+import { CalendarGroup } from '../calendar/CalendarGroup'
+import { VaccinationDueItem } from '../calendar/VaccinationDueItem'
+import { FarReminders } from './FarReminders'
+import { markedMessage } from './reminder-actions'
 import { ReminderConfirmModal } from './ReminderConfirmModal'
 import { ReminderFormModal } from './ReminderFormModal'
 import { ReminderItem } from './ReminderItem'
-
-/** Сколько дней вперёд показывать сразу и на сколько расширять кнопкой. */
-const WEEK = 7
 
 interface Dialog {
   kind: 'add' | 'skip' | 'delete'
@@ -27,16 +28,12 @@ interface PlannedRemindersProps {
 }
 
 /**
- * Запланированные дела питомца: просроченные и на неделю вперёд, по времени (Р-60). Группы «Сегодня / Завтра / Позже»,
- * записи и сроки прививок — этап 11.
+ * Календарь питомца в разделе «Дела» (Р-65): группы «Сегодня» (с просроченными делами), «Завтра» и «Позже» — дела,
+ * записи к врачу и сроки прививок на 30 дней; дела дальше — отдельным списком.
  */
 export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
-  const headingId = useId()
   const [today] = useState(() => moscowIsoDate(new Date()))
-  const [weeks, setWeeks] = useState(1)
-  const dateTo = addDays(today, WEEK * weeks)
-  // Прошлые данные — пока грузится расширенный период: список не мигает спиннером.
-  const list = useQuery({ ...remindersQuery({ pet_id: pet.id, status: 'pending', date_to: dateTo }), placeholderData: keepPreviousData })
+  const calendar = useQuery(calendarQuery(pet.id))
   const [dialog, setDialog] = useState<Dialog>({ kind: 'add', open: false })
   const listRef = useRef<HTMLDivElement>(null)
   const focusList = useRef(false)
@@ -59,79 +56,78 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
     setDialog((current) => ({ ...current, open: false }))
   }
 
-  function content() {
-    if (list.isPending) return <Spinner label="Загружаем дела" />
-    if (!list.data) {
+  function reminderItem(reminder: Reminder) {
+    return (
+      <ReminderItem
+        reminder={reminder}
+        today={today}
+        onStatus={onStatus}
+        onDone={(result) => {
+          onStatus(markedMessage(result, today))
+          focusList.current = true
+        }}
+        onSkip={() => openDialog('skip', reminder)}
+        onDelete={() => openDialog('delete', reminder)}
+      />
+    )
+  }
+
+  function eventItem(event: CalendarEvent) {
+    switch (event.type) {
+      case 'reminder':
+        return reminderItem(eventReminder(event, pet.id))
+      case 'appointment':
+        return <AppointmentEventItem event={event} today={today} />
+      case 'vaccination_due':
+        return <VaccinationDueItem event={event} today={today} />
+    }
+  }
+
+  function groups() {
+    if (calendar.isPending) return <Spinner label="Загружаем дела" />
+    if (!calendar.data) {
       return (
         <EmptyState
           title="Не удалось загрузить дела"
           description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void list.refetch()}>Повторить</Button>}
+          action={<Button onClick={() => void calendar.refetch()}>Повторить</Button>}
         />
       )
     }
-    return (
-      <>
-        {list.data.length === 0 ? (
-          <EmptyState
-            icon={CalendarPlus}
-            title={weeks === 1 ? 'На неделю дел нет' : 'В этот период дел нет'}
-            description="Добавьте своё дело — например, чистку зубов раз в неделю. Дела курса лечения появятся после приёма."
-          />
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {list.data.map((reminder) => (
-              <li key={reminder.id}>
-                <ReminderItem
-                  reminder={reminder}
-                  today={today}
-                  onStatus={onStatus}
-                  onDone={(result) => {
-                    onStatus(markedMessage(result, today))
-                    focusList.current = true
-                  }}
-                  onSkip={() => openDialog('skip', reminder)}
-                  onDelete={() => openDialog('delete', reminder)}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="secondary" size="sm" onClick={() => setWeeks(weeks + 1)}>
-            Показать ещё неделю
-          </Button>
-          <span className="text-sm text-ink-muted">Просроченные и дела по {formatShortDate(dateTo)} включительно.</span>
-        </div>
-      </>
-    )
+    const { data } = calendar
+    if (calendarGroups.every(({ key }) => data[key].length === 0)) {
+      return (
+        <EmptyState
+          icon={CalendarPlus}
+          title="На 30 дней вперёд ничего не запланировано"
+          description="Добавьте своё дело — например, чистку зубов раз в неделю. Здесь же появятся дела курса лечения, записи к врачу и сроки прививок."
+        />
+      )
+    }
+    return calendarGroups.map(({ key, title }) => (
+      <CalendarGroup key={key} title={title} period={groupPeriod(key, today)} events={data[key]} renderEvent={eventItem} />
+    ))
   }
 
   return (
     <>
-      <section aria-labelledby={headingId}>
-        <Card className="p-5 sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 id={headingId} className="text-lg font-extrabold">
-              Запланировано
-            </h2>
-            <Button variant="secondary" size="sm" icon={Plus} onClick={() => openDialog('add')}>
-              Добавить дело
-            </Button>
-          </div>
-          {/* tabIndex -1: сюда уходит фокус, когда дело пропало из списка вместе со своей кнопкой. */}
-          <div ref={listRef} tabIndex={-1} className="mt-4 outline-none">
-            {content()}
-          </div>
-        </Card>
-      </section>
+      <div className="mb-4 flex justify-end">
+        <Button icon={Plus} onClick={() => openDialog('add')}>
+          Добавить дело
+        </Button>
+      </div>
+      {/* tabIndex -1: сюда уходит фокус, когда дело пропало из списка вместе со своей кнопкой. */}
+      <div ref={listRef} tabIndex={-1} className="flex flex-col gap-4 outline-none">
+        {groups()}
+        <FarReminders petId={pet.id} today={today} renderReminder={reminderItem} />
+      </div>
       <ReminderFormModal
         open={dialog.open && dialog.kind === 'add'}
         petId={pet.id}
         petName={pet.name}
         onClose={() => closeDialog()}
         onSaved={(reminder) => {
-          onStatus(`Дело добавлено: ${reminder.title}, ${formatDue(reminder.due_at, today)}.`)
+          onStatus(`Дело добавлено: ${reminder.title}, ${formatDueWithYear(reminder.due_at, today)}.`)
           closeDialog()
         }}
       />

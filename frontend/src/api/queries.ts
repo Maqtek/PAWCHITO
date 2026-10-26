@@ -49,6 +49,8 @@ export const queryKeys = {
   homeSummary: (petId: number) => ['reminders', 'home', petId] as const,
   // Под ['notifications', 'list']: отметка прочитанным в колокольчике перечитывает и уведомления главной.
   latestNotifications: (limit: number) => ['notifications', 'list', limit] as const,
+  // Тоже под ['reminders']: календарь перечитывается после отметки, нового дела и удаления.
+  calendar: (petId: number) => ['reminders', 'calendar', petId] as const,
 }
 
 /** Фильтры записей клиники (Р-52): пустые не передаются. */
@@ -220,4 +222,15 @@ export const latestNotificationsQuery = (limit: number) =>
   queryOptions({
     queryKey: queryKeys.latestNotifications(limit),
     queryFn: () => unwrap(api.GET('/notifications', { params: { query: { limit } } })),
+  })
+
+/**
+ * Календарь питомца: дела, записи и сроки прививок на 30 дней по группам (Р-65). Всегда свежий при открытии раздела:
+ * записи и прививки меняются в других разделах, а они перечитывают только свои списки.
+ */
+export const calendarQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.calendar(petId),
+    queryFn: () => unwrap(api.GET('/calendar', { params: { query: { pet_id: petId } } })),
+    staleTime: 0,
   })
