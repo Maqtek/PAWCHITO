@@ -9,6 +9,7 @@ import { FormActions, Modal, SelectField, TextareaField, TextField } from '../..
 import { changedFields } from '../../lib/changed-fields'
 import { conditionKindOptions } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 import { saveRecord } from './health-cache'
 
 interface ConditionFormModalProps {
@@ -67,7 +68,7 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
     initial: initialValues(baseline),
     validate: (values) => ({
       kind: values.kind ? undefined : validationMessages.conditionKind,
-      title: values.title.trim() ? undefined : validationMessages.required,
+      title: requiredError(values.title),
     }),
     context: 'health',
     onBusyChange,

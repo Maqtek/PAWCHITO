@@ -1,12 +1,13 @@
 import { api } from '../../api/client'
-import { errorMessage, validationMessages } from '../../api/error-messages'
+import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import { reauthenticateWith } from '../../api/session'
 import { Button, FormAlert, PasswordField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
-import { newPasswordErrors } from './checks'
+import { NewPasswordFields } from './AuthFields'
+import { newPasswordErrors, requiredError } from './checks'
 
 export interface ChangePasswordFormProps {
   /** «Текущий пароль» в профиле, «Временный пароль» при обязательной смене. */
@@ -23,7 +24,7 @@ export function ChangePasswordForm({ currentLabel, onSuccess, onCancel }: Change
     validate: (values) => {
       const passwords = newPasswordErrors(values.new_password, values.password_repeat)
       return {
-        current_password: values.current_password === '' ? validationMessages.required : undefined,
+        current_password: requiredError(values.current_password, { trim: false }),
         new_password: passwords.password,
         password_repeat: passwords.repeat,
       }
@@ -56,19 +57,7 @@ export function ChangePasswordForm({ currentLabel, onSuccess, onCancel }: Change
         maxLength={authLimits.passwordMax}
         {...form.field('current_password')}
       />
-      <PasswordField
-        label="Новый пароль"
-        hint="Не короче 8 символов"
-        autoComplete="new-password"
-        maxLength={authLimits.passwordMax}
-        {...form.field('new_password')}
-      />
-      <PasswordField
-        label="Повтор пароля"
-        autoComplete="new-password"
-        maxLength={authLimits.passwordMax}
-        {...form.field('password_repeat')}
-      />
+      <NewPasswordFields password={form.field('new_password')} repeat={form.field('password_repeat')} />
       <FormAlert message={form.formError} />
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         {/* Не FormActions: там отмена ждёт ответа, а окно смены пароля закрывается и во время запроса — ответ дойдёт до профиля. */}

@@ -2,13 +2,13 @@ import { useQueryClient } from '@tanstack/react-query'
 import { Pencil } from 'lucide-react'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { api } from '../../api/client'
-import { validationMessages } from '../../api/error-messages'
 import { authLimits } from '../../api/limits'
 import { meQuery, unwrap } from '../../api/queries'
 import type { User } from '../../api/schema'
 import { Button, FormAlert, IconButton, TextField } from '../../components/ui'
 import { displayName } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 
 /**
  * Имя в профиле: текст с карандашом, по нажатию — поле с «Сохранить» и «Отмена».
@@ -69,7 +69,7 @@ function NameForm({ name, onDone }: { name: string; onDone: (message?: string) =
   const queryClient = useQueryClient()
   const form = useForm({
     initial: { full_name: name },
-    validate: (values) => ({ full_name: values.full_name.trim() ? undefined : validationMessages.required }),
+    validate: (values) => ({ full_name: requiredError(values.full_name) }),
     context: 'profile',
     onSubmit: async ({ full_name }) => {
       const trimmed = full_name.trim()

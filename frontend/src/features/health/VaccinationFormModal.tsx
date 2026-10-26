@@ -9,6 +9,7 @@ import { FormActions, Modal, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 import { dateError } from './date-error'
 import { saveRecord } from './health-cache'
 
@@ -72,7 +73,7 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
   const form = useForm({
     initial: initialValues(baseline),
     validate: (values) => ({
-      name: values.name.trim() ? undefined : validationMessages.required,
+      name: requiredError(values.name),
       date: dateError(values.date, today),
       // Следующая может быть и в прошлом — тогда прививка просрочена (Р-46); главное — позже самой прививки.
       next_date:

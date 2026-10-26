@@ -8,6 +8,7 @@ import type { AdminClinic, ClinicCreate } from '../../api/schema'
 import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 import { saveClinic } from './clinic-cache'
 import {
   halfHourOptions,
@@ -82,19 +83,14 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
   const [baseline] = useState(clinic)
   const form = useForm({
     initial: initialValues(baseline),
-    validate: (values) => {
-      const phone = normalizePhone(values.phone)
-      let phoneError: string | undefined
-      if (values.phone.trim() === '') phoneError = validationMessages.required
-      else if (!PHONE.test(phone)) phoneError = validationMessages.phone
-      return {
-        name: values.name.trim() ? undefined : validationMessages.required,
-        address: values.address.trim() ? undefined : validationMessages.required,
-        phone: phoneError,
-        closes_at: values.opens_at < values.closes_at ? undefined : validationMessages.closesAfterOpens,
-        work_days: parseWorkDays(values.work_days).length > 0 ? undefined : validationMessages.workDays,
-      }
-    },
+    validate: (values) => ({
+      name: requiredError(values.name),
+      address: requiredError(values.address),
+      phone:
+        requiredError(values.phone) ?? (PHONE.test(normalizePhone(values.phone)) ? undefined : validationMessages.phone),
+      closes_at: values.opens_at < values.closes_at ? undefined : validationMessages.closesAfterOpens,
+      work_days: parseWorkDays(values.work_days).length > 0 ? undefined : validationMessages.workDays,
+    }),
     context: 'clinic',
     onBusyChange,
     onSubmit: async (values) => {

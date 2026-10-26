@@ -1,13 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { api } from '../../api/client'
-import { validationMessages } from '../../api/error-messages'
 import { vetLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Vet, VetCreate } from '../../api/schema'
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 import { saveVet } from './vet-cache'
 
 interface VetFormModalProps {
@@ -55,7 +55,7 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
   const [baseline] = useState(vet)
   const form = useForm({
     initial: initialValues(baseline),
-    validate: (values) => ({ full_name: values.full_name.trim() ? undefined : validationMessages.required }),
+    validate: (values) => ({ full_name: requiredError(values.full_name) }),
     context: 'vet',
     onBusyChange,
     onSubmit: async (values) => {

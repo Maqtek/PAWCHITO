@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
-import { errorMessage, validationMessages } from '../../api/error-messages'
+import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import { FormActions, Modal, PasswordField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
+import { requiredError } from '../auth/checks'
 import { RecoveryCodeScreen } from '../auth/RecoveryCodeScreen'
 
 interface RecoveryCodeModalProps {
@@ -52,7 +53,7 @@ interface ConfirmPasswordFormProps {
 function ConfirmPasswordForm({ onIssued, onBusyChange, onCancel }: ConfirmPasswordFormProps) {
   const form = useForm({
     initial: { current_password: '' },
-    validate: (values) => ({ current_password: values.current_password === '' ? validationMessages.required : undefined }),
+    validate: (values) => ({ current_password: requiredError(values.current_password, { trim: false }) }),
     context: 'recovery-code',
     onBusyChange,
     onSubmit: async ({ current_password }) => {

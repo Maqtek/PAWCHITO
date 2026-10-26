@@ -3,11 +3,11 @@ import { useState } from 'react'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
-import { authLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import { ConfirmActionForm } from '../../components/ConfirmActionModal'
-import { FormActions, Modal, TextField } from '../../components/ui'
+import { FormActions, Modal } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
+import { EmailField } from '../auth/AuthFields'
 import { emailError } from '../auth/checks'
 import { RevealOnceScreen } from '../auth/RevealOnceScreen'
 import { refetchClinic } from './clinic-cache'
@@ -99,14 +99,7 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
       <p className="text-sm text-ink-muted">
         Клиника войдёт по этому email с временным паролем и при первом входе задаст свой.
       </p>
-      <TextField
-        label="Email клиники"
-        type="email"
-        inputMode="email"
-        autoComplete="off"
-        maxLength={authLimits.emailMax}
-        {...form.field('email')}
-      />
+      <EmailField label="Email клиники" autoComplete="off" {...form.field('email')} />
       <FormActions
         error={form.formError}
         submitting={form.submitting}
