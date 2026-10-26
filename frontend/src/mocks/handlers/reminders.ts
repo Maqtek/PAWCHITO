@@ -1,10 +1,17 @@
 import { http, HttpResponse } from 'msw'
-import type { EventCategory, Prescription, ReminderStatus } from '../../api/schema'
+import type { Prescription, ReminderCreate, ReminderStatus } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
 import { isoDateError } from '../date-validation'
 import { authorizeAccount, conflict, forbidden, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { categoryError, dueAtError, reminderTitleError, repeatError } from '../reminder-validation'
-import { readServer, toReminder, updateServer, type MockReminder, type MockServerState } from '../server-state'
+import {
+  newCustomReminder,
+  readServer,
+  toReminder,
+  updateServer,
+  type MockReminder,
+  type MockServerState,
+} from '../server-state'
 import { findPet } from './pets'
 
 const STATUSES: readonly ReminderStatus[] = ['pending', 'done', 'skipped']
@@ -118,22 +125,15 @@ export const reminderHandlers = [
       })
       if (invalid) return invalid
       if (!pet) throw new Error('pet_id прошёл проверку, но не найден')
-      const id = state.nextReminderId
-      const repeat = (raw.repeat_interval_days as number | null | undefined) ?? null
-      const reminder: MockReminder = {
-        id,
+      const body = raw as ReminderCreate
+      const reminder = newCustomReminder({
+        id: state.nextReminderId,
         pet_id: pet.id,
-        source: 'custom',
-        prescription_id: null,
-        title: (raw.title as string).trim(),
-        category: (raw.category as EventCategory | undefined) ?? 'routine',
-        due_at: toMoscowString(new Date(raw.due_at as string)),
-        status: 'pending',
-        done_at: null,
-        repeat_interval_days: repeat,
-        // Серия — по первому делу: следующие получат его id (Р-61).
-        series_id: repeat === null ? null : id,
-      }
+        title: body.title.trim(),
+        category: body.category ?? 'routine',
+        due_at: toMoscowString(new Date(body.due_at)),
+        repeat_interval_days: body.repeat_interval_days ?? null,
+      })
       state.nextReminderId += 1
       state.reminders.push(reminder)
       return HttpResponse.json(toReminder(reminder, now), { status: 201 })

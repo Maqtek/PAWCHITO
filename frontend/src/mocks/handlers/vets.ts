@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
 import { authorizeAccount, forbidden, notFound, readBody, validateBody } from '../http-utils'
-import { readServer, updateServer, type MockServerState } from '../server-state'
+import { newVet, readServer, updateServer, type MockServerState } from '../server-state'
 import { normalizeText } from '../text-validation'
 import { specializationError, vacationError, vetNameError } from '../vet-validation'
 
@@ -45,14 +45,12 @@ export const vetHandlers = [
       if (invalid) return invalid
       const body = raw as VetCreate
       // Новый врач не в отпуске: on_vacation из тела POST не берётся.
-      const vet: Vet = {
+      const vet = newVet({
         id: state.nextVetId,
         clinic_id: clinicId,
         full_name: body.full_name.trim(),
         specialization: normalizeText(body.specialization),
-        on_vacation: false,
-        archived_at: null,
-      }
+      })
       state.nextVetId += 1
       state.vets.push(vet)
       return HttpResponse.json(vet, { status: 201 })

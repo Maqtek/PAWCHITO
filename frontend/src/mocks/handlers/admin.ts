@@ -15,13 +15,14 @@ import {
   attemptsKey,
   cancelFutureAppointments,
   findAccount,
+  newAccount,
+  newClinic,
   newTemporaryPassword,
   readServer,
   revokeUserTokens,
   toAdminClinic,
   toUser,
   updateServer,
-  type MockAccount,
   type MockClinic,
   type MockServerState,
 } from '../server-state'
@@ -65,7 +66,7 @@ export const adminHandlers = [
       })
       if (invalid) return invalid
       const body = raw as ClinicCreate
-      const clinic: MockClinic = {
+      const clinic = newClinic({
         id: state.nextClinicId,
         name: body.name.trim(),
         address: body.address.trim(),
@@ -73,9 +74,7 @@ export const adminHandlers = [
         opens_at: body.opens_at,
         closes_at: body.closes_at,
         work_days: sortedDays(body.work_days),
-        archived_at: null,
-        futureAppointments: 0,
-      }
+      })
       state.nextClinicId += 1
       state.clinics.push(clinic)
       return HttpResponse.json(toAdminClinic(state, clinic), { status: 201 })
@@ -176,19 +175,17 @@ export const adminHandlers = [
       const email = (raw as ClinicAccountCreate).email.trim()
       if (accountOf(state, clinic) || findAccount(state, email)) return conflict('У клиники уже есть аккаунт или email занят')
       const temporaryPassword = newTemporaryPassword()
-      const created: MockAccount = {
+      // Имя не копируется: toUser берёт название клиники при каждом ответе (Р-35).
+      const created = newAccount({
         id: state.nextUserId,
         email,
         password: temporaryPassword,
         role: 'clinic',
-        // Имя не копируется: toUser берёт название клиники при каждом ответе (Р-35).
-        full_name: '',
         must_change_password: true,
         // Аккаунт скрытой клиники сразу заблокирован, как после скрытия.
         is_active: clinic.archived_at === null,
-        recovery_code: null,
         clinic_id: clinic.id,
-      }
+      })
       state.nextUserId += 1
       state.accounts.push(created)
       return HttpResponse.json({ user: toUser(state, created), temporary_password: temporaryPassword }, { status: 201 })

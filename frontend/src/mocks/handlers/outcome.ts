@@ -1,15 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import { healthLimits, outcomeLimits } from '../../api/limits'
-import type {
-  CareStatus,
-  ClinicPetUpdate,
-  Condition,
-  ConditionCreate,
-  OutcomeCreate,
-  Prescription,
-  Vaccination,
-  WeightCreate,
-} from '../../api/schema'
+import type { CareStatus, ClinicPetUpdate, ConditionCreate, OutcomeCreate, Prescription, WeightCreate } from '../../api/schema'
 import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
 import { pastDateError } from '../date-validation'
@@ -18,7 +9,15 @@ import { conflict, fieldError, forbidden, notFound, readBody, unprocessable, val
 import { notifyOutcome, notifyPetUpdated } from '../notify'
 import { outcomeErrors } from '../outcome-validation'
 import { birthDateError, breedError, sexError } from '../pet-validation'
-import { addCourseReminders, newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
+import {
+  addCondition,
+  addCourseReminders,
+  addObservation,
+  addVaccination,
+  toAppointment,
+  updateServer,
+  type MockServerState,
+} from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
 import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
 import { authorizeClinic } from './vets'
@@ -108,41 +107,16 @@ export const outcomeHandlers = [
         state.nextPrescriptionId += 1
         return prescription
       })
-      const vaccinations: Vaccination[] = (body.vaccinations ?? []).map((item) => {
-        const vaccination: Vaccination = {
-          id: state.nextVaccinationId,
-          pet_id: pet.id,
-          name: item.name.trim(),
-          date: item.date,
-          next_date: item.next_date ?? null,
-          source: 'clinic',
-          appointment_id: appointment.id,
-        }
-        state.nextVaccinationId += 1
-        state.vaccinations.push(vaccination)
-        return vaccination
-      })
-      for (const item of body.conditions ?? []) {
-        state.conditions.push({
-          id: state.nextConditionId,
-          pet_id: pet.id,
-          kind: item.kind,
-          title: item.title.trim(),
-          description: normalizeText(item.description),
-          source: 'clinic',
-          archived_at: null,
-        })
-        state.nextConditionId += 1
-      }
+      const vaccinations = (body.vaccinations ?? []).map((item) =>
+        addVaccination(state, { ...item, pet_id: pet.id, source: 'clinic', appointment_id: appointment.id }),
+      )
+      for (const item of body.conditions ?? []) addCondition(state, { ...item, pet_id: pet.id, source: 'clinic' })
 
       // Данные питомца: что изменилось — в уведомление владельцу (БП §6.4).
       const changes: string[] = []
       const update = body.pet_update ?? {}
       if (update.weight !== undefined) {
-        state.observations.push(
-          newObservation({ id: state.nextObservationId, pet_id: pet.id, date: day, weight: update.weight, source: 'clinic' }),
-        )
-        state.nextObservationId += 1
+        addObservation(state, { pet_id: pet.id, date: day, weight: update.weight, source: 'clinic' })
         changes.push('вес')
       }
       if (update.breed !== undefined && normalizeText(update.breed) !== pet.breed) {
@@ -232,9 +206,7 @@ export const outcomeHandlers = [
       const denied = editAccess(state, clinicId, petId)
       if (denied) return denied
       const body = raw as WeightCreate
-      const observation = newObservation({ id: state.nextObservationId, pet_id: petId, date: body.date, weight: body.weight, source: 'clinic' })
-      state.nextObservationId += 1
-      state.observations.push(observation)
+      const observation = addObservation(state, { pet_id: petId, date: body.date, weight: body.weight, source: 'clinic' })
       notifyPetUpdated(state, petId, clinicId, ['вес'])
       return HttpResponse.json(observation, { status: 201 })
     })
@@ -255,18 +227,7 @@ export const outcomeHandlers = [
       const petId = Number(params.petId)
       const denied = editAccess(state, clinicId, petId)
       if (denied) return denied
-      const body = raw as ConditionCreate
-      const condition: Condition = {
-        id: state.nextConditionId,
-        pet_id: petId,
-        kind: body.kind,
-        title: body.title.trim(),
-        description: normalizeText(body.description),
-        source: 'clinic',
-        archived_at: null,
-      }
-      state.nextConditionId += 1
-      state.conditions.push(condition)
+      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: petId, source: 'clinic' })
       notifyPetUpdated(state, petId, clinicId, ['особенности здоровья'])
       return HttpResponse.json(condition, { status: 201 })
     })

@@ -7,6 +7,7 @@ import { isoDateError } from '../date-validation'
 import { authorizeAccount, conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
+  newAppointment,
   readServer,
   toAppointment,
   updateServer,
@@ -170,18 +171,14 @@ export const appointmentHandlers = [
       const body = raw as AppointmentCreate
       const start = new Date(body.slot_start)
       if (isTaken(state, bookable.vet.id, start)) return conflict('Слот уже занят')
-      const appointment: MockAppointment = {
+      const appointment = newAppointment({
         id: state.nextAppointmentId,
         pet_id: pet.id,
         vet_id: bookable.vet.id,
         slot_start: toMoscowString(start),
         reason: body.reason,
         reason_comment: normalizeText(body.reason_comment),
-        status: 'requested',
-        cancelled_by: null,
-        clinic_comment: null,
-        outcome: null,
-      }
+      })
       state.nextAppointmentId += 1
       state.appointments.push(appointment)
       notifyAppointment(state, appointment, 'requested')

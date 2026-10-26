@@ -1,13 +1,11 @@
 import { http, HttpResponse } from 'msw'
 import { healthLimits } from '../../api/limits'
 import type {
-  Condition,
   ConditionCreate,
   ConditionUpdate,
   Observation,
   ObservationCreate,
   ObservationUpdate,
-  Vaccination,
   VaccinationCreate,
   VaccinationUpdate,
 } from '../../api/schema'
@@ -23,7 +21,14 @@ import {
   unprocessable,
   validateBody,
 } from '../http-utils'
-import { newObservation, readServer, updateServer, type MockServerState } from '../server-state'
+import {
+  addCondition,
+  addObservation,
+  addVaccination,
+  readServer,
+  updateServer,
+  type MockServerState,
+} from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
 import { findPet } from './pets'
 
@@ -91,18 +96,7 @@ export const healthHandlers = [
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
-      const body = raw as ConditionCreate
-      const condition: Condition = {
-        id: state.nextConditionId,
-        pet_id: pet.id,
-        kind: body.kind,
-        title: body.title.trim(),
-        description: normalizeText(body.description),
-        source: 'owner',
-        archived_at: null,
-      }
-      state.nextConditionId += 1
-      state.conditions.push(condition)
+      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: pet.id, source: 'owner' })
       return HttpResponse.json(condition, { status: 201 })
     })
   }),
@@ -171,8 +165,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const body = raw as ObservationCreate
-      const observation = newObservation({
-        id: state.nextObservationId,
+      const observation = addObservation(state, {
         pet_id: pet.id,
         date: body.date,
         weight: body.weight ?? null,
@@ -182,8 +175,6 @@ export const healthHandlers = [
         note: normalizeText(body.note),
         source: 'owner',
       })
-      state.nextObservationId += 1
-      state.observations.push(observation)
       return HttpResponse.json(observation, { status: 201 })
     })
   }),
@@ -241,18 +232,12 @@ export const healthHandlers = [
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
-      const body = raw as VaccinationCreate
-      const vaccination: Vaccination = {
-        id: state.nextVaccinationId,
+      const vaccination = addVaccination(state, {
+        ...(raw as VaccinationCreate),
         pet_id: pet.id,
-        name: body.name.trim(),
-        date: body.date,
-        next_date: body.next_date ?? null,
         source: 'owner',
         appointment_id: null,
-      }
-      state.nextVaccinationId += 1
-      state.vaccinations.push(vaccination)
+      })
       return HttpResponse.json(vaccination, { status: 201 })
     })
   }),

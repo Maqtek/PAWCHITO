@@ -29,6 +29,7 @@ import {
   attemptsKey,
   findAccount,
   issueRefreshToken,
+  newAccount,
   newRecoveryCode,
   readMockCookie,
   readServer,
@@ -82,17 +83,14 @@ export const authHandlers = [
     const body = raw as RegisterRequest
     return updateServer((state) => {
       if (findAccount(state, body.email)) return conflict('Email уже зарегистрирован')
-      const account: MockAccount = {
+      const account = newAccount({
         id: state.nextUserId,
         email: body.email.trim(),
         password: body.password,
         role: 'owner',
         full_name: body.full_name.trim(),
-        must_change_password: false,
-        is_active: true,
         recovery_code: newRecoveryCode(),
-        clinic_id: null,
-      }
+      })
       state.nextUserId += 1
       state.accounts.push(account)
       return HttpResponse.json(
