@@ -52,3 +52,11 @@ export const healthLimits = {
   vaccineNameMax: 100,
   dateMin: '1900-01-01',
 } as const
+
+/** Запись к врачу (контракты, раздел 4 «Лимиты полей записи»; БП §5). */
+export const appointmentLimits = {
+  reasonCommentMax: 500,
+  /** Окно записи: с сегодня по сегодня + 30 дней по Москве включительно (Р-49). */
+  daysAhead: 30,
+  slotMinutes: 30,
+} as const

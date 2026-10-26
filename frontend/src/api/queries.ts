@@ -26,6 +26,13 @@ export const queryKeys = {
   conditions: (petId: number) => ['health', petId, 'conditions'] as const,
   observations: (petId: number) => ['health', petId, 'observations'] as const,
   vaccinations: (petId: number) => ['health', petId, 'vaccinations'] as const,
+  bookingClinics: ['booking', 'clinics'] as const,
+  bookingVets: (clinicId: number) => ['booking', 'clinics', clinicId, 'vets'] as const,
+  slots: (vetId: number, date: string) => ['booking', 'slots', vetId, date] as const,
+  // Под общим ['appointments']: отмена или новая запись перечитывает и список, и карточку.
+  appointments: ['appointments'] as const,
+  petAppointments: (petId: number) => ['appointments', 'pet', petId] as const,
+  appointment: (id: number) => ['appointments', id] as const,
 }
 
 export const meQuery = queryOptions({
@@ -82,4 +89,43 @@ export const vaccinationsQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.vaccinations(petId),
     queryFn: () => unwrap(api.GET('/pets/{pet_id}/vaccinations', petPath(petId))),
+  })
+
+/** Активные клиники для записи (Р-49). */
+export const bookingClinicsQuery = queryOptions({
+  queryKey: queryKeys.bookingClinics,
+  queryFn: () => unwrap(api.GET('/clinics')),
+})
+
+/** Врачи клиники, к которым можно записаться: без отпуска и архива. */
+export const bookingVetsQuery = (clinicId: number) =>
+  queryOptions({
+    queryKey: queryKeys.bookingVets(clinicId),
+    queryFn: () => unwrap(api.GET('/clinics/{clinic_id}/vets', { params: { path: { clinic_id: clinicId } } })),
+  })
+
+/** Свободные слоты врача на дату: всегда свежие — их в любой момент может занять другой владелец. */
+export const slotsQuery = (clinicId: number, vetId: number, date: string) =>
+  queryOptions({
+    queryKey: queryKeys.slots(vetId, date),
+    queryFn: () =>
+      unwrap(
+        api.GET('/clinics/{clinic_id}/vets/{vet_id}/slots', {
+          params: { path: { clinic_id: clinicId, vet_id: vetId }, query: { date } },
+        }),
+      ),
+    staleTime: 0,
+  })
+
+/** Все записи питомца, от поздних к ранним (Р-51). */
+export const petAppointmentsQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.petAppointments(petId),
+    queryFn: () => unwrap(api.GET('/pets/{pet_id}/appointments', petPath(petId))),
+  })
+
+export const appointmentQuery = (id: number) =>
+  queryOptions({
+    queryKey: queryKeys.appointment(id),
+    queryFn: () => unwrap(api.GET('/appointments/{id}', { params: { path: { id } } })),
   })

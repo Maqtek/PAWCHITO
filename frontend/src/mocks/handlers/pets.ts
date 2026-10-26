@@ -3,7 +3,7 @@ import type { Pet, PetCreate, PetUpdate } from '../../api/schema'
 import { readBody, validateBody } from '../auth-validation'
 import { authorizeAccount } from '../http-utils'
 import { birthDateError, breedError, normalizeBreed, petNameError, sexError, speciesError } from '../pet-validation'
-import { newPet, readServer, updateServer, type MockServerState } from '../server-state'
+import { cancelFutureAppointments, newPet, readServer, updateServer, type MockServerState } from '../server-state'
 
 const notFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
 
@@ -102,9 +102,12 @@ export const petHandlers = [
       if (account instanceof Response) return account
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return notFound()
-      // Записей и дел в моках нет до этапов 7 и 10 — отменять и удалять нечего; повтор тоже ничего не меняет.
-      pet.archived_at ??= new Date().toISOString()
-      return HttpResponse.json({ pet, cancelled_appointments: 0, deleted_reminders: 0 })
+      // Повторное архивирование ничего не меняет (Р-42): будущих записей уже нет.
+      if (pet.archived_at !== null) return HttpResponse.json({ pet, cancelled_appointments: 0, deleted_reminders: 0 })
+      pet.archived_at = new Date().toISOString()
+      const cancelled = cancelFutureAppointments(state, (item) => item.pet_id === pet.id)
+      // Дел в моках нет до этапа 10 — удалять нечего.
+      return HttpResponse.json({ pet, cancelled_appointments: cancelled, deleted_reminders: 0 })
     }),
   ),
 ]
