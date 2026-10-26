@@ -52,7 +52,8 @@ export interface components {
       id: number
       email: string
       role: components['schemas']['Role']
-      full_name: string
+      /** У клиники — её название; бэкенд (UserOut в openapi.json) может вернуть null. Показывать через displayName. */
+      full_name: string | null
       must_change_password: boolean
     }
     Token: { access_token: string; token_type: 'bearer'; expires_in: number }
