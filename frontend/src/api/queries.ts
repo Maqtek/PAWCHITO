@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 import { api } from './client'
 import { ApiError } from './errors'
 import type { AppointmentStatus, ReminderStatus } from './schema'
@@ -27,6 +27,8 @@ export const queryKeys = {
   conditions: (petId: number) => ['health', petId, 'conditions'] as const,
   observations: (petId: number) => ['health', petId, 'observations'] as const,
   vaccinations: (petId: number) => ['health', petId, 'vaccinations'] as const,
+  // Лента собрана из записей здоровья: их изменение перечитывает и её (health-cache).
+  timeline: (petId: number) => ['health', petId, 'timeline'] as const,
   bookingClinics: ['booking', 'clinics'] as const,
   bookingVets: (clinicId: number) => ['booking', 'clinics', clinicId, 'vets'] as const,
   slots: (vetId: number, date: string) => ['booking', 'slots', vetId, date] as const,
@@ -120,6 +122,29 @@ export const vaccinationsQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.vaccinations(petId),
     queryFn: () => unwrap(api.GET('/pets/{pet_id}/vaccinations', petPath(petId))),
+  })
+
+/** Элементов ленты на страницу: день сервер не разрывает, поэтому страница бывает и больше (Р-66). */
+const TIMELINE_PAGE_SIZE = 20
+
+/**
+ * Лента истории питомца страницами по датам (Р-66): следующая — с before = дата последнего элемента. Страница меньше
+ * лимита, в том числе пустая, — конец ленты: меньше лимита сервер отдаёт, только когда раньше ничего нет.
+ */
+export const timelineQuery = (petId: number) =>
+  infiniteQueryOptions({
+    queryKey: queryKeys.timeline(petId),
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET('/pets/{pet_id}/timeline', {
+          params: {
+            path: { pet_id: petId },
+            query: pageParam === null ? { limit: TIMELINE_PAGE_SIZE } : { before: pageParam, limit: TIMELINE_PAGE_SIZE },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => (lastPage.length < TIMELINE_PAGE_SIZE ? undefined : lastPage[lastPage.length - 1].date),
   })
 
 /** Активные клиники для записи (Р-49). */

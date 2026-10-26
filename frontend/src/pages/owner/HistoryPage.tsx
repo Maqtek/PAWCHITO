@@ -1,4 +1,4 @@
-import { HistoryIcon, PawPrint } from 'lucide-react'
+import { PawPrint } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { buttonClass, Button, EmptyState, Spinner } from '../../components/ui'
@@ -6,8 +6,8 @@ import { ConditionsSection } from '../../features/health/ConditionsSection'
 import { DiarySection } from '../../features/health/DiarySection'
 import { VaccinationsSection } from '../../features/health/VaccinationsSection'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
+import { TimelineSection } from '../../features/timeline/TimelineSection'
 import { PageHeader } from '../../layouts/PageHeader'
-import { StagePlaceholder } from '../StagePlaceholder'
 
 export function HistoryPage() {
   const { pet, isPending, isError, refetch } = useSelectedPet()
@@ -46,6 +46,7 @@ export function HistoryPage() {
         <ConditionsSection petId={pet.id} onStatus={onStatus} />
         <DiarySection petId={pet.id} onStatus={onStatus} />
         <VaccinationsSection petId={pet.id} onStatus={onStatus} />
+        <TimelineSection petId={pet.id} />
       </div>
     )
   }
@@ -57,8 +58,8 @@ export function HistoryPage() {
         title="История"
         description={
           pet
-            ? `Особенности здоровья, дневник и прививки: ${pet.name}.`
-            : 'Особенности здоровья, дневник и прививки питомца.'
+            ? `Особенности здоровья, дневник, прививки и лента истории: ${pet.name}.`
+            : 'Особенности здоровья, дневник, прививки и лента истории питомца.'
         }
       />
       {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
@@ -66,7 +67,6 @@ export function HistoryPage() {
         {status && status.petId === pet?.id ? status.text : ''}
       </p>
       <div className="max-w-3xl">{content()}</div>
-      <StagePlaceholder className="mt-4 max-w-3xl" stage={11} icon={HistoryIcon} title="Лента истории" />
     </>
   )
 }
