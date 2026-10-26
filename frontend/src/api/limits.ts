@@ -37,3 +37,18 @@ export const petLimits = {
   /** Раньше — опечатка вроде 0202; позже сегодняшнего дня по Москве дата тоже не проходит. */
   birthDateMin: '1900-01-01',
 } as const
+
+/**
+ * Лимиты полей здоровья (контракты, раздел 3 «Лимиты полей здоровья»).
+ * Длина — в символах Unicode (code points), как у authLimits. Даты — с 1900-01-01 по сегодня по Москве (Р-45, Р-46).
+ */
+export const healthLimits = {
+  conditionTitleMax: 100,
+  conditionDescriptionMax: 1000,
+  weightMin: 0.1,
+  weightMax: 200,
+  symptomsMax: 500,
+  noteMax: 1000,
+  vaccineNameMax: 100,
+  dateMin: '1900-01-01',
+} as const

@@ -22,6 +22,10 @@ export const queryKeys = {
   adminClinics: ['admin', 'clinics'] as const,
   adminClinic: (id: number) => ['admin', 'clinics', id] as const,
   clinicVets: ['clinic', 'vets'] as const,
+  // Не под ['pets']: перечитывание списка питомцев не должно задевать записи здоровья.
+  conditions: (petId: number) => ['health', petId, 'conditions'] as const,
+  observations: (petId: number) => ['health', petId, 'observations'] as const,
+  vaccinations: (petId: number) => ['health', petId, 'vaccinations'] as const,
 }
 
 export const meQuery = queryOptions({
@@ -57,3 +61,25 @@ export const clinicVetsQuery = queryOptions({
   queryKey: queryKeys.clinicVets,
   queryFn: () => unwrap(api.GET('/clinic/vets', { params: { query: { include_archived: true } } })),
 })
+
+const petPath = (petId: number) => ({ params: { path: { pet_id: petId } } })
+
+/** Особенности здоровья выбранного питомца: свои и от клиник, без архивных (Р-44). */
+export const conditionsQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.conditions(petId),
+    queryFn: () => unwrap(api.GET('/pets/{pet_id}/conditions', petPath(petId))),
+  })
+
+/** Весь дневник выбранного питомца, новые наблюдения сверху (Р-45). */
+export const observationsQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.observations(petId),
+    queryFn: () => unwrap(api.GET('/pets/{pet_id}/observations', petPath(petId))),
+  })
+
+export const vaccinationsQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.vaccinations(petId),
+    queryFn: () => unwrap(api.GET('/pets/{pet_id}/vaccinations', petPath(petId))),
+  })
