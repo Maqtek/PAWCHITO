@@ -40,3 +40,13 @@ class CreatedAtMixin:
     """created_at timestamptz NOT NULL DEFAULT now()"""
 
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), sort_order=10)
+
+
+class ArchivedMixin:
+    """archived_at timestamptz — архив вместо удаления: NULL — активен, дата — когда скрыт."""
+
+    archived_at: Mapped[datetime | None] = mapped_column(sort_order=9)
+
+    @property
+    def is_archived(self) -> bool:
+        return self.archived_at is not None
