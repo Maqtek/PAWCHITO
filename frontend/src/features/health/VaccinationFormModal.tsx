@@ -8,7 +8,7 @@ import type { Vaccination, VaccinationCreate, VaccinationUpdate } from '../../ap
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 
 interface VaccinationFormModalProps {
   open: boolean
@@ -111,11 +111,7 @@ function VaccinationForm({ petId, vaccination, onSaved, onCancel, onBusyChange }
               }),
             )
           : unwrap(api.POST('/pets/{pet_id}/vaccinations', { params: { path: { pet_id: petId } }, body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchAfterFailure(queryClient, queryKey)
-        throw error
-      })
-      storeRecord(queryClient, queryKey, saved, { prepend: true })
+      const saved = await saveRecord(queryClient, queryKey, request, { prepend: true })
       onSaved(saved)
     },
   })

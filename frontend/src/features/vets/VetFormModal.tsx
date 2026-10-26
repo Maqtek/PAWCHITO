@@ -7,7 +7,7 @@ import { unwrap } from '../../api/queries'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
-import { refetchVetsAfterFailure, storeVet } from './vet-cache'
+import { saveVet } from './vet-cache'
 
 interface VetFormModalProps {
   open: boolean
@@ -76,12 +76,7 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
         baseline && update
           ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update }))
           : unwrap(api.POST('/clinic/vets', { body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchVetsAfterFailure(queryClient)
-        throw error
-      })
-      storeVet(queryClient, saved)
-      onSaved(saved)
+      onSaved(await saveVet(queryClient, request))
     },
   })
 

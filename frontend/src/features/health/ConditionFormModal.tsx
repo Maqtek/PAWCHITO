@@ -8,7 +8,7 @@ import type { Condition, ConditionCreate, ConditionKind, ConditionUpdate } from 
 import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
 import { conditionKindLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 
 const kindOptions: SelectOption[] = (['allergy', 'chronic'] as const).map((value) => ({
   value,
@@ -100,11 +100,7 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
               }),
             )
           : unwrap(api.POST('/pets/{pet_id}/conditions', { params: { path: { pet_id: petId } }, body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchAfterFailure(queryClient, queryKey)
-        throw error
-      })
-      storeRecord(queryClient, queryKey, saved)
+      const saved = await saveRecord(queryClient, queryKey, request)
       onSaved(saved)
     },
   })

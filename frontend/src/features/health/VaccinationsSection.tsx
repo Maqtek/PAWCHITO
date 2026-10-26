@@ -9,7 +9,7 @@ import { Badge, Button } from '../../components/ui'
 import { formatLongDate, moscowIsoDate } from '../../lib/format'
 import { dataSourceLabel } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
 import { VaccinationFormModal } from './VaccinationFormModal'
 
@@ -52,16 +52,16 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
 
   async function remove() {
     if (!dialogVaccination) return
-    const queryKey = queryKeys.vaccinations(petId)
-    await unwrap(
-      api.DELETE('/pets/{pet_id}/vaccinations/{id}', {
-        params: { path: { pet_id: petId, id: dialogVaccination.id } },
-      }),
-    ).catch((error: unknown) => {
-      refetchAfterFailure(queryClient, queryKey)
-      throw error
-    })
-    storeRecord(queryClient, queryKey, dialogVaccination, { remove: true })
+    await saveRecord(
+      queryClient,
+      queryKeys.vaccinations(petId),
+      unwrap(
+        api.DELETE('/pets/{pet_id}/vaccinations/{id}', {
+          params: { path: { pet_id: petId, id: dialogVaccination.id } },
+        }),
+      ).then(() => dialogVaccination),
+      { remove: true },
+    )
     onStatus('Прививка удалена.')
     closeDialog({ gone: true })
   }

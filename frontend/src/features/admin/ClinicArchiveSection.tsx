@@ -9,7 +9,7 @@ import { Button, Card, FormActions, FormAlert, Modal } from '../../components/ui
 import { pluralize } from '../../lib/format'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeClinic } from './clinic-cache'
+import { saveClinic } from './clinic-cache'
 
 interface ClinicArchiveSectionProps {
   clinic: AdminClinic
@@ -38,16 +38,18 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
     setRestoreError(null)
     onStatus('')
     try {
-      const saved = await unwrap(
-        api.POST('/admin/clinics/{id}/restore', {
-          params: { path: { id: clinic.id } },
-        }),
+      await saveClinic(
+        queryClient,
+        unwrap(
+          api.POST('/admin/clinics/{id}/restore', {
+            params: { path: { id: clinic.id } },
+          }),
+        ),
+        clinic.id,
       )
       focusHeadingLater()
-      storeClinic(queryClient, saved)
       onStatus('Клиника возвращена.')
     } catch (error) {
-      refetchAfterFailure(queryClient, clinic.id)
       setRestoreError(errorMessage(error, 'clinic'))
     } finally {
       setRestoring(false)
@@ -128,15 +130,15 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
     context: 'clinic',
     onBusyChange,
     onSubmit: async () => {
-      const result = await unwrap(
-        api.POST('/admin/clinics/{id}/archive', {
-          params: { path: { id: clinic.id } },
-        }),
-      ).catch((error: unknown) => {
-        refetchAfterFailure(queryClient, clinic.id)
-        throw error
-      })
-      storeClinic(queryClient, result.clinic)
+      const result = await saveClinic(
+        queryClient,
+        unwrap(
+          api.POST('/admin/clinics/{id}/archive', {
+            params: { path: { id: clinic.id } },
+          }),
+        ),
+        clinic.id,
+      )
       onArchived(result.cancelled_appointments)
     },
   })

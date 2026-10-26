@@ -7,7 +7,7 @@ import { unwrap } from '../../api/queries'
 import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
 import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeClinic } from './clinic-cache'
+import { saveClinic } from './clinic-cache'
 import {
   halfHourOptions,
   normalizePhone,
@@ -116,12 +116,7 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
         baseline && update
           ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update }))
           : unwrap(api.POST('/admin/clinics', { body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchAfterFailure(queryClient, baseline?.id)
-        throw error
-      })
-      storeClinic(queryClient, saved)
-      onSaved(saved)
+      onSaved(await saveClinic(queryClient, request, baseline?.id))
     },
   })
 

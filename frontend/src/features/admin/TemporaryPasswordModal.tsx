@@ -4,12 +4,13 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
-import { queryKeys, unwrap } from '../../api/queries'
+import { unwrap } from '../../api/queries'
 import { ConfirmActionForm } from '../../components/ConfirmActionModal'
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { emailError } from '../auth/checks'
 import { RevealOnceScreen } from '../auth/RevealOnceScreen'
+import { refetchClinic } from './clinic-cache'
 
 interface TemporaryPasswordModalProps {
   mode: 'create' | 'reset'
@@ -84,7 +85,7 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
           params: { path: { id: clinicId } },
           body: { email: email.trim() },
         }),
-      ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
+      ).finally(() => refetchClinic(queryClient, clinicId))
       onIssued(result.temporary_password)
     },
     onError: (error) =>
@@ -126,7 +127,7 @@ function ResetPasswordForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
       api.POST('/admin/clinics/{id}/account/reset-password', {
         params: { path: { id: clinicId } },
       }),
-    ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
+    ).finally(() => refetchClinic(queryClient, clinicId))
     onIssued(result.temporary_password)
   }
 

@@ -9,7 +9,7 @@ import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectO
 import { moscowIsoDate } from '../../lib/format'
 import { levelLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 import { parseWeight, weightText } from './weight'
 
 const levelOptions: SelectOption[] = [
@@ -131,11 +131,7 @@ function ObservationForm({ petId, observation, onSaved, onCancel, onBusyChange }
               }),
             )
           : unwrap(api.POST('/pets/{pet_id}/observations', { params: { path: { pet_id: petId } }, body: payload }))
-      const saved = await request.catch((error: unknown) => {
-        refetchAfterFailure(queryClient, queryKey)
-        throw error
-      })
-      storeRecord(queryClient, queryKey, saved, { prepend: true })
+      const saved = await saveRecord(queryClient, queryKey, request, { prepend: true })
       onSaved(saved)
     },
   })

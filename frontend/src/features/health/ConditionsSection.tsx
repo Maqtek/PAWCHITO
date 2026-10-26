@@ -9,7 +9,7 @@ import { Badge, Button } from '../../components/ui'
 import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { ConditionFormModal } from './ConditionFormModal'
-import { refetchAfterFailure, storeRecord } from './health-cache'
+import { saveRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
 
 interface Dialog {
@@ -47,16 +47,16 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
 
   async function archive() {
     if (!dialogCondition) return
-    const queryKey = queryKeys.conditions(petId)
-    const saved = await unwrap(
-      api.POST('/pets/{pet_id}/conditions/{id}/archive', {
-        params: { path: { pet_id: petId, id: dialogCondition.id } },
-      }),
-    ).catch((error: unknown) => {
-      refetchAfterFailure(queryClient, queryKey)
-      throw error
-    })
-    storeRecord(queryClient, queryKey, saved, { remove: true })
+    await saveRecord(
+      queryClient,
+      queryKeys.conditions(petId),
+      unwrap(
+        api.POST('/pets/{pet_id}/conditions/{id}/archive', {
+          params: { path: { pet_id: petId, id: dialogCondition.id } },
+        }),
+      ),
+      { remove: true },
+    )
     onStatus('Особенность здоровья перенесена в архив.')
     closeDialog({ gone: true })
   }

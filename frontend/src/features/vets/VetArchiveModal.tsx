@@ -3,7 +3,7 @@ import { api } from '../../api/client'
 import { unwrap } from '../../api/queries'
 import type { Vet } from '../../api/schema'
 import { ConfirmActionModal } from '../../components/ConfirmActionModal'
-import { refetchVetsAfterFailure, storeVet } from './vet-cache'
+import { saveVet } from './vet-cache'
 
 export type ArchiveAction = 'archive' | 'restore'
 
@@ -27,16 +27,11 @@ export function VetArchiveModal({ open, action, vet, onClose, onDone }: VetArchi
   async function confirm() {
     if (!vet) return
     const params = { path: { id: vet.id } }
-    const saved = await unwrap(
+    const request =
       action === 'archive'
         ? api.POST('/clinic/vets/{id}/archive', { params })
-        : api.POST('/clinic/vets/{id}/restore', { params }),
-    ).catch((error: unknown) => {
-      refetchVetsAfterFailure(queryClient)
-      throw error
-    })
-    storeVet(queryClient, saved)
-    onDone(saved)
+        : api.POST('/clinic/vets/{id}/restore', { params })
+    onDone(await saveVet(queryClient, unwrap(request)))
   }
 
   return (
