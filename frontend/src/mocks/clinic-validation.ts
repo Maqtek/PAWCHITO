@@ -4,7 +4,8 @@ import { charCount, hasControlChars } from './auth-validation'
 const TIME = /^([01]\d|2[0-3]):(00|30)$/
 const PHONE = /^\+7\d{10}$/
 
-function textError(value: unknown, label: string, max: number): string | null {
+/** Обязательная строка: пробелы по краям не считаются, без управляющих символов. */
+export function textError(value: unknown, label: string, max: number): string | null {
   if (typeof value !== 'string') return `${label}: ожидается строка`
   const text = value.trim()
   if (text === '') return `${label} не может быть пустым`

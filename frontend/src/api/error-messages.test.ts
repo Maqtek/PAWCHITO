@@ -74,3 +74,10 @@ describe('тексты админки клиник', () => {
     expect(errorMessage(new ApiError(409, 'conflict'), 'clinic-account')).toBe('У клиники уже есть аккаунт или email занят.')
   })
 })
+
+describe('тексты врачей клиники', () => {
+  it('404: врача нет или он другой клиники — список перечитывается', () => {
+    expect(errorMessage(new ApiError(404, 'Врач не найден'), 'vet')).toBe('Врач не найден. Список врачей обновлён.')
+    expect(errorMessage(new ApiError(404, 'Не найдено'))).toBe('Что-то пошло не так. Попробуйте ещё раз.')
+  })
+})

@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.2).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.4).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -10,6 +10,7 @@ type Json<T> = { headers: { [name: string]: unknown }; content: { 'application/j
 type NoContent = { headers: { [name: string]: unknown }; content?: never }
 type NoParams = { query?: never; header?: never; path?: never; cookie?: never }
 type ClinicPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
+type VetPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
 type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
@@ -79,6 +80,18 @@ export interface components {
     ClinicAccountCreated: { user: components['schemas']['User']; temporary_password: string }
     TemporaryPassword: { temporary_password: string }
     ClinicArchived: { clinic: components['schemas']['AdminClinic']; cancelled_appointments: number }
+    /** Врач клиники: отпуск — флаг без дат (Р-37); specialization: null — не указана. */
+    Vet: {
+      id: number
+      clinic_id: number
+      full_name: string
+      specialization: string | null
+      on_vacation: boolean
+      archived_at: string | null
+    }
+    VetCreate: { full_name: string; specialization?: string | null }
+    /** null в specialization убирает специализацию, в full_name и on_vacation — 422 (Р-38). */
+    VetUpdate: { full_name?: string; specialization?: string | null; on_vacation?: boolean }
     UnreadCount: { unread_count: number }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
@@ -289,6 +302,64 @@ export interface paths {
       }
     }
   }
+  '/clinic/vets': {
+    parameters: NoParams
+    get: {
+      parameters: { query?: { include_archived?: boolean }; header?: never; path?: never; cookie?: never }
+      requestBody?: never
+      responses: { 200: Json<Schemas['Vet'][]>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
+    }
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['VetCreate']>
+      responses: {
+        201: Json<Schemas['Vet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/vets/{id}': {
+    parameters: VetPath
+    patch: {
+      parameters: VetPath
+      requestBody: Body<Schemas['VetUpdate']>
+      responses: {
+        200: Json<Schemas['Vet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/vets/{id}/archive': {
+    parameters: VetPath
+    post: {
+      parameters: VetPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Vet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/clinic/vets/{id}/restore': {
+    parameters: VetPath
+    post: {
+      parameters: VetPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Vet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
   '/admin/clinics/{id}/account/reset-password': {
     parameters: ClinicPath
     post: {
@@ -335,3 +406,6 @@ export type ClinicAccountCreate = Schemas['ClinicAccountCreate']
 export type ClinicAccountCreated = Schemas['ClinicAccountCreated']
 export type TemporaryPassword = Schemas['TemporaryPassword']
 export type ClinicArchived = Schemas['ClinicArchived']
+export type Vet = Schemas['Vet']
+export type VetCreate = Schemas['VetCreate']
+export type VetUpdate = Schemas['VetUpdate']
