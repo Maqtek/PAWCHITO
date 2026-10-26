@@ -37,14 +37,14 @@ export function AppRoutes() {
       <Route
         path="/change-password"
         element={
-          <RequireRole allow={['owner', 'clinic', 'admin']} passwordChange>
+          <RequireRole passwordChange>
             <ChangePasswordPage />
           </RequireRole>
         }
       />
       <Route
         element={
-          <RequireRole allow={['owner', 'clinic', 'admin']}>
+          <RequireRole>
             <AppShell />
           </RequireRole>
         }
