@@ -58,10 +58,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Зависимости
-        run: |
-          pip install -r requirements.txt
-          # pytest пока ставится только здесь: в requirements.txt он появится вместе с тестами (#31)
-          pip install pytest
+        run: pip install -r requirements.txt
 
       - name: Секрет JWT для тестов
         # Свой на каждый запуск: приложение без JWT_SECRET не стартует, а хранить его в репозитории нельзя.
@@ -75,9 +72,12 @@ jobs:
       - name: mypy
         run: mypy app
 
+      - name: openapi.json актуален
+        # Из схемы фронт генерирует типы: изменили API и не перевыгрузили файл — шаг красный.
+        run: python -m app.export_openapi --check
+
       - name: pytest
-        # Код 5 — «тестов не найдено»: до первых тестов (#31) это не ошибка.
-        run: pytest || [ $? -eq 5 ]
+        run: pytest
 
       - name: Миграции с нуля и alembic check
         # Шаг включится сам, когда в бэкенде появится Alembic (#10).

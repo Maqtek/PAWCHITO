@@ -60,7 +60,7 @@ docker compose up --build
 
 GitHub Actions (`.github/workflows/ci.yml`) на каждый PR и на push в `main`:
 
-- бэкенд — `ruff check`, `ruff format --check`, `mypy app`, `pytest`; миграции с нуля и `alembic check` — как только в бэкенде появится Alembic (#10);
+- бэкенд — `ruff check`, `ruff format --check`, `mypy app`, актуальность `openapi.json` (`python -m app.export_openapi --check`), `pytest`; миграции с нуля и `alembic check` — как только в бэкенде появится Alembic (#10);
 - фронтенд — `pnpm lint`, `pnpm test`, `pnpm build`;
 - сборка образов `backend` и `frontend`.
 
