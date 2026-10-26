@@ -166,6 +166,18 @@ class AuthService:
         self.users.update(user, recovery_code_hash=hash_password(new_code))
         return new_code
 
+    def reset_password(self, user: User, new_password: str, *, must_change: bool = False) -> None:
+        """Пароль задаёт не сам пользователь: администратору — через CLI (#27),
+        клинике — временный от админа (этап 3, Р-36, must_change=True).
+
+        Все сессии завершаются, пауза после неудачных попыток снимается.
+        """
+        self.users.update(
+            user, password_hash=hash_password(new_password), must_change_password=must_change
+        )
+        self.refresh_tokens.delete_all_for_user(user.id)
+        self.limiter.reset(user.email)
+
     def _check_current_password(self, user: User, password: str) -> None:
         """Смена пароля и новый код: тот же счётчик, что у входа (Р-31) -
         иначе из захваченной сессии можно подбирать пароль без ограничений.
