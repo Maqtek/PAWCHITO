@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.8).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.9).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -247,6 +247,30 @@ export interface components {
       vaccinations: components['schemas']['Vaccination'][]
       appointments: components['schemas']['Appointment'][]
     }
+    /** start_date можно не передавать — день приёма (Р-56). */
+    PrescriptionCreate: { drug: string; dosage: string; times: string[]; duration_days: number; start_date?: string }
+    /** Данные питомца в итоге: вес — наблюдение клиники на день приёма (Р-56). */
+    PetUpdateByClinic: {
+      weight?: number
+      breed?: string | null
+      birth_date?: string | null
+      sex?: components['schemas']['Sex']
+    }
+    /** Итог приёма — одной транзакцией (БП §6.1). */
+    OutcomeCreate: {
+      conclusion: string
+      recommendations?: string | null
+      care_status: components['schemas']['CareStatus']
+      prescriptions?: components['schemas']['PrescriptionCreate'][]
+      vaccinations?: components['schemas']['VaccinationCreate'][]
+      pet_update?: components['schemas']['PetUpdateByClinic']
+      conditions?: components['schemas']['ConditionCreate'][]
+    }
+    OutcomeResult: { appointment: components['schemas']['Appointment']; created_reminders: number }
+    /** Клиника меняет только породу, дату рождения и пол (Р-57). */
+    ClinicPetUpdate: { breed?: string | null; birth_date?: string | null; sex?: components['schemas']['Sex'] }
+    WeightCreate: { date: string; weight: number }
+    PetPhoto: { photo_url: string }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
     ValidationError: { loc: (string | number)[]; msg: string; type: string }
@@ -753,6 +777,75 @@ export interface paths {
         404: Json<Schemas['Error']>
       }
     }
+    patch: {
+      parameters: PetPath
+      requestBody: Body<Schemas['ClinicPetUpdate']>
+      responses: {
+        200: Json<Schemas['Pet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/appointments/{id}/outcome': {
+    parameters: AppointmentPath
+    post: {
+      parameters: AppointmentPath
+      requestBody: Body<Schemas['OutcomeCreate']>
+      responses: {
+        200: Json<Schemas['OutcomeResult']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/pets/{pet_id}/weight': {
+    parameters: PetPath
+    post: {
+      parameters: PetPath
+      requestBody: Body<Schemas['WeightCreate']>
+      responses: {
+        201: Json<Schemas['Observation']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/pets/{pet_id}/conditions': {
+    parameters: PetPath
+    post: {
+      parameters: PetPath
+      requestBody: Body<Schemas['ConditionCreate']>
+      responses: {
+        201: Json<Schemas['Condition']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/clinic/pets/{pet_id}/photo': {
+    parameters: PetPath
+    put: {
+      parameters: PetPath
+      requestBody: { content: { 'multipart/form-data': { file: Blob } } }
+      responses: {
+        200: Json<Schemas['PetPhoto']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        413: Json<Schemas['Error']>
+        415: Json<Schemas['Error']>
+      }
+    }
   }
   '/clinic/pets/{pet_id}/observations': {
     parameters: PetPath
@@ -967,6 +1060,13 @@ export type Notification = Schemas['Notification']
 export type NotificationList = Schemas['NotificationList']
 export type ClinicAppointmentCancel = Schemas['ClinicAppointmentCancel']
 export type ClinicPetCard = Schemas['ClinicPetCard']
+export type PrescriptionCreate = Schemas['PrescriptionCreate']
+export type PetUpdateByClinic = Schemas['PetUpdateByClinic']
+export type OutcomeCreate = Schemas['OutcomeCreate']
+export type OutcomeResult = Schemas['OutcomeResult']
+export type ClinicPetUpdate = Schemas['ClinicPetUpdate']
+export type WeightCreate = Schemas['WeightCreate']
+export type PetPhoto = Schemas['PetPhoto']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']
 export type RegisterRequest = Schemas['RegisterRequest']

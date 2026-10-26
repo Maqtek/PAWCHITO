@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Check, X } from 'lucide-react'
+import { Check, ClipboardCheck, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
@@ -21,20 +21,30 @@ interface ClinicAppointmentCardProps {
   /** Нет — врач принимает. */
   vetUnavailable?: VetAvailability
   onStatus: (message: string) => void
-  /** Окно — у страницы: запись может уйти из вкладки, а окно с ответом или ошибкой должно остаться. */
+  /** Окна — у страницы: запись может уйти из вкладки, а окно с ответом или ошибкой должно остаться. */
   onCancel: () => void
+  onOutcome: () => void
 }
 
 const cancelledByForClinic = { ...cancelledByLabel, owner: 'Владелец отменил запись', clinic: 'Вы отменили запись' }
 
 /** Запись в кабинете клиники: подтверждение — сразу, отмена — с комментарием владельцу (Р-53). */
-export function ClinicAppointmentCard({ appointment, now, vetUnavailable, onStatus, onCancel }: ClinicAppointmentCardProps) {
+export function ClinicAppointmentCard({
+  appointment,
+  now,
+  vetUnavailable,
+  onStatus,
+  onCancel,
+  onOutcome,
+}: ClinicAppointmentCardProps) {
   const queryClient = useQueryClient()
   const headingId = useId()
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const started = new Date(appointment.slot_start).getTime() <= now.getTime()
   const active = appointment.status === 'requested' || appointment.status === 'confirmed'
+  // Итог — у подтверждённой записи, время которой наступило (Р-56).
+  const awaitingOutcome = appointment.status === 'confirmed' && started && !appointment.outcome
   const when = formatSlot(appointment.slot_start)
   // Подпись для скринридера — с питомцем и временем: в списке много одинаковых «Подтвердить».
   const forRecord = (
@@ -99,9 +109,7 @@ export function ClinicAppointmentCard({ appointment, now, vetUnavailable, onStat
           {appointment.clinic_comment && <>: «{appointment.clinic_comment}»</>}
         </p>
       )}
-      {appointment.status === 'confirmed' && started && !appointment.outcome && (
-        <p className="mt-2 text-sm text-ink-muted">Ждёт итога — форма итога появится на этапе 9.</p>
-      )}
+      {appointment.outcome && <p className="mt-2 text-sm break-words">Итог: {appointment.outcome.conclusion}</p>}
       {error && (
         <div className="mt-3">
           <FormAlert message={error} />
@@ -109,6 +117,19 @@ export function ClinicAppointmentCard({ appointment, now, vetUnavailable, onStat
       )}
       {active && (
         <div className="mt-3 flex flex-wrap gap-2">
+          {awaitingOutcome && (
+            <Button
+              size="sm"
+              icon={ClipboardCheck}
+              onClick={() => {
+                onStatus('')
+                setError(null)
+                onOutcome()
+              }}
+            >
+              Внести итог{forRecord}
+            </Button>
+          )}
           {/* Прошедшую заявку не подтверждают — её отменяют (Р-53). */}
           {appointment.status === 'requested' && !started && (
             <Button size="sm" icon={Check} aria-disabled={confirming} onClick={() => void confirm()}>

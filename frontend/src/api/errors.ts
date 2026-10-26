@@ -3,6 +3,7 @@ import type { ValidationError } from './schema'
 interface ApiErrorDetails {
   retryAfter?: number | null
   fieldErrors?: Record<string, string>
+  pathErrors?: Record<string, string>
 }
 
 /** Ответ API с ошибкой: статус, текст из {"detail": "..."} и подробности для форм. */
@@ -13,14 +14,21 @@ export class ApiError extends Error {
   readonly retryAfter: number | null
   /** Ошибки полей из ответа 422: имя поля → текст. */
   readonly fieldErrors: Record<string, string>
+  /** Те же ошибки по полному пути без «body»: «prescriptions.0.times» — для форм со списками (итог приёма). */
+  readonly pathErrors: Record<string, string>
 
-  constructor(status: number, detail: string, { retryAfter = null, fieldErrors = {} }: ApiErrorDetails = {}) {
+  constructor(
+    status: number,
+    detail: string,
+    { retryAfter = null, fieldErrors = {}, pathErrors = {} }: ApiErrorDetails = {},
+  ) {
     super(detail)
     this.name = 'ApiError'
     this.status = status
     this.detail = detail
     this.retryAfter = retryAfter
     this.fieldErrors = fieldErrors
+    this.pathErrors = pathErrors
   }
 
   /** Ошибка из ответа и его разобранного тела: {"detail": "..."} или массив ошибок полей у 422. */
@@ -28,10 +36,12 @@ export class ApiError extends Error {
     const retryAfter = parseRetryAfter(response.headers.get('Retry-After'))
     const detail = typeof body === 'object' && body !== null && 'detail' in body ? body.detail : undefined
     if (Array.isArray(detail)) {
-      const fieldErrors = Object.fromEntries(
-        (detail as ValidationError[]).map((item) => [String(item.loc[item.loc.length - 1]), item.msg]),
+      const items = detail as ValidationError[]
+      const fieldErrors = Object.fromEntries(items.map((item) => [String(item.loc[item.loc.length - 1]), item.msg]))
+      const pathErrors = Object.fromEntries(
+        items.map((item) => [item.loc.filter((part, index) => index > 0 || (part !== 'body' && part !== 'query')).join('.'), item.msg]),
       )
-      return new ApiError(response.status, Object.values(fieldErrors).join('; '), { retryAfter, fieldErrors })
+      return new ApiError(response.status, Object.values(fieldErrors).join('; '), { retryAfter, fieldErrors, pathErrors })
     }
     return new ApiError(response.status, typeof detail === 'string' ? detail : response.statusText, { retryAfter })
   }

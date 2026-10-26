@@ -8,10 +8,11 @@ import type { Appointment, AppointmentStatus } from '../../api/schema'
 import { Button, EmptyState, SelectField, Spinner, Tabs, TextField, type SelectOption } from '../../components/ui'
 import { ClinicAppointmentCard, type VetAvailability } from '../../features/clinic-appointments/ClinicAppointmentCard'
 import { ClinicCancelModal } from '../../features/clinic-appointments/ClinicCancelModal'
+import { OutcomeFormModal } from '../../features/clinic-appointments/OutcomeFormModal'
 import { PageHeader } from '../../layouts/PageHeader'
 import { addDays } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { appointmentStatusLabel } from '../../lib/labels'
+import { appointmentStatusLabel, careStatusLabel } from '../../lib/labels'
 
 type View = 'schedule' | 'awaiting' | 'decision'
 
@@ -24,6 +25,7 @@ const statusOptions: SelectOption[] = [
 ]
 
 interface Dialog {
+  kind: 'cancel' | 'outcome'
   appointment?: Appointment
   /** Закрытое окно хранит свои данные до следующего открытия — заголовок не меняется, пока окно закрывается. */
   open: boolean
@@ -60,7 +62,7 @@ export function ClinicAppointmentsPage() {
   const vets = useQuery(clinicVetsQuery)
 
   const [notice, setNotice] = useState('')
-  const [dialog, setDialog] = useState<Dialog>({ open: false })
+  const [dialog, setDialog] = useState<Dialog>({ kind: 'cancel', open: false })
   const listRef = useRef<HTMLDivElement>(null)
   const focusList = useRef(false)
 
@@ -132,7 +134,8 @@ export function ClinicAppointmentsPage() {
               now={now}
               vetUnavailable={view === 'decision' ? vetAvailability.get(appointment.vet.id) : undefined}
               onStatus={setNotice}
-              onCancel={() => setDialog({ appointment, open: true })}
+              onCancel={() => setDialog({ kind: 'cancel', appointment, open: true })}
+              onOutcome={() => setDialog({ kind: 'outcome', appointment, open: true })}
             />
           </li>
         ))}
@@ -144,7 +147,7 @@ export function ClinicAppointmentsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Кабинет клиники" title="Записи" description="Заявки, подтверждённые приёмы и записи, требующие решения." />
+      <PageHeader eyebrow="Кабинет клиники" title="Записи" description="Заявки, подтверждённые приёмы, итоги и записи, требующие решения." />
       <div className="flex max-w-3xl flex-col gap-4">
         <Tabs
           label="Записи"
@@ -179,11 +182,27 @@ export function ClinicAppointmentsPage() {
         </div>
       </div>
       <ClinicCancelModal
-        open={dialog.open}
+        open={dialog.open && dialog.kind === 'cancel'}
         appointment={dialogAppointment}
         onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
         onDone={(cancelled) => {
           setNotice(`Запись отменена: ${cancelled.pet.name}. Владелец получит уведомление с вашим комментарием.`)
+          focusList.current = true
+          setDialog((currentDialog) => ({ ...currentDialog, open: false }))
+        }}
+      />
+      <OutcomeFormModal
+        open={dialog.open && dialog.kind === 'outcome'}
+        appointment={dialogAppointment}
+        onClose={() => setDialog((currentDialog) => ({ ...currentDialog, open: false }))}
+        onDone={({ appointment, created_reminders: reminders }) => {
+          const status = appointment.outcome ? careStatusLabel[appointment.outcome.care_status].toLowerCase() : ''
+          setNotice(
+            `Итог внесён: ${appointment.pet.name} — ${status}.` +
+              (reminders > 0 ? ` Дел курса: ${reminders}.` : '') +
+              ' Владелец получит уведомление.',
+          )
+          // Запись ушла из «Ждут итога» вместе с кнопкой, открывшей окно.
           focusList.current = true
           setDialog((currentDialog) => ({ ...currentDialog, open: false }))
         }}

@@ -7,6 +7,7 @@ import { clinicPetObservationsQuery, clinicPetQuery } from '../../api/queries'
 import { PetCard } from '../../components/pet/PetCard'
 import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
 import { formatSlot } from '../../features/appointments/format'
+import { PetPhotoUpload } from '../../features/clinic-appointments/PetPhotoUpload'
 import { PageHeader } from '../../layouts/PageHeader'
 import { formatLongDate, formatWeight } from '../../lib/format'
 import {
@@ -36,7 +37,7 @@ const ownerSource = 'Внесено владельцем'
 
 /**
  * Карточка питомца для клиники (BR-10.2, FR-18): только чтение, если у питомца есть неотменённая запись в эту клинику
- * (Р-54). Изменение данных, вес и фото — вместе с итогом приёма на этапе 9.
+ * (Р-54). Данные, вес и особенности клиника вносит в итоге приёма; фото — здесь, после завершённого приёма (Р-58).
  */
 export function ClinicPetPage() {
   const petId = Number(useParams().petId)
@@ -44,6 +45,7 @@ export function ClinicPetPage() {
   const card = useQuery({ ...clinicPetQuery(petId), enabled: valid })
   const observations = useQuery({ ...clinicPetObservationsQuery(petId), enabled: valid && Boolean(card.data) })
   const [now] = useState(() => new Date())
+  const [status, setStatus] = useState('')
 
   const back = (
     <Link to="/clinic/appointments" className={linkClass}>
@@ -76,6 +78,8 @@ export function ClinicPetPage() {
     return (
       <div className="flex flex-col gap-4">
         <PetCard pet={pet} today={now} />
+        {/* Фото — после завершённого приёма в этой клинике (БП §6.4, Р-58). */}
+        {appointments.some((item) => item.status === 'completed') && <PetPhotoUpload petId={pet.id} onStatus={setStatus} />}
         <Section title="Особенности здоровья" empty="Особенностей не отмечено.">
           {conditions.map((condition) => (
             <li key={condition.id} className="rounded-xl border border-line p-3">
@@ -150,9 +154,13 @@ export function ClinicPetPage() {
       <PageHeader
         eyebrow="Кабинет клиники"
         title={card.data ? card.data.pet.name : 'Карточка питомца'}
-        description="Данные, особенности здоровья, прививки, дневник и приёмы в вашей клинике. Изменить данные можно будет с итогом приёма."
+        description="Данные, особенности здоровья, прививки, дневник и приёмы в вашей клинике. После приёма можно загрузить фото питомца."
       />
       <div className="mb-4">{back}</div>
+      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
+      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
+        {status}
+      </p>
       <div className="max-w-3xl">{content()}</div>
     </>
   )

@@ -1,4 +1,6 @@
+import { appointmentLimits } from '../api/limits'
 import type { Role } from '../api/schema'
+import { toMoscowString } from '../lib/dates'
 import { issueRefreshToken, readMockCookie, seedState, updateServer, writeMockCookie, writeServer } from './server-state'
 
 export { readMockCookie } from './server-state'
@@ -56,6 +58,19 @@ export function requireMockPasswordChange(): void {
   })
 }
 
+/**
+ * «Приём начался»: подтверждённая запись переезжает на текущие полчаса и попадает в «Ждут итога» (Р-56).
+ * По умолчанию — запись Майло к Петрову.
+ */
+export function startMockVisit(id = 20): void {
+  const slotMs = appointmentLimits.slotMinutes * 60 * 1000
+  updateServer((state) => {
+    const appointment = state.appointments.find((item) => item.id === id)
+    if (appointment?.status !== 'confirmed') throw new Error(`Запись ${id} не подтверждена`)
+    appointment.slot_start = toMoscowString(new Date(Math.floor(Date.now() / slotMs) * slotMs))
+  })
+}
+
 export function setMockNetwork(on: boolean): void {
   updateServer((state) => {
     state.network = on
@@ -68,6 +83,7 @@ export function createConsoleHelpers() {
     expireAccess: expireMockAccess,
     endSessions: endMockSessions,
     requirePasswordChange: requireMockPasswordChange,
+    startVisit: startMockVisit,
     /** «Сеть» моков; приложение узнаёт о ней, как о настоящей, — событием online/offline. */
     network(on: boolean) {
       setMockNetwork(on)

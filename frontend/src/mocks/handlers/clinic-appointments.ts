@@ -18,11 +18,11 @@ const queryError = (field: string, msg: string) =>
   HttpResponse.json({ detail: [{ loc: ['query', field], msg, type: 'value_error' }] }, { status: 422 })
 
 /** Клиника записи — по врачу. */
-const clinicOf = (state: MockServerState, appointment: MockAppointment) =>
+export const clinicOf = (state: MockServerState, appointment: MockAppointment) =>
   state.vets.find((vet) => vet.id === appointment.vet_id)?.clinic_id
 
 /** Запись своей клиники; запись другой клиники — как несуществующая, 404. */
-function findOwnAppointment(state: MockServerState, clinicId: number, rawId: unknown): MockAppointment | undefined {
+export function findOwnAppointment(state: MockServerState, clinicId: number, rawId: unknown): MockAppointment | undefined {
   const id = Number(rawId)
   const appointment = state.appointments.find((item) => item.id === id)
   return appointment && clinicOf(state, appointment) === clinicId ? appointment : undefined
@@ -56,7 +56,7 @@ function commentError(value: unknown): string | null {
 }
 
 /** Карточка доступна, если у питомца есть неотменённая запись в эту клинику (Р-54). */
-function canReadCard(state: MockServerState, clinicId: number, petId: number): boolean {
+export function canReadCard(state: MockServerState, clinicId: number, petId: number): boolean {
   return state.appointments.some(
     (item) => item.pet_id === petId && item.status !== 'cancelled' && clinicOf(state, item) === clinicId,
   )

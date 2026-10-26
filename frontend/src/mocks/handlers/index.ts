@@ -5,6 +5,7 @@ import { clinicAppointmentHandlers } from './clinic-appointments'
 import { healthHandlers } from './health'
 import { networkHandlers } from './network'
 import { notificationHandlers } from './notifications'
+import { outcomeHandlers } from './outcome'
 import { petHandlers } from './pets'
 import { vetHandlers } from './vets'
 
@@ -18,5 +19,6 @@ export const handlers = [
   ...healthHandlers,
   ...appointmentHandlers,
   ...clinicAppointmentHandlers,
+  ...outcomeHandlers,
   ...notificationHandlers,
 ]

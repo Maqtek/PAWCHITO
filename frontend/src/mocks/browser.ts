@@ -5,5 +5,5 @@ import { createConsoleHelpers } from './session'
 export const worker = setupWorker(...handlers)
 export { onUnhandledFrame } from './unhandled'
 
-/** Ручная проверка сессии из консоли: pawchitoMocks.expireAccess(), .endSessions(), .requirePasswordChange(), .network(false), .reset(). */
+/** Ручная проверка из консоли: pawchitoMocks.expireAccess(), .endSessions(), .requirePasswordChange(), .startVisit(), .network(false), .reset(). */
 export const pawchitoMocks = createConsoleHelpers()

@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { loginMockAs, resetMockServer } from '../../mocks/session'
@@ -27,6 +27,22 @@ describe('ClinicPetPage', () => {
     const visits = screen.getByRole('heading', { name: 'Приёмы в вашей клинике' }).closest('div')!
     expect(within(visits).getByText('Итог: Растяжение связок задней лапы')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Изменить/ })).not.toBeInTheDocument()
+  })
+
+  it('фото — только после завершённого приёма; формат и размер проверяются до отправки', async () => {
+    const view = renderWithProviders(<AppRoutes />, { route: '/clinic/pets/10' })
+    const input = await screen.findByLabelText('Загрузить фото')
+    // user.upload отбросил бы файл по accept — а проверяем как раз сообщение формы.
+    fireEvent.change(input, { target: { files: [new File(['не фото'], 'note.txt', { type: 'text/plain' })] } })
+    expect(await screen.findByText('Фото — JPEG, PNG или WebP.')).toBeInTheDocument()
+    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'big.png', { type: 'image/png' })
+    fireEvent.change(input, { target: { files: [big] } })
+    expect(await screen.findByText('Фото больше 5 МБ — выберите поменьше.')).toBeInTheDocument()
+    view.unmount()
+    // У Рекса приём в клинике подтверждён, но ещё не прошёл.
+    renderWithProviders(<AppRoutes />, { route: '/clinic/pets/13' })
+    expect(await screen.findByRole('heading', { level: 1, name: 'Рекс' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Загрузить фото')).not.toBeInTheDocument()
   })
 
   it('без неотменённой записи в клинику — карточка недоступна', async () => {

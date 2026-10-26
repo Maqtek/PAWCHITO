@@ -30,5 +30,8 @@ export const noticeText = {
     `Клиника «${clinic}» отменила запись: ${pet}, ${noticeWhen(slotStart)}. Комментарий: «${comment}»`,
   cancelledClinicUnavailable: (clinic: string, pet: string, slotStart: string) =>
     `Запись отменена — клиника «${clinic}» больше не принимает: ${pet}, ${noticeWhen(slotStart)}`,
-  outcomeAdded: (pet: string, careStatus: string) => `Внесён итог приёма: ${pet} — ${careStatus.toLowerCase()}`,
+  outcomeAdded: (pet: string, careStatus: string, reminders = 0) =>
+    `Внесён итог приёма: ${pet} — ${careStatus.toLowerCase()}` + (reminders > 0 ? `. Дел курса: ${reminders}` : ''),
+  petUpdated: (clinic: string, pet: string, changes: string[]) =>
+    `Клиника «${clinic}» обновила данные питомца ${pet}: ${changes.join(', ')}`,
 }
