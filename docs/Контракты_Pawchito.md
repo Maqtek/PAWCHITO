@@ -2,7 +2,7 @@
 
 Черновик REST-контракта поверх [usecases.pdf](usecases.pdf) (US-xx), [требований](Требования_Pawchito.md) (FR-xx) и [бизнес-правил](Бизнес-правила_Pawchito.md) (БП §x). Финальный источник правды — `openapi.json`, генерируемый из кода FastAPI; этот файл — проектный черновик до реализации, обновляется вместе с бэкендом. Термины и значения enum — по [глоссарию](Глоссарий_Pawchito.md). Значения полей в примерах условные.
 
-Версия 1.3 · 25.10.2026 — лимиты полей клиники и часы работы в пределах суток, см. [журнал решений](Решения_Pawchito.md) (Р-33, Р-34). Версия 1.2 — лимиты полей авторизации и формат ошибок `422` (Р-28–Р-32). Пометка **(расш.)** — расширенная версия, остальное — MVP.
+Версия 1.3 · 25.10.2026 — лимиты полей клиники и часы работы в пределах суток, см. [журнал решений](Решения_Pawchito.md) (Р-33–Р-36). Версия 1.2 — лимиты полей авторизации и формат ошибок `422` (Р-28–Р-32). Пометка **(расш.)** — расширенная версия, остальное — MVP.
 
 ## Общие правила
 
@@ -63,6 +63,8 @@
 ```json
 {"id": 1, "email": "owner@example.com", "role": "owner", "full_name": "Иванов И.И.", "must_change_password": false}
 ```
+
+`full_name` у аккаунта клиники — название клиники: сервер подставляет его из клиники при каждом ответе, отдельно не хранит.
 
 **Token** — плюс `Set-Cookie: refresh_token=...`
 
@@ -185,7 +187,7 @@
 | POST | `/auth/recover` | Гость | `{"email": "owner@example.com", "recovery_code": "K7QM-2XPA-9RTD-4WNB", "new_password": "newsecret1"}` | `200` `{"recovery_code": "P3LV-8HZC-1MEK-6YSU"}` — новый код, все сессии завершены<br>`400` неверный email или код · `429` |
 | POST | `/auth/change-password` | owner / clinic / admin | `{"current_password": "secret123", "new_password": "newsecret1"}` | `200` Token + cookie; остальные сессии завершены, `must_change_password` сброшен<br>`400` неверный текущий пароль · `429` |
 | GET | `/users/me` | owner / clinic / admin | — | `200` User |
-| PATCH | `/users/me` | owner / clinic / admin | `{"full_name": "Иванова И.И."}` | `200` User. Email не меняется |
+| PATCH | `/users/me` | owner / clinic / admin | `{"full_name": "Иванова И.И."}` | `200` User. Email не меняется<br>`403` у клиники: название меняет администратор (`PATCH /admin/clinics/{id}`) |
 | POST | `/users/me/recovery-code` | owner | `{"current_password": "secret123"}` | `200` `{"recovery_code": "..."}`; старый код перестаёт действовать<br>`400` неверный текущий пароль · `429` |
 
 Пароль администратора сбрасывается CLI-командой бэкенда на сервере, через API — нет. Восстановление через email — FR-38 **(расш.)**, контракт появится на этапе 13.
@@ -363,10 +365,12 @@ US-08 «Смена питомца» — переключатель на фрон
 | GET | `/admin/clinics/{id}` | admin | — | `200` AdminClinic. Значение `future_appointments_count` показывается перед скрытием |
 | POST | `/admin/clinics` | admin | `{"name": "ВетДоктор", "address": "ул. Ленина, 10", "phone": "+79990000000", "opens_at": "09:00", "closes_at": "20:00", "work_days": [1, 2, 3, 4, 5, 6]}` | `201` AdminClinic<br>`422` см. «Лимиты полей клиники», в том числе `opens_at` не раньше `closes_at` |
 | PATCH | `/admin/clinics/{id}` | admin | `{"phone": "+79991112233", "closes_at": "21:00"}` | `200` AdminClinic. Существующие записи не меняются, новые слоты считаются по новым часам<br>`422` см. «Лимиты полей клиники» |
-| POST | `/admin/clinics/{id}/archive` | admin | — | `200` `{"clinic": AdminClinic, "cancelled_appointments": 7}` — будущие записи отменены (`cancelled_by: system`), владельцы уведомлены, аккаунт клиники заблокирован, его сессии завершены. История приёмов сохраняется (BR-10.5) |
-| POST | `/admin/clinics/{id}/restore` | admin | — | `200` AdminClinic — аккаунт разблокирован, отменённые записи не восстанавливаются |
-| POST | `/admin/clinics/{id}/account` | admin | `{"email": "clinic2@example.com"}` | `201` `{"user": User, "temporary_password": "vT4q-9mKx-2Lpe"}` — пароль показывается один раз, при первом входе его нужно сменить<br>`409` у клиники уже есть аккаунт или email занят |
-| POST | `/admin/clinics/{id}/account/reset-password` | admin | — | `200` `{"temporary_password": "..."}` — сессии клиники завершены, `must_change_password: true` |
+| POST | `/admin/clinics/{id}/archive` | admin | — | `200` `{"clinic": AdminClinic, "cancelled_appointments": 7}` — будущие записи отменены (`cancelled_by: system`), владельцы уведомлены, аккаунт клиники заблокирован, его сессии завершены. История приёмов сохраняется (BR-10.5). Повторное скрытие — `200` без изменений, `cancelled_appointments: 0` |
+| POST | `/admin/clinics/{id}/restore` | admin | — | `200` AdminClinic — аккаунт разблокирован, отменённые записи не восстанавливаются. Возврат нескрытой клиники — `200` без изменений |
+| POST | `/admin/clinics/{id}/account` | admin | `{"email": "clinic2@example.com"}` | `201` `{"user": User, "temporary_password": "vT4q-9mKx-2Lpe"}` — пароль показывается один раз, при первом входе его нужно сменить. У скрытой клиники аккаунт создаётся сразу заблокированным (`is_active: false`)<br>`409` у клиники уже есть аккаунт или email занят |
+| POST | `/admin/clinics/{id}/account/reset-password` | admin | — | `200` `{"temporary_password": "..."}` — сессии клиники завершены, `must_change_password: true`, пауза после неудачных попыток входа (Р-31) снята<br>`404` у клиники нет аккаунта |
+
+Для всех путей с `{id}`: `404` — клиники нет. Проверки идут по порядку: доступ (`401` / `403`), тело (`422`), поиск клиники (`404`).
 
 ### Лимиты полей клиники
 
