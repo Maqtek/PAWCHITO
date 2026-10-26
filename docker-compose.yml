@@ -45,8 +45,11 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:?заполните JWT_SECRET в .env, команда есть в .env.example}
+      MEDIA_DIR: /srv/media
     volumes:
       - ./backend:/app
+      # фото питомцев: том вне /app, чтобы они не попадали в рабочую копию репозитория
+      - media:/srv/media
     ports:
       - "8000:8000"
     depends_on:
@@ -71,3 +74,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  media:
