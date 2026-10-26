@@ -197,6 +197,17 @@ export interface components {
       reason: components['schemas']['AppointmentReason']
       reason_comment?: string | null
     }
+    /** Тип элемента ленты истории; в один день элементы идут в этом порядке: приём, курс, прививка, наблюдение (Р-66). */
+    TimelineItemType: 'appointment' | 'prescription' | 'vaccination' | 'observation'
+    /**
+     * Элемент ленты истории (Р-66), date — YYYY-MM-DD: у наблюдения и прививки — их дата, у приёма — день приёма
+     * по Москве, у курса — дата начала рецепта. Приёмы — только завершённые с итогом.
+     */
+    TimelineItem:
+      | { type: 'appointment'; date: string; data: components['schemas']['Appointment'] }
+      | { type: 'prescription'; date: string; data: components['schemas']['Prescription'] }
+      | { type: 'vaccination'; date: string; data: components['schemas']['Vaccination'] }
+      | { type: 'observation'; date: string; data: components['schemas']['Observation'] }
     /** Клиника: часы ЧЧ:ММ одинаковы для всех рабочих дней; work_days — 1 (понедельник) … 7 (воскресенье). */
     Clinic: {
       id: number
@@ -705,6 +716,26 @@ export interface paths {
       }
     }
   }
+  '/pets/{pet_id}/timeline': {
+    parameters: PetPath
+    get: {
+      parameters: {
+        /** before — YYYY-MM-DD, элементы строго раньше этой даты; limit — от 1 до 100, по умолчанию 50 (Р-66). */
+        query?: { before?: string; limit?: number }
+        header?: never
+        path: { pet_id: number }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['TimelineItem'][]>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
   '/reminders': {
     parameters: NoParams
     get: {
@@ -1174,6 +1205,8 @@ export type Prescription = Schemas['Prescription']
 export type AppointmentOutcome = Schemas['AppointmentOutcome']
 export type Appointment = Schemas['Appointment']
 export type AppointmentCreate = Schemas['AppointmentCreate']
+export type TimelineItemType = Schemas['TimelineItemType']
+export type TimelineItem = Schemas['TimelineItem']
 export type UnreadCount = Schemas['UnreadCount']
 export type NotificationType = Schemas['NotificationType']
 export type Notification = Schemas['Notification']
