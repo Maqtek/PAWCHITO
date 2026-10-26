@@ -10,6 +10,7 @@ import { notificationHandlers } from './notifications'
 import { outcomeHandlers } from './outcome'
 import { petHandlers } from './pets'
 import { reminderHandlers } from './reminders'
+import { timelineHandlers } from './timeline'
 import { vetHandlers } from './vets'
 
 // Выключатель сети стоит первым: при network: false он отвечает раньше остальных.
@@ -26,5 +27,6 @@ export const handlers = [
   ...reminderHandlers,
   ...homeHandlers,
   ...calendarHandlers,
+  ...timelineHandlers,
   ...notificationHandlers,
 ]
