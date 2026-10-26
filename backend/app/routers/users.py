@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.routers.deps import (
     AuthServiceDep,
-    CurrentUser,
+    NameEditor,
     OwnerUser,
     UserAllowPasswordChange,
     UserServiceDep,
@@ -22,7 +22,7 @@ def read_me(user: UserAllowPasswordChange) -> UserOut:
 
 
 @router.patch("/me")
-def update_me(data: UserUpdate, user: CurrentUser, service: UserServiceDep) -> UserOut:
+def update_me(data: UserUpdate, user: NameEditor, service: UserServiceDep) -> UserOut:
     return UserOut.model_validate(service.update_profile(user, data.full_name))
 
 
