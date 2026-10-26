@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ApiError } from '../../api/errors'
 import { clinicPetObservationsQuery, clinicPetQuery } from '../../api/queries'
 import { PetCard } from '../../components/pet/PetCard'
-import { Badge, Card, EmptyState, LoadError, Spinner, linkClass } from '../../components/ui'
+import { Badge, Card, EmptyState, LoadError, PageStatus, Spinner, linkClass } from '../../components/ui'
 import { formatSlot } from '../../features/appointments/format'
 import { PetPhotoUpload } from '../../features/clinic-appointments/PetPhotoUpload'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -149,10 +149,7 @@ export function ClinicPetPage() {
         description="Данные, особенности здоровья, прививки, дневник и приёмы в вашей клинике. После приёма можно загрузить фото питомца."
       />
       <div className="mb-4">{back}</div>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       <div className="max-w-3xl">{content()}</div>
     </>
   )

@@ -3,7 +3,7 @@ import { PawPrint, Plus } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { petsQuery } from '../../api/queries'
 import type { Pet, PetArchived } from '../../api/schema'
-import { Button, EmptyState, LoadError, Spinner } from '../../components/ui'
+import { Button, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { PetArchiveModal } from '../../features/pets/PetArchiveModal'
 import { PetFormModal } from '../../features/pets/PetFormModal'
 import { PetListItem } from '../../features/pets/PetListItem'
@@ -109,10 +109,7 @@ export function PetsPage() {
         description="Добавляйте питомцев, меняйте их данные и переносите в архив."
         actions={pets && pets.length > 0 ? addButton : undefined}
       />
-      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда питомец пропал из списка вместе со своей кнопкой. */}
       <div ref={listRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}

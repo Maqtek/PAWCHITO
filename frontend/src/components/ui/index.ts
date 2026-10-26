@@ -10,6 +10,7 @@ export { CheckboxField, PasswordField, SelectField, TextareaField, TextField, ty
 export { FormAlert } from './FormAlert'
 export { LoadError } from './LoadError'
 export { Modal } from './Modal'
+export { PageStatus } from './PageStatus'
 export { ProgressBar } from './ProgressBar'
 export { Spinner } from './Spinner'
 export { Tabs, type TabItem } from './Tabs'

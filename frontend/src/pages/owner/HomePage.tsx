@@ -3,7 +3,7 @@ import { CloudOff, PawPrint, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { meQuery } from '../../api/queries'
-import { buttonClass, EmptyState, LoadError, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { PetSummary } from '../../features/home/PetSummary'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
@@ -46,10 +46,7 @@ export function HomePage() {
           </Link>
         }
       />
-      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status && status.petId === pet?.id ? status.text : ''}
-      </p>
+      <PageStatus message={status && status.petId === pet?.id ? status.text : ''} />
       {content()}
     </>
   )

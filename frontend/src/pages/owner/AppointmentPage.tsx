@@ -5,7 +5,7 @@ import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
 import { ApiError } from '../../api/errors'
 import type { AppointmentOutcome } from '../../api/schema'
-import { Badge, Button, Card, EmptyState, LoadError, Spinner, linkClass } from '../../components/ui'
+import { Badge, Button, Card, EmptyState, LoadError, PageStatus, Spinner, linkClass } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
@@ -105,10 +105,7 @@ export function AppointmentPage() {
     <>
       <PageHeader eyebrow="Ветеринар" title="Запись к врачу" description="Когда, куда и к кому, и что с записью сейчас." />
       <div className="mb-4">{back}</div>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда кнопка отмены пропала вместе с возможностью отменить. */}
       <div ref={cardRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}

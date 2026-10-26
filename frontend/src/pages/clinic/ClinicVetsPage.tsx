@@ -3,7 +3,7 @@ import { Plus, Stethoscope } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { clinicVetsQuery } from '../../api/queries'
 import type { Vet } from '../../api/schema'
-import { Button, EmptyState, LoadError, Spinner, Tabs } from '../../components/ui'
+import { Button, EmptyState, LoadError, PageStatus, Spinner, Tabs } from '../../components/ui'
 import { VetArchiveModal, type ArchiveAction } from '../../features/vets/VetArchiveModal'
 import { VetCard } from '../../features/vets/VetCard'
 import { VetFormModal } from '../../features/vets/VetFormModal'
@@ -121,10 +121,7 @@ export function ClinicVetsPage() {
           </Button>
         }
       />
-      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       <div className="max-w-2xl">{content()}</div>
       <VetFormModal
         open={dialog.open && (dialog.kind === 'add' || dialog.kind === 'edit')}

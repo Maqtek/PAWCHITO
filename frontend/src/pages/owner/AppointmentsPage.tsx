@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { buttonClass, EmptyState, LoadError, Spinner } from '../../components/ui'
+import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { AppointmentCard } from '../../features/appointments/AppointmentCard'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
@@ -141,10 +141,7 @@ function PetAppointments({ petId, petName }: { petId: number; petName: string })
 
   return (
     <>
-      {/* Регион статуса смонтирован в любом состоянии: сообщение в уже существующем регионе скринридер озвучит. */}
-      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
-        {status}
-      </p>
+      <PageStatus message={status} />
       {/* tabIndex -1: сюда уходит фокус, когда отменённая запись ушла из предстоящих вместе со своей кнопкой. */}
       <div ref={listRef} tabIndex={-1} className="max-w-2xl outline-none">
         {content()}
