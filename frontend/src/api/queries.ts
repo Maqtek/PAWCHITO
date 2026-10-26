@@ -1,4 +1,4 @@
-import { queryOptions } from '@tanstack/react-query'
+import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query'
 import { api } from './client'
 import { ApiError } from './errors'
 import type { AppointmentStatus, ReminderStatus } from './schema'
@@ -27,6 +27,8 @@ export const queryKeys = {
   conditions: (petId: number) => ['health', petId, 'conditions'] as const,
   observations: (petId: number) => ['health', petId, 'observations'] as const,
   vaccinations: (petId: number) => ['health', petId, 'vaccinations'] as const,
+  // Лента собрана из записей здоровья: их изменение перечитывает и её (health-cache).
+  timeline: (petId: number) => ['health', petId, 'timeline'] as const,
   bookingClinics: ['booking', 'clinics'] as const,
   bookingVets: (clinicId: number) => ['booking', 'clinics', clinicId, 'vets'] as const,
   slots: (vetId: number, date: string) => ['booking', 'slots', vetId, date] as const,
@@ -45,6 +47,12 @@ export const queryKeys = {
   reminders: ['reminders'] as const,
   remindersFiltered: (filters: ReminderFilters) => ['reminders', filters] as const,
   prescriptionProgress: (prescriptionId: number) => ['reminders', 'progress', prescriptionId] as const,
+  // Под общим ['reminders']: отметка дела на главной перечитывает сводку тем же refetchReminders.
+  homeSummary: (petId: number) => ['reminders', 'home', petId] as const,
+  // Под ['notifications', 'list']: отметка прочитанным в колокольчике перечитывает и уведомления главной.
+  latestNotifications: (limit: number) => ['notifications', 'list', limit] as const,
+  // Тоже под ['reminders']: календарь перечитывается после отметки, нового дела и удаления.
+  calendar: (petId: number) => ['reminders', 'calendar', petId] as const,
 }
 
 /** Фильтры записей клиники (Р-52): пустые не передаются. */
@@ -120,6 +128,29 @@ export const vaccinationsQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.vaccinations(petId),
     queryFn: () => unwrap(api.GET('/pets/{pet_id}/vaccinations', petPath(petId))),
+  })
+
+/** Элементов ленты на страницу: день сервер не разрывает, поэтому страница бывает и больше (Р-66). */
+const TIMELINE_PAGE_SIZE = 20
+
+/**
+ * Лента истории питомца страницами по датам (Р-66): следующая — с before = дата последнего элемента. Страница меньше
+ * лимита, в том числе пустая, — конец ленты: меньше лимита сервер отдаёт, только когда раньше ничего нет.
+ */
+export const timelineQuery = (petId: number) =>
+  infiniteQueryOptions({
+    queryKey: queryKeys.timeline(petId),
+    queryFn: ({ pageParam }) =>
+      unwrap(
+        api.GET('/pets/{pet_id}/timeline', {
+          params: {
+            path: { pet_id: petId },
+            query: pageParam === null ? { limit: TIMELINE_PAGE_SIZE } : { before: pageParam, limit: TIMELINE_PAGE_SIZE },
+          },
+        }),
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => (lastPage.length < TIMELINE_PAGE_SIZE ? undefined : lastPage[lastPage.length - 1].date),
   })
 
 /** Активные клиники для записи (Р-49). */
@@ -198,4 +229,33 @@ export const prescriptionProgressQuery = (prescriptionId: number) =>
   queryOptions({
     queryKey: queryKeys.prescriptionProgress(prescriptionId),
     queryFn: () => unwrap(api.GET('/prescriptions/{id}/progress', { params: { path: { id: prescriptionId } } })),
+  })
+
+/**
+ * Сводка главной (Р-64). Всегда свежая при открытии: её меняют не только дела, но и записи и итог приёма, а ключ —
+ * под ['reminders'].
+ */
+export const homeSummaryQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.homeSummary(petId),
+    queryFn: () => unwrap(api.GET('/home/summary', { params: { query: { pet_id: petId } } })),
+    staleTime: 0,
+  })
+
+/** Последние уведомления на главной, от новых к старым (Р-55). */
+export const latestNotificationsQuery = (limit: number) =>
+  queryOptions({
+    queryKey: queryKeys.latestNotifications(limit),
+    queryFn: () => unwrap(api.GET('/notifications', { params: { query: { limit } } })),
+  })
+
+/**
+ * Календарь питомца: дела, записи и сроки прививок на 30 дней по группам (Р-65). Всегда свежий при открытии раздела:
+ * записи и прививки меняются в других разделах, а они перечитывают только свои списки.
+ */
+export const calendarQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.calendar(petId),
+    queryFn: () => unwrap(api.GET('/calendar', { params: { query: { pet_id: petId } } })),
+    staleTime: 0,
   })

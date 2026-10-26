@@ -3,8 +3,9 @@ import { useId } from 'react'
 import type { Reminder, ReminderMarked } from '../../api/schema'
 import { Badge, Button } from '../../components/ui'
 import { eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
+import { formatDueWithYear } from '../calendar/calendar-event'
 import { MarkActions } from './MarkActions'
-import { canMark, formatDue, scheduleLabel } from './reminder-actions'
+import { canMark, scheduleLabel } from './reminder-actions'
 
 interface ReminderItemProps {
   reminder: Reminder
@@ -19,7 +20,7 @@ interface ReminderItemProps {
 /** Запланированное дело: когда, что, тип; отметка — на сегодня и просроченное, удаление — только своего (Р-61, Р-62). */
 export function ReminderItem({ reminder, today, onDone, onSkip, onDelete, onStatus }: ReminderItemProps) {
   const titleId = useId()
-  const when = formatDue(reminder.due_at, today)
+  const when = formatDueWithYear(reminder.due_at, today)
   const label = `${reminder.title}, ${when}`
 
   return (
