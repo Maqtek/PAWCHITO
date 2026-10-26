@@ -27,7 +27,7 @@ class VetRepository(BaseRepository[Vet]):
                 Vet.archived_at.is_(None),
                 Vet.on_vacation.is_(False),
             )
-            .order_by(Vet.id)
+            .order_by(Vet.full_name, Vet.id)
         )
         return self.session.scalars(stmt).all()
 
