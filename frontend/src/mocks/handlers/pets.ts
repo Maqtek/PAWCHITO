@@ -108,8 +108,10 @@ export const petHandlers = [
       pet.archived_at = new Date().toISOString()
       const cancelled = cancelFutureAppointments(state, (item) => item.pet_id === pet.id)
       for (const appointment of cancelled) notifyAppointment(state, appointment, 'cancelledPetArchived')
-      // Дел в моках нет до этапа 10 — удалять нечего.
-      return HttpResponse.json({ pet, cancelled_appointments: cancelled.length, deleted_reminders: 0 })
+      // Запланированные дела — и свои, и курса — удаляются (Р-02); отмеченные остаются в истории.
+      const planned = state.reminders.filter((item) => item.pet_id === pet.id && item.status === 'pending')
+      state.reminders = state.reminders.filter((item) => !planned.includes(item))
+      return HttpResponse.json({ pet, cancelled_appointments: cancelled.length, deleted_reminders: planned.length })
     }),
   ),
 ]

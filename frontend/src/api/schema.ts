@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.9).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.10).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -15,6 +15,8 @@ type PetPath = { query?: never; header?: never; path: { pet_id: number }; cookie
 /** Запись здоровья питомца: особенность, наблюдение или прививка. */
 type PetRecordPath = { query?: never; header?: never; path: { pet_id: number; id: number }; cookie?: never }
 type AppointmentPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
+type ReminderPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
+type PrescriptionPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
 type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
@@ -33,6 +35,8 @@ export interface components {
     /** Причина обращения: задаёт тип события в календаре (БП §5). */
     AppointmentReason: 'checkup' | 'vaccination' | 'illness' | 'follow_up' | 'other'
     CancelledBy: 'owner' | 'clinic' | 'system'
+    ReminderSource: 'prescription' | 'custom'
+    ReminderStatus: 'pending' | 'done' | 'skipped'
     /** События из БП §9; перенос (расш.) и итог с изменением данных — этапы 9 и 13. */
     NotificationType:
       | 'appointment_requested'
@@ -271,6 +275,33 @@ export interface components {
     ClinicPetUpdate: { breed?: string | null; birth_date?: string | null; sex?: components['schemas']['Sex'] }
     WeightCreate: { date: string; weight: number }
     PetPhoto: { photo_url: string }
+    /** Дело: курса (по рецепту) или своё. `is_overdue` — «Запланировано», а `due_at` прошло (Р-60). */
+    Reminder: {
+      id: number
+      pet_id: number
+      source: components['schemas']['ReminderSource']
+      prescription_id: number | null
+      title: string
+      category: components['schemas']['EventCategory']
+      due_at: string
+      status: components['schemas']['ReminderStatus']
+      is_overdue: boolean
+      /** Время отметки — и выполнения, и пропуска (Р-61). */
+      done_at: string | null
+      repeat_interval_days: number | null
+      /** id первого дела серии у своего дела с повтором, иначе null. */
+      series_id: number | null
+    }
+    ReminderCreate: {
+      pet_id: number
+      title: string
+      due_at: string
+      category?: components['schemas']['EventCategory']
+      repeat_interval_days?: number | null
+    }
+    /** next — следующее дело серии; у разового дела и дела курса — null. */
+    ReminderMarked: { reminder: components['schemas']['Reminder']; next: components['schemas']['Reminder'] | null }
+    PrescriptionProgress: { prescription_id: number; total: number; done: number; skipped: number; pending: number }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
     ValidationError: { loc: (string | number)[]; msg: string; type: string }
@@ -674,6 +705,95 @@ export interface paths {
       }
     }
   }
+  '/reminders': {
+    parameters: NoParams
+    get: {
+      parameters: {
+        query?: {
+          pet_id?: number
+          date_from?: string
+          date_to?: string
+          status?: Schemas['ReminderStatus']
+          prescription_id?: number
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Reminder'][]>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['ReminderCreate']>
+      responses: {
+        201: Json<Schemas['Reminder']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/reminders/{id}': {
+    parameters: ReminderPath
+    delete: {
+      parameters: ReminderPath
+      requestBody?: never
+      responses: {
+        204: NoContent
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/reminders/{id}/done': {
+    parameters: ReminderPath
+    post: {
+      parameters: ReminderPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['ReminderMarked']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/reminders/{id}/skip': {
+    parameters: ReminderPath
+    post: {
+      parameters: ReminderPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['ReminderMarked']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/prescriptions/{id}/progress': {
+    parameters: PrescriptionPath
+    get: {
+      parameters: PrescriptionPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['PrescriptionProgress']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
   '/notifications/unread-count': {
     parameters: NoParams
     get: {
@@ -1067,6 +1187,12 @@ export type OutcomeResult = Schemas['OutcomeResult']
 export type ClinicPetUpdate = Schemas['ClinicPetUpdate']
 export type WeightCreate = Schemas['WeightCreate']
 export type PetPhoto = Schemas['PetPhoto']
+export type ReminderSource = Schemas['ReminderSource']
+export type ReminderStatus = Schemas['ReminderStatus']
+export type Reminder = Schemas['Reminder']
+export type ReminderCreate = Schemas['ReminderCreate']
+export type ReminderMarked = Schemas['ReminderMarked']
+export type PrescriptionProgress = Schemas['PrescriptionProgress']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']
 export type RegisterRequest = Schemas['RegisterRequest']

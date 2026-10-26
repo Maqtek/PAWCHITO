@@ -76,3 +76,14 @@ export const appointmentLimits = {
   daysAhead: 30,
   slotMinutes: 30,
 } as const
+
+/** Своё дело (контракты, раздел 6 «Лимиты полей дела»; БП §7, Р-59). */
+export const reminderLimits = {
+  titleMax: 100,
+  /** Дата дела — с сегодня по сегодня + 365 дней по Москве. */
+  daysAhead: 365,
+  repeatMin: 1,
+  repeatMax: 365,
+  /** Готовые интервалы повтора в форме; остальное — «Свой интервал» (БП §7). */
+  repeatPresets: [1, 7, 14, 30],
+} as const
