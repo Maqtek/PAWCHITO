@@ -119,7 +119,7 @@ export function PlannedReminders({ pet, onStatus }: PlannedRemindersProps) {
         }}
       />
       <ReminderConfirmModal
-        open={dialog.open && (dialog.kind === 'skip' || dialog.kind === 'delete')}
+        open={dialog.open && dialog.kind !== 'add'}
         kind={dialog.kind === 'delete' ? 'delete' : 'skip'}
         reminder={dialog.reminder}
         today={today}

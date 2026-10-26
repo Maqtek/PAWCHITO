@@ -18,7 +18,6 @@ import {
   TextField,
   type SelectOption,
 } from '../../components/ui'
-import { cn } from '../../lib/cn'
 import { addDays, isoWeekday } from '../../lib/dates'
 import { formatTime, moscowIsoDate } from '../../lib/format'
 import { appointmentReasonLabel } from '../../lib/labels'
@@ -92,7 +91,7 @@ export function BookingWizard({ pets, selectedPetId, onBooked }: BookingWizardPr
           <li
             key={item.id}
             aria-current={item.id === step ? 'step' : undefined}
-            className={cn(position === index ? 'font-extrabold text-ink' : 'text-ink-muted')}
+            className={position === index ? 'font-extrabold text-ink' : 'text-ink-muted'}
           >
             {position + 1}. {item.title}
           </li>
@@ -212,7 +211,6 @@ function ClinicStep({ onPick }: { onPick: (clinic: Clinic) => void }) {
 
 function VetStep({ clinic, onBack, onPick }: { clinic: Clinic; onBack: () => void; onPick: (vet: Vet) => void }) {
   const { data: vets, isPending, error, refetch } = useQuery(bookingVetsQuery(clinic.id))
-  const back = <BackButton onBack={onBack}>Другая клиника</BackButton>
 
   function content() {
     if (isPending) return <Spinner label="Загружаем врачей" />
@@ -243,7 +241,7 @@ function VetStep({ clinic, onBack, onPick }: { clinic: Clinic; onBack: () => voi
         {clinic.name} · {formatSchedule(clinic)}
       </p>
       {content()}
-      {back}
+      <BackButton onBack={onBack}>Другая клиника</BackButton>
     </>
   )
 }
