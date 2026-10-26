@@ -1,4 +1,4 @@
-import type { AppointmentStatus, CareStatus, EventCategory, Role, Species } from '../api/schema'
+import type { AppointmentStatus, CareStatus, EventCategory, Role, Sex, Species } from '../api/schema'
 
 /** Цветовая пара из токенов макета. */
 export type Tone = 'mint' | 'butter' | 'blush' | 'sky' | 'lilac' | 'coral' | 'neutral'
@@ -13,6 +13,12 @@ export const speciesLabel: Record<Species, string> = {
   dog: 'Собака',
   cat: 'Кошка',
   other: 'Другое',
+}
+
+export const sexLabel: Record<Sex, string> = {
+  male: 'Мальчик',
+  female: 'Девочка',
+  unknown: 'Не указан',
 }
 
 export const careStatusOrder: CareStatus[] = ['routine', 'attention', 'treatment', 'recovery', 'prevention']

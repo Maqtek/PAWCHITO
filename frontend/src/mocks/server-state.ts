@@ -1,4 +1,4 @@
-import type { AdminClinic, Role, User, Vet } from '../api/schema'
+import type { AdminClinic, Pet, Role, User, Vet } from '../api/schema'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -41,6 +41,9 @@ export interface MockServerState {
   /** Врачи всех клиник; клиника видит только своих — по clinic_id аккаунта. */
   vets: Vet[]
   nextVetId: number
+  /** Питомцы всех владельцев; владелец видит только своих — по owner_id. */
+  pets: Pet[]
+  nextPetId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -112,6 +115,21 @@ function seedVet(id: number, clinicId: number, fullName: string, specialization:
   }
 }
 
+/** Новый питомец: без фото и статуса ухода — их ставит только клиника (БП §6.3, §6.4). */
+export function newPet(fields: Pick<Pet, 'id' | 'owner_id' | 'name' | 'species'> & Partial<Pet>): Pet {
+  return {
+    breed: null,
+    birth_date: null,
+    sex: 'unknown',
+    photo_url: null,
+    care_status: null,
+    care_status_set_at: null,
+    care_status_clinic: null,
+    archived_at: null,
+    ...fields,
+  }
+}
+
 export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refreshDelayMs?: number } = {}): MockServerState {
   return {
     accounts: [
@@ -141,6 +159,26 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       seedVet(8, 4, 'Белова Ольга Игоревна', 'терапевт'),
     ],
     nextVetId: 100,
+    pets: [
+      newPet({
+        id: 10,
+        owner_id: 1,
+        name: 'Майло',
+        species: 'dog',
+        breed: 'Золотистый ретривер',
+        birth_date: '2022-05-01',
+        sex: 'male',
+        care_status: 'treatment',
+        care_status_set_at: '2026-10-10T10:40:00+03:00',
+        care_status_clinic: { id: 2, name: 'ВетДоктор' },
+      }),
+      newPet({ id: 11, owner_id: 1, name: 'Барсик', species: 'cat', breed: 'Британская короткошёрстная', birth_date: '2025-03-14', sex: 'male' }),
+      // В архиве: в списках владельца его нет (Р-40).
+      newPet({ id: 12, owner_id: 1, name: 'Кеша', species: 'other', breed: 'Волнистый попугай', archived_at: '2026-09-01T12:00:00+03:00' }),
+      // Питомец другого владельца: owner@example.com его не видит и не меняет (404).
+      newPet({ id: 13, owner_id: 12, name: 'Рекс', species: 'dog' }),
+    ],
+    nextPetId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,

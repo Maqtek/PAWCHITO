@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.4).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.5).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -11,6 +11,7 @@ type NoContent = { headers: { [name: string]: unknown }; content?: never }
 type NoParams = { query?: never; header?: never; path?: never; cookie?: never }
 type ClinicPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
 type VetPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
+type PetPath = { query?: never; header?: never; path: { pet_id: number }; cookie?: never }
 type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
@@ -57,6 +58,23 @@ export interface components {
       care_status_clinic: components['schemas']['ClinicRef'] | null
       archived_at: string | null
     }
+    /** sex можно не передавать — сервер поставит unknown (Р-41). */
+    PetCreate: {
+      name: string
+      species: components['schemas']['Species']
+      breed?: string | null
+      birth_date?: string | null
+      sex?: components['schemas']['Sex']
+    }
+    /** null в breed и birth_date убирает значение, в name, species и sex — 422 (Р-41). */
+    PetUpdate: {
+      name?: string
+      species?: components['schemas']['Species']
+      breed?: string | null
+      birth_date?: string | null
+      sex?: components['schemas']['Sex']
+    }
+    PetArchived: { pet: components['schemas']['Pet']; cancelled_appointments: number; deleted_reminders: number }
     /** Клиника: часы ЧЧ:ММ одинаковы для всех рабочих дней; work_days — 1 (понедельник) … 7 (воскресенье). */
     Clinic: {
       id: number
@@ -209,6 +227,53 @@ export interface paths {
       parameters: { query?: { archived?: boolean }; header?: never; path?: never; cookie?: never }
       requestBody?: never
       responses: { 200: Json<Schemas['Pet'][]>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
+    }
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['PetCreate']>
+      responses: {
+        201: Json<Schemas['Pet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/pets/{pet_id}': {
+    parameters: PetPath
+    get: {
+      parameters: PetPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['Pet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+    patch: {
+      parameters: PetPath
+      requestBody: Body<Schemas['PetUpdate']>
+      responses: {
+        200: Json<Schemas['Pet']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/pets/{pet_id}/archive': {
+    parameters: PetPath
+    post: {
+      parameters: PetPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['PetArchived']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
     }
   }
   '/notifications/unread-count': {
@@ -385,6 +450,9 @@ export type User = Schemas['User']
 export type Token = Schemas['Token']
 export type ClinicRef = Schemas['ClinicRef']
 export type Pet = Schemas['Pet']
+export type PetCreate = Schemas['PetCreate']
+export type PetUpdate = Schemas['PetUpdate']
+export type PetArchived = Schemas['PetArchived']
 export type UnreadCount = Schemas['UnreadCount']
 export type ApiErrorBody = Schemas['Error']
 export type LoginRequest = Schemas['LoginRequest']

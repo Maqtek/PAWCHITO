@@ -30,6 +30,19 @@ describe('PetIllustration', () => {
     render(<PetIllustration species="cat" />)
     expect(screen.getByRole('img', { name: 'Кошка' })).toBeInTheDocument()
   })
+
+  it('у собаки, кошки и другого животного — свой рисунок и фон', () => {
+    render(
+      <>
+        <PetIllustration species="dog" />
+        <PetIllustration species="cat" />
+        <PetIllustration species="other" />
+      </>,
+    )
+    const images = ['Собака', 'Кошка', 'Другое'].map((name) => screen.getByRole('img', { name }))
+    expect(new Set(images.map((image) => image.innerHTML)).size).toBe(3)
+    expect(new Set(images.map((image) => image.className)).size).toBe(3)
+  })
 })
 
 describe('CareStatusScale', () => {
