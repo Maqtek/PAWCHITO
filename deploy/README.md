@@ -69,11 +69,13 @@ docker compose -f docker-compose.prod.yml ps
 | `DEPLOY_SSH_KEY` | закрытый ключ `pawchito_deploy` целиком; локальную копию потом удалить |
 | `DEPLOY_KNOWN_HOSTS` | вывод `ssh-keyscan` из шага 3 |
 
+5. Включить деплой: Settings → Secrets and variables → Actions → Variables → New repository variable `DEPLOY_ENABLED` со значением `true`. Без неё `deploy.yml` пропускается — и после CI, и при ручном запуске: пока сервера нет, workflow не падает на каждом push в `main`. Выключить деплой — удалить переменную или поставить другое значение.
+
 Проверка — Actions → Deploy → Run workflow на `main`.
 
 ## Деплой
 
-`deploy.yml` запускается после успешного CI на push в `main` и вручную (Run workflow, только `main`). Деплои идут по одному, начатый не прерывается. На сервере выполняется `deploy/deploy.sh <коммит>`:
+`deploy.yml` при `DEPLOY_ENABLED=true` запускается после успешного CI на push в `main` и вручную (Run workflow, только `main`). Деплои идут по одному, начатый не прерывается. На сервере выполняется `deploy/deploy.sh <коммит>`:
 
 1. `git fetch` и `git reset --hard` на коммит — только из `main`. Дальше работает уже новая версия скрипта.
 2. `pg_dump` в `/opt/pawchito-backups/db-…-predeploy-<коммит>.dump`.

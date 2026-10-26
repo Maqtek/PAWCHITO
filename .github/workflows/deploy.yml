@@ -21,13 +21,16 @@ concurrency:
 jobs:
   deploy:
     name: Деплой на VPS
+    # Пока сервера нет, деплой выключен: без переменной репозитория DEPLOY_ENABLED=true джоба пропускается,
+    # а не падает на каждом push в main. Переменная — уровня репозитория: переменные окружения в if джобы не видны.
     # workflow_run срабатывает и на CI из PR, если ветка в форке называется main, —
     # поэтому только push в main этого репозитория. Вручную — только из main.
     if: >-
+      vars.DEPLOY_ENABLED == 'true' && (
       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository)
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
