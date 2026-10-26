@@ -1,15 +1,27 @@
 """Эндпоинты /api/admin/clinics: клиники для администратора (контракты, раздел 9).
 
-Порядок проверок: доступ (401/403, зависимость AdminUser), тело (422), поиск клиники (404).
-Аккаунт клиники и сброс его пароля — #52, #53.
+Порядок проверок: доступ (401/403, зависимость AdminUser), тело (422), поиск клиники (404),
+конфликт (409). Сброс пароля клиники — #53.
 """
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.exceptions import RequestValidationError
 
 from app.routers.deps import AdminUser, ClinicServiceDep
-from app.schemas.clinic import AdminClinicOut, ClinicArchivedOut, ClinicIn, ClinicUpdate
-from app.services.clinics import ClinicHoursError, ClinicNotFoundError
+from app.schemas.clinic import (
+    AdminClinicOut,
+    ClinicAccountCreatedOut,
+    ClinicAccountIn,
+    ClinicArchivedOut,
+    ClinicIn,
+    ClinicUpdate,
+)
+from app.schemas.user import UserOut
+from app.services.clinics import (
+    ClinicAccountConflictError,
+    ClinicHoursError,
+    ClinicNotFoundError,
+)
 
 router = APIRouter(prefix="/admin/clinics", tags=["admin"])
 
@@ -75,3 +87,20 @@ def restore_clinic(clinic_id: int, _: AdminUser, service: ClinicServiceDep) -> A
         return AdminClinicOut.model_validate(service.restore(clinic_id))
     except ClinicNotFoundError:
         raise _not_found() from None
+
+
+@router.post("/{clinic_id}/account", status_code=status.HTTP_201_CREATED)
+def create_clinic_account(
+    clinic_id: int, data: ClinicAccountIn, _: AdminUser, service: ClinicServiceDep
+) -> ClinicAccountCreatedOut:
+    try:
+        user, temporary_password = service.create_account(clinic_id, data.email)
+    except ClinicNotFoundError:
+        raise _not_found() from None
+    except ClinicAccountConflictError:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "У клиники уже есть аккаунт или email занят"
+        ) from None
+    return ClinicAccountCreatedOut(
+        user=UserOut.model_validate(user), temporary_password=temporary_password
+    )

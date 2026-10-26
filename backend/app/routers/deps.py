@@ -35,8 +35,8 @@ def get_auth_service(db: DbSession, limiter: AttemptLimiterDep) -> AuthService:
 AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
 
 
-def get_clinic_service(db: DbSession) -> ClinicService:
-    return ClinicService(db)
+def get_clinic_service(db: DbSession, limiter: AttemptLimiterDep) -> ClinicService:
+    return ClinicService(db, limiter)
 
 
 ClinicServiceDep = Annotated[ClinicService, Depends(get_clinic_service)]

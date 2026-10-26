@@ -13,7 +13,7 @@ class UserOut(BaseModel):
     email: str
     role: UserRole
     # Читается из User.display_name: у клиники — её название (Р-35); в JSON поле — full_name
-    full_name: str | None = Field(validation_alias="display_name")
+    full_name: str = Field(validation_alias="display_name")
     must_change_password: bool
 
 

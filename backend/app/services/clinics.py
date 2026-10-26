@@ -8,12 +8,16 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models import Clinic
+from app.core.security import generate_temporary_password, hash_password
+from app.models import Clinic, User, UserRole
 from app.repositories.clinic import ClinicRepository
 from app.repositories.refresh_token import RefreshTokenRepository
+from app.repositories.user import UserRepository
+from app.services.rate_limit import AttemptLimiter
 
 
 class ClinicNotFoundError(Exception):
@@ -24,10 +28,16 @@ class ClinicHoursError(Exception):
     """Открытие не раньше закрытия — по итоговым значениям после PATCH."""
 
 
+class ClinicAccountConflictError(Exception):
+    """У клиники уже есть аккаунт или email занят — 409, без уточнения (контракты, раздел 9)."""
+
+
 class ClinicService:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: Session, limiter: AttemptLimiter) -> None:
         self.clinics = ClinicRepository(session)
+        self.users = UserRepository(session)
         self.refresh_tokens = RefreshTokenRepository(session)
+        self.limiter = limiter
 
     def list_all(self) -> Sequence[Clinic]:
         """Все клиники, включая скрытые."""
@@ -81,3 +91,32 @@ class ClinicService:
             clinic.account.is_active = True
         self.clinics.session.flush()
         return clinic
+
+    def create_account(self, clinic_id: int, email: str) -> tuple[User, str]:
+        """Аккаунт клиники с временным паролем: при первом входе его нужно сменить.
+
+        Возвращает пользователя и пароль — он показывается один раз, в базе только хеш.
+        У скрытой клиники аккаунт сразу заблокирован (Р-36). full_name не заполняется:
+        имя в ответах — название клиники (Р-35).
+        """
+        clinic = self.get(clinic_id)
+        if clinic.user_id is not None:
+            raise ClinicAccountConflictError
+        temporary_password = generate_temporary_password()
+        try:
+            user = self.users.create(
+                email=email,
+                password_hash=hash_password(temporary_password),
+                role=UserRole.clinic,
+                must_change_password=True,
+                is_active=not clinic.is_archived,
+            )
+        except IntegrityError:
+            # email уже занят — уникальный индекс по lower(email); откат сделает get_db
+            raise ClinicAccountConflictError from None
+        # через связь, а не user_id: так user.clinic сразу знает клинику для display_name
+        clinic.account = user
+        self.clinics.session.flush()
+        # Пауза могла остаться от попыток входа с этим email до создания аккаунта
+        self.limiter.reset(email)
+        return user, temporary_password

@@ -252,3 +252,101 @@ class TestArchive:
     def test_404(self, client: TestClient, admin: dict[str, str]) -> None:
         for action in ("archive", "restore"):
             assert client.post(f"{URL}/999999/{action}", headers=admin).status_code == 404
+
+
+class TestAccount:
+    """Аккаунт клиники: временный пароль, смена при первом входе (#52; Р-35, Р-36)."""
+
+    def _account(
+        self, client: TestClient, admin: dict[str, str], clinic_id: int, email: str
+    ) -> Any:
+        return client.post(f"{URL}/{clinic_id}/account", json={"email": email}, headers=admin)
+
+    def test_created_with_temporary_password(
+        self, client: TestClient, admin: dict[str, str], db: Session
+    ) -> None:
+        clinic = _create(client, admin)
+        response = self._account(client, admin, clinic["id"], " Clinic2@Example.com ")
+        assert response.status_code == 201
+        body = response.json()
+        assert body["user"]["email"] == "clinic2@example.com"
+        assert body["user"]["role"] == "clinic"
+        assert body["user"]["full_name"] == "ВетДоктор"  # название клиники (Р-35)
+        assert body["user"]["must_change_password"] is True
+        assert len(body["temporary_password"]) == 14  # vT4q-9mKx-2Lpe
+        account = client.get(f"{URL}/{clinic['id']}", headers=admin).json()["account"]
+        assert account == {
+            "id": body["user"]["id"],
+            "email": "clinic2@example.com",
+            "is_active": True,
+        }
+        assert db.get(User, body["user"]["id"]).full_name is None  # в users имя не хранится
+
+    def test_first_login_requires_password_change(
+        self, client: TestClient, admin: dict[str, str]
+    ) -> None:
+        clinic = _create(client, admin)
+        password = self._account(client, admin, clinic["id"], "c@example.com").json()[
+            "temporary_password"
+        ]
+        login = client.post(
+            "/api/auth/login", json={"email": "c@example.com", "password": password}
+        )
+        assert login.status_code == 200
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        assert client.get("/api/users/me", headers=headers).json()["must_change_password"] is True
+        blocked = client.patch("/api/users/me", json={"full_name": "X"}, headers=headers)
+        assert blocked.json() == {"detail": "password_change_required"}
+
+        changed = client.post(
+            "/api/auth/change-password",
+            json={"current_password": password, "new_password": "clinicpass1"},
+            headers=headers,
+        )
+        assert changed.status_code == 200
+        headers = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+        assert client.get("/api/users/me", headers=headers).json()["must_change_password"] is False
+
+    def test_second_account_and_taken_email_409(
+        self, client: TestClient, admin: dict[str, str], make_user: Callable[..., User]
+    ) -> None:
+        first, second = _create(client, admin), _create(client, admin)
+        assert self._account(client, admin, first["id"], "a@example.com").status_code == 201
+        for clinic_id, email in ((first["id"], "b@example.com"), (second["id"], "A@example.com")):
+            response = self._account(client, admin, clinic_id, email)
+            assert response.status_code == 409
+            assert response.json() == {"detail": "У клиники уже есть аккаунт или email занят"}
+        make_user(UserRole.owner, email="owner@example.com")
+        assert self._account(client, admin, second["id"], "owner@example.com").status_code == 409
+
+    def test_archived_clinic_account_blocked(
+        self, client: TestClient, admin: dict[str, str]
+    ) -> None:
+        clinic = _create(client, admin)
+        client.post(f"{URL}/{clinic['id']}/archive", headers=admin)
+        body = self._account(client, admin, clinic["id"], "c@example.com").json()
+        login = {"email": "c@example.com", "password": body["temporary_password"]}
+        assert client.post("/api/auth/login", json=login).status_code == 403
+        client.post(f"{URL}/{clinic['id']}/restore", headers=admin)
+        assert client.post("/api/auth/login", json=login).status_code == 200
+
+    def test_pause_for_email_lifted(self, client: TestClient, admin: dict[str, str]) -> None:
+        """Попытки входа с этим email до создания аккаунта не мешают первому входу."""
+        for _ in range(5):
+            client.post("/api/auth/login", json={"email": "c@example.com", "password": "x" * 8})
+        clinic = _create(client, admin)
+        password = self._account(client, admin, clinic["id"], "c@example.com").json()[
+            "temporary_password"
+        ]
+        login = {"email": "c@example.com", "password": password}
+        assert client.post("/api/auth/login", json=login).status_code == 200
+
+    def test_validation_order(
+        self, client: TestClient, admin: dict[str, str], make_user: Callable[..., User]
+    ) -> None:
+        owner = auth_headers(make_user(UserRole.owner))
+        assert self._account(client, owner, 1, "c@example.com").status_code == 403
+        assert _errors(self._account(client, admin, 999999, "bad")) == {
+            "email": "Неверный формат email"
+        }
+        assert self._account(client, admin, 999999, "c@example.com").status_code == 404

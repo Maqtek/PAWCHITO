@@ -213,6 +213,17 @@ class TestClinicName:
             "ВетДоктор"
         )
 
+    def test_clinic_account_without_clinic_falls_back_to_email(
+        self, client: TestClient, db: Session, make_user: Callable[..., User]
+    ) -> None:
+        """Аккаунт клиники без клиники (например, созданный вручную) не роняет ответ."""
+        account = make_user(UserRole.clinic, email="lost@example.com")
+        account.full_name = None
+        db.flush()
+        response = client.get("/api/users/me", headers=auth_headers(account))
+        assert response.status_code == 200
+        assert response.json()["full_name"] == "lost@example.com"
+
     def test_owner_and_admin_still_rename(
         self, client: TestClient, make_user: Callable[..., User]
     ) -> None:
