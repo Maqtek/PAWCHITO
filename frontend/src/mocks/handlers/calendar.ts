@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import type { AppointmentReason, AppointmentStatus, Calendar, CalendarEvent, EventCategory } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal } from '../../lib/dates'
 import { appointmentReasonLabel } from '../../lib/labels'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, notFound, queryError } from '../http-utils'
 import { readServer, toAppointment, toReminder } from '../server-state'
 import { findPet } from './pets'
 
@@ -33,9 +33,6 @@ const byAt = (a: CalendarEvent, b: CalendarEvent) =>
 
 const dayOf = (at: string) => moscowLocal(new Date(at)).date
 
-const petIdError = (msg: string, type: string) =>
-  HttpResponse.json({ detail: [{ loc: ['query', 'pet_id'], msg, type }] }, { status: 422 })
-
 // Как у бэкенда: доступ (401/403), параметры (422), поиск питомца (404).
 export const calendarHandlers = [
   http.get('*/api/calendar', ({ request }) => {
@@ -43,11 +40,11 @@ export const calendarHandlers = [
     const account = authorizeAccount(state, request, { allowed: ['owner'] })
     if (account instanceof Response) return account
     const rawPet = new URL(request.url).searchParams.get('pet_id')
-    if (rawPet === null) return petIdError('Укажите питомца', 'missing')
-    if (!/^\d+$/.test(rawPet)) return petIdError('Номер питомца — целое число', 'int_parsing')
+    if (rawPet === null) return queryError('pet_id', 'Укажите питомца', 'missing')
+    if (!/^\d+$/.test(rawPet)) return queryError('pet_id', 'Номер питомца — целое число', 'int_parsing')
     // Календарь — о питомце, а не фильтр списка: чужой — 404, как несуществующий; архивный — как обычно (Р-64, Р-65).
     const pet = findPet(state, account.id, rawPet)
-    if (!pet) return HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
+    if (!pet) return notFound('Питомец не найден')
 
     const now = new Date()
     const today = moscowLocal(now).date

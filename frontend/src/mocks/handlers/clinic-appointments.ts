@@ -2,20 +2,16 @@ import { http, HttpResponse } from 'msw'
 import { appointmentLimits } from '../../api/limits'
 import type { AppointmentStatus, ClinicAppointmentCancel, ClinicPetCard } from '../../api/schema'
 import { moscowLocal } from '../../lib/dates'
-import { charCount, readBody, validateBody } from '../auth-validation'
+import { charCount } from '../auth-validation'
 import { isoDateError } from '../date-validation'
 import { normalizeText } from '../health-validation'
+import { conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import { readServer, toAppointment, updateServer, type MockAppointment, type MockServerState } from '../server-state'
 import { newestFirst, observationsInPeriod, readPeriod } from './health'
 import { authorizeClinic } from './vets'
 
 const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'completed', 'cancelled']
-
-const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
-const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
-const queryError = (field: string, msg: string) =>
-  HttpResponse.json({ detail: [{ loc: ['query', field], msg, type: 'value_error' }] }, { status: 422 })
 
 /** Клиника записи — по врачу. */
 export const clinicOf = (state: MockServerState, appointment: MockAppointment) =>

@@ -4,12 +4,55 @@ import { accountFromAuthorization, type MockAccount, type MockServerState } from
 
 export const unauthorized = () => HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
 export const forbidden = (detail = 'Недостаточно прав') => HttpResponse.json({ detail }, { status: 403 })
+export const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
+export const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
 
 export const tooManyRequests = (retryAfterSeconds: number) =>
   HttpResponse.json(
     { detail: 'Слишком много попыток' },
     { status: 429, headers: { 'Retry-After': String(retryAfterSeconds) } },
   )
+
+/** Ошибка поля в формате FastAPI: loc — место ("body" или "query") и путь к полю. */
+export interface FieldError {
+  loc: (string | number)[]
+  msg: string
+  type: string
+}
+
+/** 422 со списком ошибок полей, как у FastAPI. */
+export const unprocessable = (detail: FieldError[]) => HttpResponse.json({ detail }, { status: 422 })
+
+/** type — value_error, как у проверок Pydantic; другой — только у ошибок разбора параметра (missing, int_parsing). */
+export const fieldError = (loc: FieldError['loc'], msg: string, type = 'value_error'): FieldError => ({ loc, msg, type })
+
+/** Ответ 422 со всеми ошибками полей сразу или null, если ошибок нет. */
+export function fieldErrors(where: 'body' | 'query', checks: Record<string, string | null>): Response | null {
+  const detail = Object.entries(checks)
+    .filter((entry): entry is [string, string] => entry[1] !== null)
+    .map(([field, msg]) => fieldError([where, field], msg))
+  return detail.length > 0 ? unprocessable(detail) : null
+}
+
+/** Ошибки полей тела запроса или null. */
+export const validateBody = (checks: Record<string, string | null>) => fieldErrors('body', checks)
+
+/** 422 одного параметра запроса. */
+export const queryError = (field: string, msg: string, type?: string) =>
+  unprocessable([fieldError(['query', field], msg, type)])
+
+/** Тело запроса как объект; не JSON или не объект — пустой объект, и поля получат ошибки. */
+export async function readBody(request: Request): Promise<Record<string, unknown>> {
+  try {
+    const body: unknown = await request.json()
+    return isObject(body) ? body : {}
+  } catch {
+    return {}
+  }
+}
+
+export const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 interface AccessRules {
   /** Роли, которым доступен эндпоинт; без списка — любая. */

@@ -1,6 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import type { ClinicAccountCreate, ClinicCreate, ClinicUpdate } from '../../api/schema'
-import { emailError, readBody, validateBody } from '../auth-validation'
+import { emailError } from '../auth-validation'
 import {
   clinicAddressError,
   clinicNameError,
@@ -9,7 +9,7 @@ import {
   timeError,
   workDaysError,
 } from '../clinic-validation'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, conflict, notFound, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
   attemptsKey,
@@ -26,7 +26,7 @@ import {
   type MockServerState,
 } from '../server-state'
 
-const notFound = (detail = 'Клиника не найдена') => HttpResponse.json({ detail }, { status: 404 })
+const clinicNotFound = () => notFound('Клиника не найдена')
 
 function findClinic(state: MockServerState, rawId: unknown): MockClinic | undefined {
   const id = Number(rawId)
@@ -87,7 +87,7 @@ export const adminHandlers = [
     const account = authorizeAccount(state, request, { allowed: ['admin'] })
     if (account instanceof Response) return account
     const clinic = findClinic(state, params.id)
-    return clinic ? HttpResponse.json(toAdminClinic(state, clinic)) : notFound()
+    return clinic ? HttpResponse.json(toAdminClinic(state, clinic)) : clinicNotFound()
   }),
 
   http.patch('*/api/admin/clinics/:id', async ({ request, params }) => {
@@ -107,7 +107,7 @@ export const adminHandlers = [
       })
       if (invalid) return invalid
       const clinic = findClinic(state, params.id)
-      if (!clinic) return notFound()
+      if (!clinic) return clinicNotFound()
       const body = raw as ClinicUpdate
       // Открытие раньше закрытия — по итоговым значениям: новое + сохранённое.
       const order = validateBody({
@@ -129,7 +129,7 @@ export const adminHandlers = [
       const account = authorizeAccount(state, request, { allowed: ['admin'] })
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
-      if (!clinic) return notFound()
+      if (!clinic) return clinicNotFound()
       // Повторное скрытие ничего не отменяет второй раз.
       if (clinic.archived_at !== null) {
         return HttpResponse.json({ clinic: toAdminClinic(state, clinic), cancelled_appointments: 0 })
@@ -156,7 +156,7 @@ export const adminHandlers = [
       const account = authorizeAccount(state, request, { allowed: ['admin'] })
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
-      if (!clinic) return notFound()
+      if (!clinic) return clinicNotFound()
       clinic.archived_at = null
       const clinicAccount = accountOf(state, clinic)
       if (clinicAccount) clinicAccount.is_active = true
@@ -172,11 +172,9 @@ export const adminHandlers = [
       const invalid = validateBody({ email: emailError(raw.email) })
       if (invalid) return invalid
       const clinic = findClinic(state, params.id)
-      if (!clinic) return notFound()
+      if (!clinic) return clinicNotFound()
       const email = (raw as ClinicAccountCreate).email.trim()
-      if (accountOf(state, clinic) || findAccount(state, email)) {
-        return HttpResponse.json({ detail: 'У клиники уже есть аккаунт или email занят' }, { status: 409 })
-      }
+      if (accountOf(state, clinic) || findAccount(state, email)) return conflict('У клиники уже есть аккаунт или email занят')
       const temporaryPassword = newTemporaryPassword()
       const created: MockAccount = {
         id: state.nextUserId,
@@ -202,7 +200,7 @@ export const adminHandlers = [
       const account = authorizeAccount(state, request, { allowed: ['admin'] })
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
-      if (!clinic) return notFound()
+      if (!clinic) return clinicNotFound()
       const clinicAccount = accountOf(state, clinic)
       if (!clinicAccount) return notFound('У клиники нет аккаунта')
       const temporaryPassword = newTemporaryPassword()

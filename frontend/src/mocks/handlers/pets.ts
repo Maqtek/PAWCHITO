@@ -1,12 +1,11 @@
 import { http, HttpResponse } from 'msw'
 import type { Pet, PetCreate, PetUpdate } from '../../api/schema'
-import { readBody, validateBody } from '../auth-validation'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, notFound, readBody, validateBody } from '../http-utils'
 import { birthDateError, breedError, normalizeBreed, petNameError, sexError, speciesError } from '../pet-validation'
 import { notifyAppointment } from '../notify'
 import { cancelFutureAppointments, newPet, readServer, updateServer, type MockServerState } from '../server-state'
 
-const notFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
+const petNotFound = () => notFound('Питомец не найден')
 
 /** Питомец владельца; питомец другого владельца — как несуществующий, 404 (Р-42). Архивный находится как обычно. */
 export function findPet(state: MockServerState, ownerId: number, rawId: unknown): Pet | undefined {
@@ -66,7 +65,7 @@ export const petHandlers = [
     const account = authorizeAccount(state, request, { allowed: ['owner'] })
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
-    return pet ? HttpResponse.json(pet) : notFound()
+    return pet ? HttpResponse.json(pet) : petNotFound()
   }),
 
   http.patch('*/api/pets/:petId', async ({ request, params }) => {
@@ -85,7 +84,7 @@ export const petHandlers = [
       })
       if (invalid) return invalid
       const pet = findPet(state, account.id, params.petId)
-      if (!pet) return notFound()
+      if (!pet) return petNotFound()
       // photo_url и care_status в теле игнорируются: владелец их не меняет (Р-41).
       const body = raw as PetUpdate
       if (body.name !== undefined) pet.name = body.name.trim()
@@ -102,7 +101,7 @@ export const petHandlers = [
       const account = authorizeAccount(state, request, { allowed: ['owner'] })
       if (account instanceof Response) return account
       const pet = findPet(state, account.id, params.petId)
-      if (!pet) return notFound()
+      if (!pet) return petNotFound()
       // Повторное архивирование ничего не меняет (Р-42): будущих записей уже нет.
       if (pet.archived_at !== null) return HttpResponse.json({ pet, cancelled_appointments: 0, deleted_reminders: 0 })
       pet.archived_at = new Date().toISOString()

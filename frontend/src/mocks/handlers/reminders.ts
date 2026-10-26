@@ -1,19 +1,13 @@
 import { http, HttpResponse } from 'msw'
 import type { EventCategory, Prescription, ReminderStatus } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
-import { readBody, validateBody } from '../auth-validation'
 import { isoDateError } from '../date-validation'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, conflict, forbidden, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { categoryError, dueAtError, reminderTitleError, repeatError } from '../reminder-validation'
 import { readServer, toReminder, updateServer, type MockReminder, type MockServerState } from '../server-state'
 import { findPet } from './pets'
 
 const STATUSES: readonly ReminderStatus[] = ['pending', 'done', 'skipped']
-
-const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
-const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
-const queryError = (field: string, msg: string) =>
-  HttpResponse.json({ detail: [{ loc: ['query', field], msg, type: 'value_error' }] }, { status: 422 })
 
 /** Рецепт из итога приёма своего питомца, в том числе архивного; чужой — как несуществующий. */
 function ownPrescription(state: MockServerState, ownerId: number, rawId: unknown): Prescription | undefined {
@@ -155,7 +149,7 @@ export const reminderHandlers = [
       if (account instanceof Response) return account
       const reminder = ownReminder(state, account.id, params.id)
       if (!reminder) return notFound('Дело не найдено')
-      if (reminder.source === 'prescription') return HttpResponse.json({ detail: 'Дела курса не удаляются' }, { status: 403 })
+      if (reminder.source === 'prescription') return forbidden('Дела курса не удаляются')
       // Отметка окончательная: отмеченное дело остаётся в истории (Р-62).
       if (reminder.status !== 'pending') return conflict('Отмеченное дело не удаляется')
       // Запланированное в серии одно — следующее создаётся при отметке; удаляем и его, и всё запланированное после.

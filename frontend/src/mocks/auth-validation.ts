@@ -1,4 +1,3 @@
-import { HttpResponse } from 'msw'
 import { authLimits } from '../api/limits'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -13,24 +12,6 @@ export function hasControlChars(value: string): boolean {
     const code = char.codePointAt(0) ?? 0
     return code < 0x20 || code === 0x7f
   })
-}
-
-/** Тело запроса как объект; не JSON или не объект — пустой объект, и поля получат ошибки. */
-export async function readBody(request: Request): Promise<Record<string, unknown>> {
-  try {
-    const body: unknown = await request.json()
-    return typeof body === 'object' && body !== null && !Array.isArray(body) ? (body as Record<string, unknown>) : {}
-  } catch {
-    return {}
-  }
-}
-
-/** Ответ 422 в формате FastAPI со всеми ошибками полей сразу или null, если ошибок нет. */
-export function validateBody(checks: Record<string, string | null>): Response | null {
-  const detail = Object.entries(checks)
-    .filter((entry): entry is [string, string] => entry[1] !== null)
-    .map(([field, msg]) => ({ loc: ['body', field], msg, type: 'value_error' }))
-  return detail.length > 0 ? HttpResponse.json({ detail }, { status: 422 }) : null
 }
 
 /** Строка не длиннее max — для полей, которые дальше сверяет сам сервер (вход, текущий пароль). */

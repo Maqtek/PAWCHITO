@@ -12,19 +12,15 @@ import type {
 } from '../../api/schema'
 import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
-import { readBody, validateBody } from '../auth-validation'
 import { pastDateError } from '../date-validation'
 import { conditionKindError, conditionTitleError, multilineTextError, normalizeText, weightError } from '../health-validation'
+import { conflict, fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
 import { notifyOutcome, notifyPetUpdated } from '../notify'
-import { outcomeErrors, type FieldError } from '../outcome-validation'
+import { outcomeErrors } from '../outcome-validation'
 import { birthDateError, breedError, normalizeBreed, sexError } from '../pet-validation'
 import { addCourseReminders, newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
 import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
 import { authorizeClinic } from './vets'
-
-const invalid = (detail: FieldError[]) => HttpResponse.json({ detail }, { status: 422 })
-const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
-const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
 
 /** Первые байты файла: тип фото определяется по содержимому, а не по имени (Р-58). */
 function photoType(bytes: Uint8Array): 'jpeg' | 'png' | 'webp' | null {
@@ -68,7 +64,7 @@ function editAccess(state: MockServerState, clinicId: number, petId: number): Re
   const completed = state.appointments.some(
     (item) => item.pet_id === petId && item.status === 'completed' && clinicOf(state, item) === clinicId,
   )
-  return completed ? null : HttpResponse.json({ detail: 'Нет завершённого приёма' }, { status: 403 })
+  return completed ? null : forbidden('Нет завершённого приёма')
 }
 
 const sorted = (times: string[]) => [...times].sort()
@@ -81,8 +77,8 @@ export const outcomeHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const now = new Date()
-      const fieldErrors = outcomeErrors(raw, null, now)
-      if (fieldErrors.length > 0) return invalid(fieldErrors)
+      const errors = outcomeErrors(raw, null, now)
+      if (errors.length > 0) return unprocessable(errors)
       const appointment = findOwnAppointment(state, clinicId, params.id)
       if (!appointment) return notFound('Запись не найдена')
       if (appointment.status === 'completed') return conflict('Итог уже внесён')
@@ -91,7 +87,7 @@ export const outcomeHandlers = [
       // Даты рецептов и прививок — относительно дня приёма, поэтому после поиска записи (Р-56).
       const day = moscowLocal(new Date(appointment.slot_start)).date
       const dateErrors = outcomeErrors(raw, day, now)
-      if (dateErrors.length > 0) return invalid(dateErrors)
+      if (dateErrors.length > 0) return unprocessable(dateErrors)
 
       const body = raw as OutcomeCreate
       const pet = state.pets.find((item) => item.id === appointment.pet_id)
@@ -280,7 +276,7 @@ export const outcomeHandlers = [
     return updateServer((state) => {
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
-      if (!bytes) return invalid([{ loc: ['body', 'file'], msg: 'Выберите файл фото', type: 'value_error' }])
+      if (!bytes) return unprocessable([fieldError(['body', 'file'], 'Выберите файл фото')])
       if (bytes.length > outcomeLimits.photoBytesMax) {
         return HttpResponse.json({ detail: 'Фото больше 5 МБ' }, { status: 413 })
       }

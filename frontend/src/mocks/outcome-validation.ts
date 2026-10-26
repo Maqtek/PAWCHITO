@@ -11,20 +11,13 @@ import {
   vaccineNameError,
   weightError,
 } from './health-validation'
+import { fieldError, isObject, type FieldError } from './http-utils'
 import { birthDateError, breedError, sexError } from './pet-validation'
 
 const CARE_STATUSES: readonly CareStatus[] = ['routine', 'attention', 'treatment', 'recovery', 'prevention']
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
-export interface FieldError {
-  loc: (string | number)[]
-  msg: string
-  type: 'value_error'
-}
-
 type Raw = Record<string, unknown>
-
-const isObject = (value: unknown): value is Raw => typeof value === 'object' && value !== null && !Array.isArray(value)
 
 /**
  * Ошибки тела итога (Р-56). Без дня приёма — только сами поля: такие ошибки идут до поиска записи (404).
@@ -33,7 +26,7 @@ const isObject = (value: unknown): value is Raw => typeof value === 'object' && 
 export function outcomeErrors(raw: Raw, appointmentDay: string | null, now = new Date()): FieldError[] {
   const errors: FieldError[] = []
   const add = (loc: (string | number)[], msg: string | null) => {
-    if (msg) errors.push({ loc: ['body', ...loc], msg, type: 'value_error' })
+    if (msg) errors.push(fieldError(['body', ...loc], msg))
   }
 
   // Поля самого итога — только на первом проходе, иначе ошибки повторятся.

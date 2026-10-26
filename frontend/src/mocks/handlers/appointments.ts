@@ -3,10 +3,9 @@ import { appointmentLimits } from '../../api/limits'
 import type { AppointmentCreate, AppointmentReason, AppointmentStatus, Slot, Vet } from '../../api/schema'
 import { addDays, isoWeekday, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { readBody, validateBody } from '../auth-validation'
 import { isoDateError } from '../date-validation'
 import { multilineTextError, normalizeText } from '../health-validation'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
   readServer,
@@ -24,9 +23,6 @@ const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'compl
 const ACTIVE: readonly AppointmentStatus[] = ['requested', 'confirmed']
 const SLOT_MS = appointmentLimits.slotMinutes * 60 * 1000
 const ISO_DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/
-
-const notFound = (detail: string) => HttpResponse.json({ detail }, { status: 404 })
-const conflict = (detail: string) => HttpResponse.json({ detail }, { status: 409 })
 
 const collator = new Intl.Collator('ru')
 
@@ -138,9 +134,7 @@ export const appointmentHandlers = [
         : date > lastBookableDay(now)
           ? `Дата — не дальше ${appointmentLimits.daysAhead} дней`
           : null)
-    if (dateError) {
-      return HttpResponse.json({ detail: [{ loc: ['query', 'date'], msg: dateError, type: 'value_error' }] }, { status: 422 })
-    }
+    if (dateError) return queryError('date', dateError)
     const bookable = bookableVet(state, Number(params.vetId))
     if (!bookable || bookable.clinic.id !== Number(params.clinicId)) return notFound('Врач не принимает записи')
     const slots: Slot[] = gridStarts(bookable.clinic, date)
@@ -225,10 +219,7 @@ export const appointmentHandlers = [
     if (account instanceof Response) return account
     const status = new URL(request.url).searchParams.get('status')
     if (status !== null && !STATUSES.includes(status as AppointmentStatus)) {
-      return HttpResponse.json(
-        { detail: [{ loc: ['query', 'status'], msg: 'Статус: requested, confirmed, completed или cancelled', type: 'value_error' }] },
-        { status: 422 },
-      )
+      return queryError('status', 'Статус: requested, confirmed, completed или cancelled')
     }
     // Архивный питомец — как обычно (Р-51).
     const pet = findPet(state, account.id, params.petId)

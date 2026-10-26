@@ -14,11 +14,17 @@ import {
   maxLengthError,
   normalizeRecoveryCode,
   passwordError,
-  readBody,
   recoveryCodeError,
-  validateBody,
 } from '../auth-validation'
-import { authorizeAccount, forbidden, tooManyRequests, unauthorized } from '../http-utils'
+import {
+  authorizeAccount,
+  conflict,
+  forbidden,
+  readBody,
+  tooManyRequests,
+  unauthorized,
+  validateBody,
+} from '../http-utils'
 import {
   attemptsKey,
   findAccount,
@@ -75,9 +81,7 @@ export const authHandlers = [
     if (invalid) return invalid
     const body = raw as RegisterRequest
     return updateServer((state) => {
-      if (findAccount(state, body.email)) {
-        return HttpResponse.json({ detail: 'Email уже зарегистрирован' }, { status: 409 })
-      }
+      if (findAccount(state, body.email)) return conflict('Email уже зарегистрирован')
       const account: MockAccount = {
         id: state.nextUserId,
         email: body.email.trim(),

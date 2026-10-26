@@ -11,7 +11,6 @@ import type {
   VaccinationCreate,
   VaccinationUpdate,
 } from '../../api/schema'
-import { readBody, validateBody } from '../auth-validation'
 import { isoDateError, pastDateError } from '../date-validation'
 import {
   conditionKindError,
@@ -22,20 +21,25 @@ import {
   vaccineNameError,
   weightError,
 } from '../health-validation'
-import { authorizeAccount, forbidden } from '../http-utils'
+import {
+  authorizeAccount,
+  fieldError,
+  fieldErrors,
+  forbidden,
+  notFound,
+  readBody,
+  unprocessable,
+  validateBody,
+} from '../http-utils'
 import { newObservation, readServer, updateServer, type MockServerState } from '../server-state'
 import { findPet } from './pets'
 
-const notFound = () => HttpResponse.json({ detail: 'Запись не найдена' }, { status: 404 })
-const petNotFound = () => HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
+const recordNotFound = () => notFound('Запись не найдена')
+const petNotFound = () => notFound('Питомец не найден')
 const fromClinic = () => forbidden('Запись внесена клиникой — изменить её может только клиника')
 
 /** 422 без поля: правило про всё тело, как model_validator у Pydantic (Р-45). */
-const nothingFilled = () =>
-  HttpResponse.json(
-    { detail: [{ loc: ['body'], msg: 'Заполните хотя бы одно поле, кроме даты', type: 'value_error' }] },
-    { status: 422 },
-  )
+const nothingFilled = () => unprocessable([fieldError(['body'], 'Заполните хотя бы одно поле, кроме даты')])
 
 const OBSERVATION_FIELDS = ['weight', 'appetite', 'energy', 'symptoms', 'note'] as const
 
@@ -126,7 +130,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const condition = findRecord(state.conditions, pet.id, params.id)
-      if (!condition) return notFound()
+      if (!condition) return recordNotFound()
       if (condition.source === 'clinic') return fromClinic()
       const body = raw as ConditionUpdate
       if (body.kind !== undefined) condition.kind = body.kind
@@ -143,7 +147,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const condition = findRecord(state.conditions, pet.id, params.id)
-      if (!condition) return notFound()
+      if (!condition) return recordNotFound()
       if (condition.source === 'clinic') return fromClinic()
       // Повторное архивирование ничего не меняет (Р-47).
       condition.archived_at ??= new Date().toISOString()
@@ -201,7 +205,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const observation = findRecord(state.observations, pet.id, params.id)
-      if (!observation) return notFound()
+      if (!observation) return recordNotFound()
       if (observation.source === 'clinic') return fromClinic()
       const body = raw as ObservationUpdate
       const next: Observation = {
@@ -274,7 +278,7 @@ export const healthHandlers = [
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()
       const vaccination = findRecord(state.vaccinations, pet.id, params.id)
-      if (!vaccination) return notFound()
+      if (!vaccination) return recordNotFound()
       if (vaccination.source === 'clinic') return fromClinic()
       const body = raw as VaccinationUpdate
       const date = body.date ?? vaccination.date
@@ -297,7 +301,7 @@ export const healthHandlers = [
       if (!pet) return petNotFound()
       const vaccination = findRecord(state.vaccinations, pet.id, params.id)
       // Повторное удаление — 404: прививки уже нет (Р-47).
-      if (!vaccination) return notFound()
+      if (!vaccination) return recordNotFound()
       if (vaccination.source === 'clinic') return fromClinic()
       state.vaccinations = state.vaccinations.filter((item) => item !== vaccination)
       return new HttpResponse(null, { status: 204 })
@@ -317,17 +321,13 @@ export function readPeriod(request: Request): Period | Response {
   const to = query.get('date_to')
   const fromError = from === null ? null : isoDateError(from, 'Начало периода')
   const toError = to === null ? null : isoDateError(to, 'Конец периода')
-  const orderError = !fromError && !toError && from !== null && to !== null && from > to
-  const detail = [
-    fromError && { field: 'date_from', msg: fromError },
-    (toError ?? orderError) && { field: 'date_to', msg: toError ?? 'Конец периода — не раньше начала' },
-  ].filter((item): item is { field: string; msg: string } => typeof item === 'object' && item !== null)
-  if (detail.length === 0) return { from, to }
-  // Ошибка параметра запроса — в loc ["query", …], как у FastAPI.
-  return HttpResponse.json(
-    { detail: detail.map(({ field, msg }) => ({ loc: ['query', field], msg, type: 'value_error' })) },
-    { status: 422 },
-  )
+  // Порядок — только у двух верных дат.
+  const outOfOrder = !fromError && !toError && from !== null && to !== null && from > to
+  const invalid = fieldErrors('query', {
+    date_from: fromError,
+    date_to: toError ?? (outOfOrder ? 'Конец периода — не раньше начала' : null),
+  })
+  return invalid ?? { from, to }
 }
 
 /** Наблюдения питомца за период, границы включительно: новые даты сверху. */

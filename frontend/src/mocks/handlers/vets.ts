@@ -1,11 +1,10 @@
 import { http, HttpResponse } from 'msw'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { readBody, validateBody } from '../auth-validation'
-import { authorizeAccount, forbidden } from '../http-utils'
+import { authorizeAccount, forbidden, notFound, readBody, validateBody } from '../http-utils'
 import { readServer, updateServer, type MockServerState } from '../server-state'
 import { normalizeSpecialization, specializationError, vacationError, vetNameError } from '../vet-validation'
 
-const notFound = () => HttpResponse.json({ detail: 'Врач не найден' }, { status: 404 })
+const vetNotFound = () => notFound('Врач не найден')
 
 /** Клиника аккаунта из access-токена или готовый ответ 401/403. */
 export function authorizeClinic(state: MockServerState, request: Request): number | Response {
@@ -73,7 +72,7 @@ export const vetHandlers = [
       })
       if (invalid) return invalid
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       const body = raw as VetUpdate
       if (body.full_name !== undefined) vet.full_name = body.full_name.trim()
       if (body.specialization !== undefined) vet.specialization = normalizeSpecialization(body.specialization)
@@ -87,7 +86,7 @@ export const vetHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       // Повторное архивирование ничего не меняет. Флаг отпуска остаётся до возврата.
       vet.archived_at ??= new Date().toISOString()
       return HttpResponse.json(vet)
@@ -99,7 +98,7 @@ export const vetHandlers = [
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
       const vet = findVet(state, clinicId, params.id)
-      if (!vet) return notFound()
+      if (!vet) return vetNotFound()
       vet.archived_at = null
       return HttpResponse.json(vet)
     }),

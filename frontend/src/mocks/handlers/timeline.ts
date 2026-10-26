@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import type { TimelineItem, TimelineItemType } from '../../api/schema'
 import { moscowLocal } from '../../lib/dates'
 import { isoDateError } from '../date-validation'
-import { authorizeAccount } from '../http-utils'
+import { authorizeAccount, fieldErrors, notFound } from '../http-utils'
 import { readServer, toAppointment, type MockServerState } from '../server-state'
 import { findPet } from './pets'
 
@@ -64,23 +64,15 @@ export const timelineHandlers = [
     const before = query.get('before')
     const rawLimit = query.get('limit')
     const limit = rawLimit === null ? LIMIT_DEFAULT : /^\d+$/.test(rawLimit) ? Number(rawLimit) : Number.NaN
-    const detail = [
-      { field: 'before', msg: before === null ? null : isoDateError(before, 'Дата') },
-      {
-        field: 'limit',
-        msg: Number.isInteger(limit) && limit >= 1 && limit <= LIMIT_MAX ? null : `limit — целое число от 1 до ${LIMIT_MAX}`,
-      },
-    ].filter((item) => item.msg !== null)
-    if (detail.length > 0) {
-      // Все ошибки параметров сразу, в loc ["query", …], как у FastAPI.
-      return HttpResponse.json(
-        { detail: detail.map(({ field, msg }) => ({ loc: ['query', field], msg, type: 'value_error' })) },
-        { status: 422 },
-      )
-    }
+    // Все ошибки параметров сразу.
+    const invalid = fieldErrors('query', {
+      before: before === null ? null : isoDateError(before, 'Дата'),
+      limit: Number.isInteger(limit) && limit >= 1 && limit <= LIMIT_MAX ? null : `limit — целое число от 1 до ${LIMIT_MAX}`,
+    })
+    if (invalid) return invalid
     // Чужой и несуществующий питомец — 404; архивный — как обычно (Р-42).
     const pet = findPet(state, account.id, params.petId)
-    if (!pet) return HttpResponse.json({ detail: 'Питомец не найден' }, { status: 404 })
+    if (!pet) return notFound('Питомец не найден')
     const items = petTimeline(state, pet.id).filter((item) => before === null || item.date < before)
     return HttpResponse.json(page(items, limit))
   }),
