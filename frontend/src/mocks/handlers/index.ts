@@ -7,6 +7,7 @@ import { networkHandlers } from './network'
 import { notificationHandlers } from './notifications'
 import { outcomeHandlers } from './outcome'
 import { petHandlers } from './pets'
+import { reminderHandlers } from './reminders'
 import { vetHandlers } from './vets'
 
 // Выключатель сети стоит первым: при network: false он отвечает раньше остальных.
@@ -20,5 +21,6 @@ export const handlers = [
   ...appointmentHandlers,
   ...clinicAppointmentHandlers,
   ...outcomeHandlers,
+  ...reminderHandlers,
   ...notificationHandlers,
 ]

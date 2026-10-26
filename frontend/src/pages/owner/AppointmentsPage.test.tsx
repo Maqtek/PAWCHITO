@@ -126,7 +126,7 @@ describe('AppointmentPage', () => {
     const outcome = await screen.findByRole('region', { name: 'Итог приёма' })
     expect(within(outcome).getByText('Мелоксикам, 1,5 мл')).toBeInTheDocument()
     expect(within(outcome).getByText('09:00, 21:00 · 5 дней с 12 октября 2026')).toBeInTheDocument()
-    expect(within(outcome).getByText('Дела курса по рецептам появятся в разделе «Дела».')).toBeInTheDocument()
+    expect(within(outcome).getByRole('link', { name: '«Курс лечения»' })).toHaveAttribute('href', '/course')
     expect(within(outcome).getByText('— 12 октября 2026, следующая 12 октября 2027')).toBeInTheDocument()
   })
 })

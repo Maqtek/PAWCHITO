@@ -10,7 +10,7 @@ import type {
   Vaccination,
   WeightCreate,
 } from '../../api/schema'
-import { addDays, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
+import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
 import { readBody, validateBody } from '../auth-validation'
 import { pastDateError } from '../date-validation'
@@ -18,7 +18,7 @@ import { conditionKindError, conditionTitleError, multilineTextError, normalizeT
 import { notifyOutcome, notifyPetUpdated } from '../notify'
 import { outcomeErrors, type FieldError } from '../outcome-validation'
 import { birthDateError, breedError, normalizeBreed, sexError } from '../pet-validation'
-import { newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
+import { addCourseReminders, newObservation, toAppointment, updateServer, type MockServerState } from '../server-state'
 import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
 import { authorizeClinic } from './vets'
 
@@ -69,20 +69,6 @@ function editAccess(state: MockServerState, clinicId: number, petId: number): Re
     (item) => item.pet_id === petId && item.status === 'completed' && clinicOf(state, item) === clinicId,
   )
   return completed ? null : HttpResponse.json({ detail: 'Нет завершённого приёма' }, { status: 403 })
-}
-
-/** Дела курса: каждое время каждого дня рецепта, кроме уже прошедшего (БП §6.2). Сами дела — этап 10. */
-function remindersCount(prescriptions: Prescription[], now: Date): number {
-  let count = 0
-  for (const prescription of prescriptions) {
-    for (let day = 0; day < prescription.duration_days; day += 1) {
-      const date = addDays(prescription.start_date, day)
-      for (const time of prescription.times) {
-        if (new Date(moscowDateTime(date, time)).getTime() > now.getTime()) count += 1
-      }
-    }
-  }
-  return count
 }
 
 const sorted = (times: string[]) => [...times].sort()
@@ -190,7 +176,8 @@ export const outcomeHandlers = [
         prescriptions,
         vaccinations,
       }
-      const reminders = remindersCount(prescriptions, now)
+      // Дела курса — каждое время каждого дня, кроме уже прошедшего (БП §6.2).
+      const reminders = prescriptions.reduce((sum, prescription) => sum + addCourseReminders(state, pet.id, prescription, now), 0)
       notifyOutcome(state, appointment, careStatusLabel[body.care_status as CareStatus], reminders)
       notifyPetUpdated(state, pet.id, clinicId, changes)
       return HttpResponse.json({ appointment: toAppointment(state, appointment), created_reminders: reminders })
