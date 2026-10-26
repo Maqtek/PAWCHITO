@@ -132,32 +132,47 @@ const ACCESS_TTL_SECONDS = 900
 const CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 const PASSWORD_ALPHABET = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'
 
+// Фабрики newAccount, newClinic, newVet, newAppointment и newCustomReminder перечисляют поля в порядке схемы ответа:
+// незаданные берутся по умолчанию, а JSON ответа остаётся прежним.
+
 type AccountFields = Pick<MockAccount, 'id' | 'email' | 'password' | 'role'> & Partial<MockAccount>
 
 /** Аккаунт: активен, без временного пароля и кода восстановления; full_name у клиники пустое (Р-35). */
-export function newAccount(fields: AccountFields): MockAccount {
+export function newAccount({ id, email, password, role, ...rest }: AccountFields): MockAccount {
   return {
+    id,
+    email,
+    password,
+    role,
     full_name: '',
     must_change_password: false,
     is_active: true,
     recovery_code: null,
     clinic_id: null,
-    ...fields,
+    ...rest,
   }
 }
 
 const seedAccount = (fields: Omit<AccountFields, 'password'>) => newAccount({ password: SEED_PASSWORD, ...fields })
 
 /** Клиника: не скрыта, будущих записей в счётчике seed нет. */
-export function newClinic(
-  fields: Pick<MockClinic, 'id' | 'name' | 'address' | 'phone' | 'opens_at' | 'closes_at' | 'work_days'> & Partial<MockClinic>,
-): MockClinic {
-  return { archived_at: null, futureAppointments: 0, ...fields }
+export function newClinic({
+  id,
+  name,
+  address,
+  phone,
+  opens_at,
+  closes_at,
+  work_days,
+  ...rest
+}: Pick<MockClinic, 'id' | 'name' | 'address' | 'phone' | 'opens_at' | 'closes_at' | 'work_days'> &
+  Partial<MockClinic>): MockClinic {
+  return { id, name, address, phone, opens_at, closes_at, work_days, archived_at: null, futureAppointments: 0, ...rest }
 }
 
 /** Врач: без специализации, не в отпуске, не в архиве. */
-export function newVet(fields: Pick<Vet, 'id' | 'clinic_id' | 'full_name'> & Partial<Vet>): Vet {
-  return { specialization: null, on_vacation: false, archived_at: null, ...fields }
+export function newVet({ id, clinic_id, full_name, ...rest }: Pick<Vet, 'id' | 'clinic_id' | 'full_name'> & Partial<Vet>): Vet {
+  return { id, clinic_id, full_name, specialization: null, on_vacation: false, archived_at: null, ...rest }
 }
 
 /** Новый питомец: без фото и статуса ухода — их ставит только клиника (БП §6.3, §6.4). */
@@ -240,16 +255,26 @@ function seedDay(days: number): string {
 }
 
 /** Запись: заявка без комментариев и итога. */
-export function newAppointment(
-  fields: Pick<MockAppointment, 'id' | 'pet_id' | 'vet_id' | 'slot_start' | 'reason'> & Partial<MockAppointment>,
-): MockAppointment {
+export function newAppointment({
+  id,
+  pet_id,
+  vet_id,
+  slot_start,
+  reason,
+  ...rest
+}: Pick<MockAppointment, 'id' | 'pet_id' | 'vet_id' | 'slot_start' | 'reason'> & Partial<MockAppointment>): MockAppointment {
   return {
+    id,
+    pet_id,
+    vet_id,
+    slot_start,
+    reason,
     reason_comment: null,
     status: 'requested',
     cancelled_by: null,
     clinic_comment: null,
     outcome: null,
-    ...fields,
+    ...rest,
   }
 }
 
@@ -306,17 +331,29 @@ function seedPrescription(): Prescription {
 }
 
 /** Своё дело: запланировано; серия с повтором — по первому делу, следующие получат его id (Р-61). */
-export function newCustomReminder(
-  fields: Pick<MockReminder, 'id' | 'pet_id' | 'title' | 'category' | 'due_at' | 'repeat_interval_days'> &
-    Partial<MockReminder>,
-): MockReminder {
+export function newCustomReminder({
+  id,
+  pet_id,
+  title,
+  category,
+  due_at,
+  repeat_interval_days,
+  ...rest
+}: Pick<MockReminder, 'id' | 'pet_id' | 'title' | 'category' | 'due_at' | 'repeat_interval_days'> &
+  Partial<MockReminder>): MockReminder {
   return {
+    id,
+    pet_id,
     source: 'custom',
     prescription_id: null,
+    title,
+    category,
+    due_at,
     status: 'pending',
     done_at: null,
-    series_id: fields.repeat_interval_days === null ? null : fields.id,
-    ...fields,
+    repeat_interval_days,
+    series_id: repeat_interval_days === null ? null : id,
+    ...rest,
   }
 }
 
