@@ -4,11 +4,11 @@ import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { conditionsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Condition } from '../../api/schema'
+import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { Badge, Button } from '../../components/ui'
 import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { ConditionFormModal } from './ConditionFormModal'
-import { ConfirmActionModal } from './ConfirmActionModal'
 import { refetchAfterFailure, storeRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
 
@@ -103,8 +103,9 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
       <ConfirmActionModal
         open={dialog.open && dialog.kind === 'archive'}
         title="Перенести в архив"
-        submit="В архив"
-        submitting="Переносим…"
+        submitLabel="В архив"
+        submittingLabel="Переносим…"
+        context="health"
         onConfirm={archive}
         onClose={() => closeDialog()}
       >

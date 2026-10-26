@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { Reminder, ReminderMarked } from '../../api/schema'
-import { ConfirmActionModal } from '../health/ConfirmActionModal'
+import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { deleteReminder, formatDue, markReminder, refetchReminders } from './reminder-actions'
 
 interface ReminderConfirmModalProps {
@@ -38,8 +38,8 @@ export function ReminderConfirmModal({ open, kind, reminder, today, onClose, onS
     <ConfirmActionModal
       open={open}
       title={kind === 'skip' ? 'Пропустить дело' : 'Удалить дело'}
-      submit={kind === 'skip' ? 'Пропустить' : 'Удалить'}
-      submitting={kind === 'skip' ? 'Отмечаем…' : 'Удаляем…'}
+      submitLabel={kind === 'skip' ? 'Пропустить' : 'Удалить'}
+      submittingLabel={kind === 'skip' ? 'Отмечаем…' : 'Удаляем…'}
       context="reminder"
       onConfirm={confirm}
       onClose={onClose}

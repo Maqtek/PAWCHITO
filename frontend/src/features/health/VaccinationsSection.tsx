@@ -4,11 +4,11 @@ import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { queryKeys, unwrap, vaccinationsQuery } from '../../api/queries'
 import type { Vaccination } from '../../api/schema'
+import { ConfirmActionModal } from '../../components/ConfirmActionModal'
 import { Badge, Button } from '../../components/ui'
 import { formatLongDate, moscowIsoDate } from '../../lib/format'
 import { dataSourceLabel } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
-import { ConfirmActionModal } from './ConfirmActionModal'
 import { refetchAfterFailure, storeRecord } from './health-cache'
 import { HealthSection } from './HealthSection'
 import { VaccinationFormModal } from './VaccinationFormModal'
@@ -109,8 +109,9 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
       <ConfirmActionModal
         open={dialog.open && dialog.kind === 'delete'}
         title="Удалить прививку"
-        submit="Удалить"
-        submitting="Удаляем…"
+        submitLabel="Удалить"
+        submittingLabel="Удаляем…"
+        context="health"
         onConfirm={remove}
         onClose={() => closeDialog()}
       >
