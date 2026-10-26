@@ -246,19 +246,21 @@ CI перегенерирует файл и падает, если он отли
 - `src/api/schema.ts` — типы по `docs/Контракты_Pawchito.md`. Когда бэкенд отдаст `openapi.json`, файл заменяется генерацией `openapi-typescript`.
 - `src/api/auth-token.ts` — access-токен, только в памяти (не в `localStorage`).
 - `src/api/session.ts` — сессия: refresh-cookie → токен до первого запроса, обмен по очереди между вкладками (`navigator.locks`), вход и выход во всех вкладках (`BroadcastChannel`), выход без сети доводится позже.
-- `src/api/client.ts` — клиент openapi-fetch: ждёт сессию, подставляет токен, на 401 обновляет его и повторяет запрос; не вышло — экран входа.
+- `src/api/client.ts` — клиент openapi-fetch: ждёт сессию, подставляет токен, на 401 обновляет его и повторяет запрос; не вышло — экран входа. Запросам, кроме GET, ставит таймаут — передавать `signal` в вызов не нужно.
 - `src/api/error-messages.ts` — тексты ошибок для форм и причин выхода.
 - `src/mocks/` — мок-сервер по контрактам (`server-state.ts`, `handlers/`); новый эндпоинт → тип в `schema.ts` + обработчик в `mocks/handlers`.
-- `src/components/ui/` — UI-кит; цвета и радиусы — только токены из `src/styles/index.css`.
+- `src/components/ui/` — UI-кит; цвета и радиусы — только токены из `src/styles/index.css`. Повторяющиеся блоки — тоже здесь: `LoadError` (не загрузилось, «Повторить»), `PageStatus` (строка статуса страницы), `SectionCard` (раздел в карточке с заголовком), `FormActions` (ошибка, «Отмена» и отправка в подвале формы).
+- `src/components/ConfirmActionModal.tsx` — окно подтверждения действия: архив, удаление, пропуск.
 - `src/lib/labels.ts` — подписи значений по глоссарию; в интерфейсе не пишем значения enum напрямую.
 - `src/app/navigation.ts` — разделы по ролям (бизнес-правила, §11).
-- `src/lib/use-form.ts` — хук форм: ошибки полей при отправке и дальше живьём, фокус на первое неверное поле, 422 по полям.
+- `src/lib/use-form.ts` — хук форм: ошибки полей при отправке и дальше живьём, фокус на первое неверное поле, 422 по полям; `onBusyChange` не даёт закрыть окно, пока идёт запрос.
+- `src/lib/use-focus-after-render.ts` — фокус на список или заголовок после рендера, когда кнопка, открывшая окно, пропала вместе с записью.
 - `src/features/auth/` — проверки полей авторизации, экран кода восстановления, форма смены пароля; `src/pages/auth/` — вход, регистрация, восстановление, смена временного пароля.
 - `src/features/profile/` — имя на месте и модалки профиля (смена пароля, новый код восстановления).
 - `src/features/admin/` — форма клиники, секции страницы клиники, временный пароль; `src/pages/admin/` — список и страница клиники.
 - `src/features/vets/` — карточка врача с отпуском, форма врача, подтверждение архива и возврата; `src/pages/clinic/ClinicVetsPage.tsx` — врачи клиники.
 - `src/features/pets/` — выбранный питомец, карточка в списке, форма питомца, подтверждение архива; `src/pages/owner/PetsPage.tsx` — питомцы владельца.
-- `src/features/health/` — разделы «Истории» (особенности, дневник, прививки), их формы и подтверждение; `src/pages/owner/HistoryPage.tsx` — история выбранного питомца.
+- `src/features/health/` — разделы «Истории» (особенности, дневник, прививки) и их формы; `src/pages/owner/HistoryPage.tsx` — история выбранного питомца.
 - `src/features/appointments/` — мастер записи, карточка записи, подтверждение отмены; `src/pages/owner/` — `AppointmentsPage` (мои записи), `NewAppointmentPage`, `AppointmentPage`. Даты по Москве — `src/lib/dates.ts`.
 - `src/features/clinic-appointments/` — запись в кабинете клиники, отмена с комментарием; `src/pages/clinic/` — `ClinicAppointmentsPage` и карточка `ClinicPetPage`.
 - `src/features/notifications/` — список уведомлений в выпадающей панели колокольчика (`src/layouts/NotificationBell.tsx`); тексты и ссылки уведомлений моков — `src/mocks/notification-texts.ts`.
