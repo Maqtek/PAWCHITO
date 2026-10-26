@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { CalendarAppointmentEvent } from '../../api/schema'
 import { Badge, buttonClass } from '../../components/ui'
 import { appointmentStatusLabel, appointmentStatusTone, eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
-import { formatDue } from '../reminders/reminder-actions'
+import { formatDue } from './due'
 
 interface AppointmentEventItemProps {
   event: CalendarAppointmentEvent

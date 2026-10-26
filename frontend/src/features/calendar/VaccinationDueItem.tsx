@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import type { CalendarVaccinationEvent } from '../../api/schema'
 import { Badge, buttonClass } from '../../components/ui'
 import { eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
-import { formatDueDay } from './calendar-event'
+import { formatDueDay } from './due'
 
 interface VaccinationDueItemProps {
   event: CalendarVaccinationEvent

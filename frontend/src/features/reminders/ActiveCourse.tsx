@@ -7,9 +7,10 @@ import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from 
 import { formatDayDate, formatShortDate, formatTime, NBSP, pluralize } from '../../lib/format'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
+import { dueDay, formatDue } from '../calendar/due'
 import { progressText, type Course } from './course'
 import { MarkActions } from './MarkActions'
-import { canMark, dueDay, formatDue, markedMessage } from './reminder-actions'
+import { canMark, markedMessage } from './reminder-actions'
 import { ReminderConfirmModal } from './ReminderConfirmModal'
 
 interface ActiveCourseProps {
@@ -22,7 +23,7 @@ interface ActiveCourseProps {
 function groupByDay(reminders: Reminder[]): [string, Reminder[]][] {
   const days = new Map<string, Reminder[]>()
   for (const reminder of reminders) {
-    const day = dueDay(reminder)
+    const day = dueDay(reminder.due_at)
     days.set(day, [...(days.get(day) ?? []), reminder])
   }
   return [...days]
@@ -51,7 +52,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
     const progress = { total: all.length, done: count('done'), skipped: count('skipped') }
     // Показываем с сегодняшнего дня или с первой неотмеченной дозы, если она раньше.
     const firstPending = all.find((item) => item.status === 'pending')
-    const from = firstPending && dueDay(firstPending) < today ? dueDay(firstPending) : today
+    const from = firstPending && dueDay(firstPending.due_at) < today ? dueDay(firstPending.due_at) : today
     const grouped = groupByDay(all)
     const past = grouped.filter(([day]) => day < from)
     const visible = showPast ? grouped : grouped.filter(([day]) => day >= from)
@@ -68,7 +69,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
           {visible.map(([day, doses]) => (
             <li key={day} className="rounded-xl border border-line p-3">
               <p className="text-sm font-bold first-letter:uppercase">
-                {formatDayDate(new Date(`${day}T12:00:00+03:00`))}
+                {formatDayDate(day)}
                 {day === today && ' · сегодня'}
               </p>
               <ul className="mt-2 flex flex-col gap-2">

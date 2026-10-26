@@ -6,7 +6,8 @@ import { Badge, Card, EmptyState, linkClass } from '../../components/ui'
 import { eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { MarkActions } from '../reminders/MarkActions'
-import { formatDue, markedMessage, scheduleLabel } from '../reminders/reminder-actions'
+import { formatDue } from '../calendar/due'
+import { markedMessage, scheduleLabel } from '../reminders/reminder-actions'
 import { ReminderConfirmModal } from '../reminders/ReminderConfirmModal'
 
 interface TodayRemindersProps {

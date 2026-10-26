@@ -1,7 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query'
 import type { Reminder, ReminderMarked } from '../../api/schema'
 import { ConfirmActionModal } from '../../components/ConfirmActionModal'
-import { deleteReminder, formatDue, markReminder, refetchReminders } from './reminder-actions'
+import { formatDue } from '../calendar/due'
+import { deleteReminder, markReminder, refetchReminders } from './reminder-actions'
 
 interface ReminderConfirmModalProps {
   open: boolean

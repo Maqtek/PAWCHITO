@@ -31,14 +31,14 @@ export function moscowIsoDate(date: Date): string {
   return [String(year).padStart(4, '0'), String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-')
 }
 
-/** «среда, 17 июня» по московскому времени. */
-export function formatDayDate(date: Date): string {
+/** «среда, 17 июня» по московскому времени: момент или дата «YYYY-MM-DD». */
+export function formatDayDate(value: string | Date): string {
   return new Intl.DateTimeFormat(LOCALE, {
     timeZone: TIME_ZONE,
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-  }).format(date)
+  }).format(new Date(value))
 }
 
 /** «10 октября» по московскому времени. */

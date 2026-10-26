@@ -3,7 +3,7 @@ import { useId } from 'react'
 import type { Reminder, ReminderMarked } from '../../api/schema'
 import { Badge, Button } from '../../components/ui'
 import { eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
-import { formatDueWithYear } from '../calendar/calendar-event'
+import { formatDueWithYear } from '../calendar/due'
 import { MarkActions } from './MarkActions'
 import { canMark, scheduleLabel } from './reminder-actions'
 

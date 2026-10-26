@@ -2,9 +2,8 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Reminder, ReminderMarked } from '../../api/schema'
-import { addDays, moscowLocal } from '../../lib/dates'
-import { formatTime, NBSP, pluralize } from '../../lib/format'
-import { formatSlot } from '../appointments/format'
+import { NBSP, pluralize } from '../../lib/format'
+import { dueDay, formatDue } from '../calendar/due'
 
 /** Отметка дела: следующее дело серии сервер создаёт сам (Р-61). */
 export function markReminder(id: number, action: 'done' | 'skip'): Promise<ReminderMarked> {
@@ -24,19 +23,8 @@ export function refetchReminders(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.reminders })
 }
 
-/** День дела по Москве, «YYYY-MM-DD». */
-export const dueDay = (reminder: Pick<Reminder, 'due_at'>) => moscowLocal(new Date(reminder.due_at)).date
-
 /** Отметить можно дело на сегодня или просроченное (Р-61). */
-export const canMark = (reminder: Reminder, today: string) => reminder.status === 'pending' && dueDay(reminder) <= today
-
-/** «сегодня, 18:00», «завтра, 21:00», иначе «пятница, 30 октября, 10:00». */
-export function formatDue(dueAt: string, today: string): string {
-  const day = moscowLocal(new Date(dueAt)).date
-  if (day === today) return `сегодня, ${formatTime(dueAt)}`
-  if (day === addDays(today, 1)) return `завтра, ${formatTime(dueAt)}`
-  return formatSlot(dueAt)
-}
+export const canMark = (reminder: Reminder, today: string) => reminder.status === 'pending' && dueDay(reminder.due_at) <= today
 
 /** «Каждый день», «Раз в 7 дней» (БП §7). */
 export function repeatLabel(days: number): string {
