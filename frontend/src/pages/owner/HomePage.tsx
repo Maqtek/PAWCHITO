@@ -1,37 +1,22 @@
 import { useQuery } from '@tanstack/react-query'
-import { CloudOff, PawPrint, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { meQuery } from '../../api/queries'
-import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
+import { buttonClass, PageStatus } from '../../components/ui'
 import { PetSummary } from '../../features/home/PetSummary'
+import { PetRequired } from '../../features/pets/PetRequired'
+import { usePetStatus } from '../../features/pets/usePetStatus'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { displayName, formatDayDate, greeting } from '../../lib/format'
 
 export function HomePage() {
   const { data: user } = useQuery(meQuery)
-  const { pet, isPending, isError, refetch } = useSelectedPet()
+  const { pet } = useSelectedPet()
   // Время фиксируется при открытии страницы: рендер должен быть чистым.
   const [now] = useState(() => new Date())
-  // Сообщение относится к питомцу, при котором его показали: после переключения оно не висит над чужими делами.
-  const [status, setStatus] = useState<{ petId: number; text: string } | null>(null)
-
-  function content() {
-    if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) return <LoadError icon={CloudOff} title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
-    if (!pet) {
-      return (
-        <EmptyState
-          icon={PawPrint}
-          title="Добавьте первого питомца"
-          description="Здесь появятся его карточка, статус ухода, дела на сегодня и ближайшая запись к врачу."
-        />
-      )
-    }
-    // key: при смене питомца сводка начинает с чистого листа — без чужих открытых окон.
-    return <PetSummary key={pet.id} pet={pet} now={now} onStatus={(text) => setStatus({ petId: pet.id, text })} />
-  }
+  const [status, showStatus] = usePetStatus(pet?.id)
 
   return (
     <>
@@ -46,8 +31,18 @@ export function HomePage() {
           </Link>
         }
       />
-      <PageStatus message={status && status.petId === pet?.id ? status.text : ''} />
-      {content()}
+      <PageStatus message={status} />
+      {/*
+        Ссылка «Добавить питомца» — в шапке страницы.
+        key: при смене питомца сводка начинает с чистого листа — без чужих открытых окон.
+      */}
+      <PetRequired
+        emptyTitle="Добавьте первого питомца"
+        description="Здесь появятся его карточка, статус ухода, дела на сегодня и ближайшая запись к врачу."
+        hideAddLink
+      >
+        {(pet) => <PetSummary key={pet.id} pet={pet} now={now} onStatus={showStatus} />}
+      </PetRequired>
     </>
   )
 }

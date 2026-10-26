@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { CalendarPlus, ClipboardList, PawPrint } from 'lucide-react'
+import { CalendarPlus, ClipboardList } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { petAppointmentsQuery } from '../../api/queries'
@@ -8,6 +8,7 @@ import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../c
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { AppointmentCard } from '../../features/appointments/AppointmentCard'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
+import { PetRequired } from '../../features/pets/PetRequired'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
@@ -26,28 +27,7 @@ const bookLink = (
 )
 
 export function AppointmentsPage() {
-  const { pet, isPending: petsPending, isError: petsError, refetch: refetchPets } = useSelectedPet()
-
-  function content() {
-    if (petsPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && petsError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetchPets()} />
-    if (!pet) {
-      return (
-        <EmptyState
-          icon={PawPrint}
-          title="Сначала добавьте питомца"
-          description="Запись к врачу делается для конкретного питомца."
-          action={
-            <Link to="/pets" className={buttonClass()}>
-              Добавить питомца
-            </Link>
-          }
-        />
-      )
-    }
-    // key: при смене питомца список и окно начинают с чистого листа.
-    return <PetAppointments key={pet.id} petId={pet.id} petName={pet.name} />
-  }
+  const { pet } = useSelectedPet()
 
   return (
     <>
@@ -57,7 +37,10 @@ export function AppointmentsPage() {
         description={pet ? `Записи питомца ${pet.name}: предстоящие и прошедшие.` : 'Запись в клинику и ваши записи.'}
         actions={pet ? bookLink : undefined}
       />
-      {content()}
+      {/* key: при смене питомца список и окно начинают с чистого листа. */}
+      <PetRequired description="Запись к врачу делается для конкретного питомца.">
+        {(pet) => <PetAppointments key={pet.id} petId={pet.id} petName={pet.name} />}
+      </PetRequired>
     </>
   )
 }

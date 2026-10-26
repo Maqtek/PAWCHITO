@@ -1,43 +1,14 @@
-import { ArrowLeft, PawPrint } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
-import { buttonClass, EmptyState, linkClass, LoadError, Spinner } from '../../components/ui'
+import { linkClass } from '../../components/ui'
 import { BookingWizard } from '../../features/appointments/BookingWizard'
+import { PetRequired } from '../../features/pets/PetRequired'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 
 export function NewAppointmentPage() {
-  const { pets, pet, isPending, isError, refetch } = useSelectedPet()
+  const { pets } = useSelectedPet()
   const navigate = useNavigate()
-
-  function content() {
-    if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
-    if (!pet) {
-      return (
-        <EmptyState
-          icon={PawPrint}
-          title="Сначала добавьте питомца"
-          description="Запись к врачу делается для конкретного питомца."
-          action={
-            <Link to="/pets" className={buttonClass()}>
-              Добавить питомца
-            </Link>
-          }
-        />
-      )
-    }
-    return (
-      <BookingWizard
-        pets={pets}
-        selectedPetId={pet.id}
-        onBooked={(appointment) =>
-          navigate(`/appointments/${appointment.id}`, {
-            state: { status: 'Заявка отправлена. Клиника подтвердит запись — статус появится здесь.' },
-          })
-        }
-      />
-    )
-  }
 
   return (
     <>
@@ -48,7 +19,19 @@ export function NewAppointmentPage() {
           Все записи
         </Link>
       </div>
-      {content()}
+      <PetRequired description="Запись к врачу делается для конкретного питомца.">
+        {(pet) => (
+          <BookingWizard
+            pets={pets}
+            selectedPetId={pet.id}
+            onBooked={(appointment) =>
+              navigate(`/appointments/${appointment.id}`, {
+                state: { status: 'Заявка отправлена. Клиника подтвердит запись — статус появится здесь.' },
+              })
+            }
+          />
+        )}
+      </PetRequired>
     </>
   )
 }

@@ -1,47 +1,16 @@
-import { PawPrint } from 'lucide-react'
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { buttonClass, EmptyState, LoadError, PageStatus, Spinner } from '../../components/ui'
+import { PageStatus } from '../../components/ui'
 import { ConditionsSection } from '../../features/health/ConditionsSection'
 import { DiarySection } from '../../features/health/DiarySection'
 import { VaccinationsSection } from '../../features/health/VaccinationsSection'
+import { PetRequired } from '../../features/pets/PetRequired'
+import { usePetStatus } from '../../features/pets/usePetStatus'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { TimelineSection } from '../../features/timeline/TimelineSection'
 import { PageHeader } from '../../layouts/PageHeader'
 
 export function HistoryPage() {
-  const { pet, isPending, isError, refetch } = useSelectedPet()
-  // Сообщение относится к питомцу, при котором его показали: после переключения оно не висит над чужими записями.
-  const [status, setStatus] = useState<{ petId: number; text: string } | null>(null)
-
-  function content() {
-    if (isPending) return <Spinner label="Загружаем питомцев" />
-    if (!pet && isError) return <LoadError title="Не удалось загрузить питомцев" onRetry={() => void refetch()} />
-    if (!pet) {
-      return (
-        <EmptyState
-          icon={PawPrint}
-          title="Сначала добавьте питомца"
-          description="История ведётся для каждого питомца отдельно."
-          action={
-            <Link to="/pets" className={buttonClass()}>
-              Добавить питомца
-            </Link>
-          }
-        />
-      )
-    }
-    const onStatus = (text: string) => setStatus({ petId: pet.id, text })
-    return (
-      // key: при смене питомца разделы начинают с чистого листа — без чужих открытых окон.
-      <div key={pet.id} className="flex flex-col gap-4">
-        <ConditionsSection petId={pet.id} onStatus={onStatus} />
-        <DiarySection petId={pet.id} onStatus={onStatus} />
-        <VaccinationsSection petId={pet.id} onStatus={onStatus} />
-        <TimelineSection petId={pet.id} />
-      </div>
-    )
-  }
+  const { pet } = useSelectedPet()
+  const [status, showStatus] = usePetStatus(pet?.id)
 
   return (
     <>
@@ -54,8 +23,20 @@ export function HistoryPage() {
             : 'Особенности здоровья, дневник, прививки и лента истории питомца.'
         }
       />
-      <PageStatus message={status && status.petId === pet?.id ? status.text : ''} />
-      <div className="max-w-3xl">{content()}</div>
+      <PageStatus message={status} />
+      <div className="max-w-3xl">
+        {/* key: при смене питомца разделы начинают с чистого листа — без чужих открытых окон. */}
+        <PetRequired description="История ведётся для каждого питомца отдельно.">
+          {(pet) => (
+            <div key={pet.id} className="flex flex-col gap-4">
+              <ConditionsSection petId={pet.id} onStatus={showStatus} />
+              <DiarySection petId={pet.id} onStatus={showStatus} />
+              <VaccinationsSection petId={pet.id} onStatus={showStatus} />
+              <TimelineSection petId={pet.id} />
+            </div>
+          )}
+        </PetRequired>
+      </div>
     </>
   )
 }
