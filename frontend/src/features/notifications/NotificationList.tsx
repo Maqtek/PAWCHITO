@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
-import { notificationsQuery, unwrap } from '../../api/queries'
+import { notificationsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Notification } from '../../api/schema'
 import { Button, FormAlert, Spinner } from '../../components/ui'
 import { cn } from '../../lib/cn'
@@ -19,7 +19,7 @@ export function NotificationList({ onClose }: { onClose: () => void }) {
 
   /** Список и счётчик в шапке — под общим ключом ['notifications']. */
   function refresh() {
-    void queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.allNotifications })
   }
 
   // Переход по уведомлению отмечает его прочитанным; переход не ждёт ответа — отметку подхватит следующий опрос.

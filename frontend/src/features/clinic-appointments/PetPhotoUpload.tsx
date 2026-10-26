@@ -5,7 +5,7 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { outcomeLimits } from '../../api/limits'
-import { unwrap } from '../../api/queries'
+import { queryKeys, unwrap } from '../../api/queries'
 import { buttonClass, FormAlert } from '../../components/ui'
 
 const ACCEPTED = ['image/jpeg', 'image/png', 'image/webp']
@@ -50,7 +50,7 @@ export function PetPhotoUpload({ petId, onStatus }: { petId: number; onStatus: (
       )
     } finally {
       setUploading(false)
-      void queryClient.invalidateQueries({ queryKey: ['clinic', 'pets', petId] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.clinicPet(petId) })
     }
   }
 

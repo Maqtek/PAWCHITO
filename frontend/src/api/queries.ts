@@ -32,16 +32,22 @@ export const queryKeys = {
   bookingClinics: ['booking', 'clinics'] as const,
   bookingVets: (clinicId: number) => ['booking', 'clinics', clinicId, 'vets'] as const,
   slots: (vetId: number, date: string) => ['booking', 'slots', vetId, date] as const,
+  // Слоты всех врачей и дат: новая запись занимает время, отмена освобождает.
+  allSlots: ['booking', 'slots'] as const,
   // Под общим ['appointments']: отмена или новая запись перечитывает и список, и карточку.
   appointments: ['appointments'] as const,
   petAppointments: (petId: number) => ['appointments', 'pet', petId] as const,
   appointment: (id: number) => ['appointments', id] as const,
   // Под общим ['notifications']: отметка прочитанным перечитывает и список, и счётчик в шапке.
   notifications: ['notifications', 'list'] as const,
+  // Всё об уведомлениях: список, уведомления главной и счётчик в шапке.
+  allNotifications: ['notifications'] as const,
   // Под общим ['clinic', 'appointments']: подтверждение или отмена перечитывает все вкладки.
   clinicAppointments: ['clinic', 'appointments'] as const,
   clinicAppointmentsFiltered: (filters: ClinicAppointmentFilters) => ['clinic', 'appointments', filters] as const,
   clinicPet: (petId: number) => ['clinic', 'pets', petId] as const,
+  // Карточки всех питомцев клиники: доступ к ним зависит от записей (Р-54).
+  allClinicPets: ['clinic', 'pets'] as const,
   clinicPetObservations: (petId: number) => ['clinic', 'pets', petId, 'observations'] as const,
   // Под общим ['reminders']: отметка, новое дело или удаление перечитывает «Дела», «Курс лечения» и прогресс курсов.
   reminders: ['reminders'] as const,
@@ -208,13 +214,13 @@ export const clinicAppointmentsQuery = (filters: ClinicAppointmentFilters) =>
 export const clinicPetQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.clinicPet(petId),
-    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}', { params: { path: { pet_id: petId } } })),
+    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}', petPath(petId))),
   })
 
 export const clinicPetObservationsQuery = (petId: number) =>
   queryOptions({
     queryKey: queryKeys.clinicPetObservations(petId),
-    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}/observations', { params: { path: { pet_id: petId } } })),
+    queryFn: () => unwrap(api.GET('/clinic/pets/{pet_id}/observations', petPath(petId))),
   })
 
 /** Дела по плановому времени, от ранних к поздним (Р-60). */

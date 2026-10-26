@@ -20,7 +20,7 @@ export function storeAppointment(queryClient: QueryClient, appointment: Appointm
 /** Запрос упал или не дождался ответа, а на сервере изменение могло примениться — перечитываем записи и слоты. */
 export function refetchAppointments(queryClient: QueryClient): void {
   void queryClient.invalidateQueries({ queryKey: queryKeys.appointments })
-  void queryClient.invalidateQueries({ queryKey: ['booking', 'slots'] })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.allSlots })
 }
 
 /** Отменить может только владелец и только до начала приёма (Р-48). */

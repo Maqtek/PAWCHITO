@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../../api/client'
-import { latestNotificationsQuery } from '../../api/queries'
+import { latestNotificationsQuery, queryKeys } from '../../api/queries'
 import type { Notification } from '../../api/schema'
 import { Button, Card, Spinner } from '../../components/ui'
 import { cn } from '../../lib/cn'
@@ -22,7 +22,7 @@ export function LatestNotifications() {
     if (notification.read_at !== null) return
     void api
       .POST('/notifications/{id}/read', { params: { path: { id: notification.id } } })
-      .finally(() => void queryClient.invalidateQueries({ queryKey: ['notifications'] }))
+      .finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.allNotifications }))
   }
 
   function content() {
