@@ -50,6 +50,23 @@ export function formatShortDate(value: string | Date): string {
   }).format(new Date(value))
 }
 
+/** «10 октября 2026» для даты «YYYY-MM-DD»: записи здоровья бывают и за прошлые годы. */
+export function formatLongDate(value: string): string {
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TIME_ZONE,
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+    .format(new Date(value))
+    .replace(/\s*г\.$/, '')
+}
+
+/** «4,2 кг» — вес из дневника. */
+export function formatWeight(kg: number): string {
+  return `${new Intl.NumberFormat(LOCALE, { maximumFractionDigits: 2 }).format(kg)}${NBSP}кг`
+}
+
 /** «20:00» по московскому времени. */
 export function formatTime(value: string | Date): string {
   return new Intl.DateTimeFormat(LOCALE, {

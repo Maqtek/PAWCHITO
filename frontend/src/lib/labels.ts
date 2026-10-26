@@ -1,4 +1,14 @@
-import type { AppointmentStatus, CareStatus, EventCategory, Role, Sex, Species } from '../api/schema'
+import type {
+  AppointmentStatus,
+  CareStatus,
+  ConditionKind,
+  DataSource,
+  EventCategory,
+  Level,
+  Role,
+  Sex,
+  Species,
+} from '../api/schema'
 
 /** Цветовая пара из токенов макета. */
 export type Tone = 'mint' | 'butter' | 'blush' | 'sky' | 'lilac' | 'coral' | 'neutral'
@@ -19,6 +29,23 @@ export const sexLabel: Record<Sex, string> = {
   male: 'Мальчик',
   female: 'Девочка',
   unknown: 'Не указан',
+}
+
+export const conditionKindLabel: Record<ConditionKind, string> = {
+  allergy: 'Аллергия',
+  chronic: 'Хроническое заболевание',
+}
+
+/** Аппетит и энергия в дневнике (БП §3: снижен / норма / повышен): одна подпись подходит к обоим словам. */
+export const levelLabel: Record<Level, string> = {
+  low: 'Ниже обычного',
+  normal: 'Как обычно',
+  high: 'Выше обычного',
+}
+
+export const dataSourceLabel: Record<DataSource, string> = {
+  owner: 'Внесено вами',
+  clinic: 'Внесено клиникой',
 }
 
 export const careStatusOrder: CareStatus[] = ['routine', 'attention', 'treatment', 'recovery', 'prevention']
