@@ -178,10 +178,20 @@ describe('VetFormModal: изменение', () => {
   })
 
   it('врач не найден (404) — текст ошибки и перечитанный список', async () => {
-    server.use(http.patch('*/api/clinic/vets/:id', () => HttpResponse.json({ detail: 'Врач не найден' }, { status: 404 })))
+    server.use(
+      http.patch('*/api/clinic/vets/:id', () => {
+        // Врача уже нет у клиники — например, его убрали в другой вкладке.
+        updateServer((state) => {
+          state.vets = state.vets.filter((vet) => vet.id !== 4)
+        })
+        return HttpResponse.json({ detail: 'Врач не найден' }, { status: 404 })
+      }),
+    )
     const { user, dialog } = renderForm(seedVet(4))
+    await vi.waitFor(() => expect(screen.getByTestId('list')).toHaveTextContent('Петров Павел Петрович'))
     await user.type(within(dialog).getByLabelText('ФИО'), ' мл.')
     await user.click(within(dialog).getByRole('button', { name: 'Сохранить' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Врач не найден. Список врачей обновлён.')
+    await vi.waitFor(() => expect(screen.getByTestId('list')).not.toHaveTextContent('Петров Павел Петрович'))
   })
 })

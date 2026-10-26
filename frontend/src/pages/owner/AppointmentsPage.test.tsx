@@ -79,13 +79,29 @@ describe('AppointmentsPage', () => {
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Запись уже нельзя отменить')
   })
 
-  it('у питомца без записей — приглашение записаться', async () => {
+  it('смена питомца в переключателе — записи другого питомца', async () => {
     const { user } = renderWithProviders(<AppRoutes />, { route: '/appointments' })
     await screen.findByRole('region', { name: 'Предстоящие' })
     await user.click(screen.getByRole('button', { name: /^Питомец: Майло/ }))
     await user.click(screen.getByRole('button', { name: /Барсик/ }))
     // У Барсика одна заявка на завтра.
     expect(await screen.findByRole('article', { name: 'четверг, 29 октября, 09:00' })).toBeInTheDocument()
+  })
+
+  it('у питомца без записей — приглашение записаться', async () => {
+    updateServer((state) => {
+      state.appointments = state.appointments.filter((item) => item.pet_id !== 11)
+    })
+    localStorage.setItem('pawchito:selected-pet-id', '11')
+    renderWithProviders(<AppRoutes />, { route: '/appointments' })
+    expect(await screen.findByRole('heading', { name: 'Записей пока нет' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Запишите питомца Барсик к врачу — клиника подтвердит запись, а статус появится здесь.'),
+    ).toBeInTheDocument()
+    // Вторая такая же ссылка — в шапке страницы: обе ведут в мастер записи.
+    for (const link of screen.getAllByRole('link', { name: 'Записаться к врачу' })) {
+      expect(link).toHaveAttribute('href', '/appointments/new')
+    }
   })
 })
 
