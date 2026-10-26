@@ -5,7 +5,6 @@ import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Condition, ConditionCreate, ConditionKind, ConditionUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
 import { conditionKindLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
@@ -93,17 +92,15 @@ function ConditionForm({ petId, condition, onSaved, onCancel, onBusyChange }: Co
       }
       onBusyChange(true)
       try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         const request =
           baseline && update
             ? unwrap(
                 api.PATCH('/pets/{pet_id}/conditions/{id}', {
                   params: { path: { pet_id: petId, id: baseline.id } },
                   body: update,
-                  signal,
                 }),
               )
-            : unwrap(api.POST('/pets/{pet_id}/conditions', { params: { path: { pet_id: petId } }, body: payload, signal }))
+            : unwrap(api.POST('/pets/{pet_id}/conditions', { params: { path: { pet_id: petId } }, body: payload }))
         const saved = await request.catch((error: unknown) => {
           refetchAfterFailure(queryClient, queryKey)
           throw error

@@ -7,7 +7,6 @@ import { ApiError } from '../../api/errors'
 import { appointmentLimits } from '../../api/limits'
 import { bookingClinicsQuery, bookingVetsQuery, slotsQuery, unwrap } from '../../api/queries'
 import type { Appointment, AppointmentReason, Clinic, Pet, Slot, Vet } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import {
   Button,
   EmptyState,
@@ -355,7 +354,6 @@ function DetailsStep({ clinic, vet, slot, pets, selectedPetId, onBack, onConflic
               reason: values.reason as AppointmentReason,
               reason_comment: comment === '' ? null : comment,
             },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
         storeAppointment(queryClient, created)

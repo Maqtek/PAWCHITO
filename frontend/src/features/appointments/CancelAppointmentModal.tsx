@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { api } from '../../api/client'
 import { unwrap } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchAppointments, storeAppointment } from './appointment-cache'
@@ -45,11 +44,9 @@ function CancelConfirm({ appointment, onBusyChange, onCancel, onDone }: CancelCo
     onSubmit: async () => {
       onBusyChange(true)
       try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
         const cancelled = await unwrap(
           api.POST('/appointments/{id}/cancel', {
             params: { path: { id: appointment.id } },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         ).catch((error: unknown) => {
           refetchAppointments(queryClient)

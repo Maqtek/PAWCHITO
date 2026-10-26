@@ -6,7 +6,6 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { unwrap } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button, FormAlert, linkClass } from '../../components/ui'
 import { appointmentReasonLabel, appointmentStatusLabel, appointmentStatusTone, cancelledByLabel } from '../../lib/labels'
 import { formatSlot } from '../appointments/format'
@@ -63,7 +62,6 @@ export function ClinicAppointmentCard({
       await unwrap(
         api.POST('/clinic/appointments/{id}/confirm', {
           params: { path: { id: appointment.id } },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
       onStatus(`Запись подтверждена: ${appointment.pet.name}, ${when}. Владелец получит уведомление.`)

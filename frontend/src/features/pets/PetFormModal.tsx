@@ -5,7 +5,6 @@ import { validationMessages } from '../../api/error-messages'
 import { petLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Pet, PetCreate, PetUpdate, Sex, Species } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, SelectField, TextField, type SelectOption } from '../../components/ui'
 import { moscowIsoDate } from '../../lib/format'
 import { sexLabel, speciesLabel } from '../../lib/labels'
@@ -112,11 +111,10 @@ function PetForm({ pet, onSaved, onCancel, onBusyChange }: PetFormProps) {
       }
       onBusyChange(true)
       try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         const request =
           baseline && update
-            ? unwrap(api.PATCH('/pets/{pet_id}', { params: { path: { pet_id: baseline.id } }, body: update, signal }))
-            : unwrap(api.POST('/pets', { body: payload, signal }))
+            ? unwrap(api.PATCH('/pets/{pet_id}', { params: { path: { pet_id: baseline.id } }, body: update }))
+            : unwrap(api.POST('/pets', { body: payload }))
         const saved = await request.catch((error: unknown) => {
           refetchPetsAfterFailure(queryClient)
           throw error

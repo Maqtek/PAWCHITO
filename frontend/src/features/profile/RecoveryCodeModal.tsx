@@ -4,7 +4,6 @@ import { errorMessage, validationMessages } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, PasswordField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { RecoveryCodeScreen } from '../auth/RecoveryCodeScreen'
@@ -58,11 +57,9 @@ function ConfirmPasswordForm({ onIssued, onBusyChange, onCancel }: ConfirmPasswo
     onSubmit: async ({ current_password }) => {
       onBusyChange(true)
       try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
         const result = await unwrap(
           api.POST('/users/me/recovery-code', {
             body: { current_password },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
         onIssued(result.recovery_code)

@@ -5,7 +5,6 @@ import { validationMessages } from '../../api/error-messages'
 import { appointmentLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Appointment } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, TextareaField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { formatSlot } from '../appointments/format'
@@ -53,7 +52,6 @@ function CancelForm({ appointment, onBusyChange, onCancel, onDone }: CancelFormP
           api.POST('/clinic/appointments/{id}/cancel', {
             params: { path: { id: appointment.id } },
             body: { comment: comment.trim() },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         ).finally(() => refetchClinicAppointments(queryClient))
         onDone(cancelled)

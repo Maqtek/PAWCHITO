@@ -4,7 +4,6 @@ import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { queryKeys, unwrap, vaccinationsQuery } from '../../api/queries'
 import type { Vaccination } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button } from '../../components/ui'
 import { formatLongDate, moscowIsoDate } from '../../lib/format'
 import { dataSourceLabel } from '../../lib/labels'
@@ -57,7 +56,6 @@ export function VaccinationsSection({ petId, onStatus }: VaccinationsSectionProp
     await unwrap(
       api.DELETE('/pets/{pet_id}/vaccinations/{id}', {
         params: { path: { pet_id: petId, id: dialogVaccination.id } },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       }),
     ).catch((error: unknown) => {
       refetchAfterFailure(queryClient, queryKey)

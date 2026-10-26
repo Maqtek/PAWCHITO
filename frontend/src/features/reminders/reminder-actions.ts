@@ -2,19 +2,18 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { queryKeys, unwrap } from '../../api/queries'
 import type { Reminder, ReminderMarked } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { addDays, moscowLocal } from '../../lib/dates'
 import { formatTime, NBSP, pluralize } from '../../lib/format'
 import { formatSlot } from '../appointments/format'
 
 /** Отметка дела: следующее дело серии сервер создаёт сам (Р-61). */
 export function markReminder(id: number, action: 'done' | 'skip'): Promise<ReminderMarked> {
-  const options = { params: { path: { id } }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }
+  const options = { params: { path: { id } } }
   return unwrap(action === 'done' ? api.POST('/reminders/{id}/done', options) : api.POST('/reminders/{id}/skip', options))
 }
 
 export function deleteReminder(id: number): Promise<void> {
-  return unwrap(api.DELETE('/reminders/{id}', { params: { path: { id } }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
+  return unwrap(api.DELETE('/reminders/{id}', { params: { path: { id } } }))
 }
 
 /**

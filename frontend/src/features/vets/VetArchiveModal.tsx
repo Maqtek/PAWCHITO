@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { api } from '../../api/client'
 import { unwrap } from '../../api/queries'
 import type { Vet } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchVetsAfterFailure, storeVet } from './vet-cache'
@@ -51,13 +50,11 @@ function ArchiveConfirm({ action, vet, onBusyChange, onCancel, onDone }: Archive
     onSubmit: async () => {
       onBusyChange(true)
       try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
         const params = { path: { id: vet.id } }
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         const saved = await unwrap(
           action === 'archive'
-            ? api.POST('/clinic/vets/{id}/archive', { params, signal })
-            : api.POST('/clinic/vets/{id}/restore', { params, signal }),
+            ? api.POST('/clinic/vets/{id}/archive', { params })
+            : api.POST('/clinic/vets/{id}/restore', { params }),
         ).catch((error: unknown) => {
           refetchVetsAfterFailure(queryClient)
           throw error

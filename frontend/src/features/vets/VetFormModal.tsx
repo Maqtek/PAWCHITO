@@ -5,7 +5,6 @@ import { validationMessages } from '../../api/error-messages'
 import { vetLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchVetsAfterFailure, storeVet } from './vet-cache'
@@ -74,11 +73,10 @@ function VetForm({ vet, onSaved, onCancel, onBusyChange }: VetFormProps) {
       }
       onBusyChange(true)
       try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         const request =
           baseline && update
-            ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
-            : unwrap(api.POST('/clinic/vets', { body: payload, signal }))
+            ? unwrap(api.PATCH('/clinic/vets/{id}', { params: { path: { id: baseline.id } }, body: update }))
+            : unwrap(api.POST('/clinic/vets', { body: payload }))
         const saved = await request.catch((error: unknown) => {
           refetchVetsAfterFailure(queryClient)
           throw error

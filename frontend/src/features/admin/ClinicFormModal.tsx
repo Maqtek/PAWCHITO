@@ -5,7 +5,6 @@ import { validationMessages } from '../../api/error-messages'
 import { clinicLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, CheckboxField, FormAlert, Modal, SelectField, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchAfterFailure, storeClinic } from './clinic-cache'
@@ -114,11 +113,10 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
       }
       onBusyChange(true)
       try {
-        const signal = AbortSignal.timeout(REQUEST_TIMEOUT_MS)
         const request =
           baseline && update
-            ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update, signal }))
-            : unwrap(api.POST('/admin/clinics', { body: payload, signal }))
+            ? unwrap(api.PATCH('/admin/clinics/{id}', { params: { path: { id: baseline.id } }, body: update }))
+            : unwrap(api.POST('/admin/clinics', { body: payload }))
         const saved = await request.catch((error: unknown) => {
           refetchAfterFailure(queryClient, baseline?.id)
           throw error

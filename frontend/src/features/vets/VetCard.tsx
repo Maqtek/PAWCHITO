@@ -5,7 +5,6 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { unwrap } from '../../api/queries'
 import type { Vet } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button, FormAlert } from '../../components/ui'
 import { refetchVetsAfterFailure, storeVet } from './vet-cache'
 import type { ArchiveAction } from './VetArchiveModal'
@@ -41,7 +40,6 @@ export function VetCard({ vet, onStatus, onEdit, onArchiveAction }: VetCardProps
         api.PATCH('/clinic/vets/{id}', {
           params: { path: { id: vet.id } },
           body: { on_vacation: !vet.on_vacation },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
       storeVet(queryClient, saved)

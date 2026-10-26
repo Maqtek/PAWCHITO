@@ -3,7 +3,6 @@ import { useState } from 'react'
 import { api } from '../../api/client'
 import { unwrap } from '../../api/queries'
 import type { Pet, PetArchived } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { refetchPetsAfterFailure, storePet } from './pet-cache'
@@ -42,11 +41,9 @@ function ArchiveConfirm({ pet, onBusyChange, onCancel, onDone }: ArchiveConfirmP
     onSubmit: async () => {
       onBusyChange(true)
       try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
         const result = await unwrap(
           api.POST('/pets/{pet_id}/archive', {
             params: { path: { pet_id: pet.id } },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         ).catch((error: unknown) => {
           refetchPetsAfterFailure(queryClient)

@@ -6,7 +6,6 @@ import { ApiError } from '../../api/errors'
 import { reminderLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import type { EventCategory, Reminder, ReminderCreate } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, SelectField, TextField, type SelectOption } from '../../components/ui'
 import { addDays, moscowDateTime, moscowLocal } from '../../lib/dates'
 import { eventCategoryLabel } from '../../lib/labels'
@@ -112,7 +111,7 @@ function ReminderForm({ petId, petName, onSaved, onCancel, onBusyChange }: Remin
       }
       onBusyChange(true)
       try {
-        onSaved(await unwrap(api.POST('/reminders', { body: payload, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })))
+        onSaved(await unwrap(api.POST('/reminders', { body: payload })))
       } finally {
         onBusyChange(false)
         // И после ошибки: ответ мог не дойти, а дело — сохраниться.

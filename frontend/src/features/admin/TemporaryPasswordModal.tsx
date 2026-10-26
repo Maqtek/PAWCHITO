@@ -5,7 +5,6 @@ import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { emailError } from '../auth/checks'
@@ -83,7 +82,6 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
           api.POST('/admin/clinics/{id}/account', {
             params: { path: { id: clinicId } },
             body: { email: email.trim() },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
         onIssued(result.temporary_password)
@@ -142,7 +140,6 @@ function ResetPasswordForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
         const result = await unwrap(
           api.POST('/admin/clinics/{id}/account/reset-password', {
             params: { path: { id: clinicId } },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         )
         onIssued(result.temporary_password)

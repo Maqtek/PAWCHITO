@@ -5,7 +5,6 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { notificationsQuery, unwrap } from '../../api/queries'
 import type { Notification } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Spinner } from '../../components/ui'
 import { cn } from '../../lib/cn'
 import { formatShortDate, formatTime } from '../../lib/format'
@@ -39,7 +38,7 @@ export function NotificationList({ onClose }: { onClose: () => void }) {
     setError(null)
     setMarkingAll(true)
     try {
-      await unwrap(api.POST('/notifications/read-all', { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
+      await unwrap(api.POST('/notifications/read-all'))
     } catch (failure) {
       setError(errorMessage(failure))
     } finally {

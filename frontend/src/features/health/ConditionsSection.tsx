@@ -4,7 +4,6 @@ import { useId, useState } from 'react'
 import { api } from '../../api/client'
 import { conditionsQuery, queryKeys, unwrap } from '../../api/queries'
 import type { Condition } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Badge, Button } from '../../components/ui'
 import { conditionKindLabel, dataSourceLabel } from '../../lib/labels'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
@@ -52,7 +51,6 @@ export function ConditionsSection({ petId, onStatus }: ConditionsSectionProps) {
     const saved = await unwrap(
       api.POST('/pets/{pet_id}/conditions/{id}/archive', {
         params: { path: { pet_id: petId, id: dialogCondition.id } },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       }),
     ).catch((error: unknown) => {
       refetchAfterFailure(queryClient, queryKey)

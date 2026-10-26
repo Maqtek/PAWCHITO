@@ -5,7 +5,6 @@ import { api } from '../../api/client'
 import { errorMessage } from '../../api/error-messages'
 import { adminClinicQuery, unwrap } from '../../api/queries'
 import type { AdminClinic } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, Card, FormAlert, Modal } from '../../components/ui'
 import { pluralize } from '../../lib/format'
 import { useFocusAfterRender } from '../../lib/use-focus-after-render'
@@ -42,7 +41,6 @@ export function ClinicArchiveSection({ clinic, onStatus }: ClinicArchiveSectionP
       const saved = await unwrap(
         api.POST('/admin/clinics/{id}/restore', {
           params: { path: { id: clinic.id } },
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
       focusHeadingLater()
@@ -131,11 +129,9 @@ function ArchiveConfirm({ clinic, onBusyChange, onCancel, onArchived }: ArchiveC
     onSubmit: async () => {
       onBusyChange(true)
       try {
-        // Окно до ответа не закрыть — без таймаута на зависшей сети оно висело бы вечно.
         const result = await unwrap(
           api.POST('/admin/clinics/{id}/archive', {
             params: { path: { id: clinic.id } },
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
           }),
         ).catch((error: unknown) => {
           refetchAfterFailure(queryClient, clinic.id)

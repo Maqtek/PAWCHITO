@@ -7,7 +7,6 @@ import { ApiError } from '../../api/errors'
 import { healthLimits, outcomeLimits, petLimits } from '../../api/limits'
 import { clinicPetQuery, unwrap } from '../../api/queries'
 import type { Appointment, CareStatus, ConditionKind, OutcomeCreate, OutcomeResult, Pet, Sex } from '../../api/schema'
-import { REQUEST_TIMEOUT_MS } from '../../api/session'
 import { Button, FormAlert, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
 import { addDays, moscowLocal } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
@@ -229,7 +228,6 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
         api.POST('/clinic/appointments/{id}/outcome', {
           params: { path: { id: appointment.id } },
           body: toPayload(values, prescriptions, vaccinations, conditions, petValues, card?.pet),
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         }),
       )
       onDone(result)
