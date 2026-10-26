@@ -7,12 +7,11 @@ import { Badge, Button, Card, LoadError, ProgressBar, Spinner, linkClass } from 
 import { formatDayDate, formatDays, formatShortDate, formatTime } from '../../lib/format'
 import { groupBy } from '../../lib/group-by'
 import { reminderStatusLabel, reminderStatusTone } from '../../lib/labels'
-import { useFocusAfterRender } from '../../lib/use-focus-after-render'
 import { dueDay, formatDue } from '../calendar/due'
 import { courseTitle, progressText, type Course } from './course'
 import { MarkActions } from './MarkActions'
-import { canMark, markedMessage } from './reminder-actions'
-import { ReminderConfirmModal } from './ReminderConfirmModal'
+import { canMark } from './reminder-actions'
+import { useReminderMarking } from './useReminderMarking'
 
 interface ActiveCourseProps {
   course: Course
@@ -29,9 +28,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
   const headingId = useId()
   const reminders = useQuery(remindersQuery({ prescription_id: prescription.id }))
   const [showPast, setShowPast] = useState(false)
-  const [skipping, setSkipping] = useState<{ reminder?: Reminder; open: boolean }>({ open: false })
   // После отметки кнопки дозы пропадают — фокус переходит на дни курса, а не на body.
-  const [daysRef, focusDaysLater] = useFocusAfterRender<HTMLDivElement>()
+  const { listRef: daysRef, marked, skip, skipModal } = useReminderMarking<HTMLDivElement>(today, onStatus)
 
   const title = courseTitle(prescription)
 
@@ -74,14 +72,8 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
                         reminder={dose}
                         label={`${title}, ${formatDue(dose.due_at, today)}`}
                         onStatus={onStatus}
-                        onDone={(result) => {
-                          onStatus(markedMessage(result, today))
-                          focusDaysLater()
-                        }}
-                        onSkip={() => {
-                          onStatus('')
-                          setSkipping({ reminder: dose, open: true })
-                        }}
+                        onDone={marked}
+                        onSkip={() => skip(dose)}
                       />
                     ) : (
                       <Badge tone={reminderStatusTone[dose.status]}>{reminderStatusLabel[dose.status]}</Badge>
@@ -117,18 +109,7 @@ export function ActiveCourse({ course, today, onStatus }: ActiveCourseProps) {
           {days()}
         </div>
       </Card>
-      <ReminderConfirmModal
-        open={skipping.open}
-        kind="skip"
-        reminder={skipping.reminder}
-        today={today}
-        onClose={() => setSkipping((current) => ({ ...current, open: false }))}
-        onSkipped={(result) => {
-          onStatus(markedMessage(result, today))
-          focusDaysLater()
-          setSkipping((current) => ({ ...current, open: false }))
-        }}
-      />
+      {skipModal}
     </section>
   )
 }

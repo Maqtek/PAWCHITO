@@ -13,7 +13,8 @@ interface ReminderItemProps {
   today: string
   onDone: (result: ReminderMarked) => void
   onSkip: () => void
-  onDelete: () => void
+  /** Без onDelete кнопки «Удалить» нет: на главной дела только отмечают, удаляют — в «Делах». */
+  onDelete?: () => void
   onStatus: (message: string) => void
 }
 
@@ -21,6 +22,8 @@ interface ReminderItemProps {
 export function ReminderItem({ reminder, today, onDone, onSkip, onDelete, onStatus }: ReminderItemProps) {
   const when = formatDueWithYear(reminder.due_at, today)
   const label = `${reminder.title}, ${when}`
+  // Дела курса владелец не удаляет (БП §7).
+  const canDelete = onDelete !== undefined && reminder.source === 'custom'
 
   return (
     <EventCard
@@ -34,13 +37,12 @@ export function ReminderItem({ reminder, today, onDone, onSkip, onDelete, onStat
       }
     >
       <p className="mt-1 text-sm text-ink-muted">{scheduleLabel(reminder)}</p>
-      {(canMark(reminder, today) || reminder.source === 'custom') && (
+      {(canMark(reminder, today) || canDelete) && (
         <div className="mt-3 flex flex-wrap items-start gap-2">
           {canMark(reminder, today) && (
             <MarkActions reminder={reminder} label={label} onDone={onDone} onSkip={onSkip} onStatus={onStatus} />
           )}
-          {/* Дела курса владелец не удаляет (БП §7). */}
-          {reminder.source === 'custom' && (
+          {canDelete && (
             <Button variant="secondary" size="sm" icon={Trash2} onClick={onDelete}>
               Удалить
               <span className="sr-only">, {label}</span>
