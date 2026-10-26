@@ -112,7 +112,8 @@ describe('PetsPage: архив', () => {
     const { user } = renderPets()
     await user.click(await screen.findByRole('button', { name: 'В архив, Майло' }))
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'В архив' }))
-    await findStatus('Питомец перенесён в архив.')
+    // Две предстоящие записи Майло отменены вместе с архивом.
+    await findStatus('Питомец перенесён в архив: отменены 2 записи.')
     expect(names()).toEqual(['Барсик'])
     expect(within(card('Барсик')).getByText('Выбран')).toBeInTheDocument()
     expect(switcher()).toHaveAccessibleName('Питомец: Барсик. Сменить питомца')

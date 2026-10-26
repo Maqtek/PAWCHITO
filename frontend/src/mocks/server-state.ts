@@ -1,4 +1,20 @@
-import type { AdminClinic, Condition, Observation, Pet, Role, User, Vaccination, Vet } from '../api/schema'
+import type {
+  AdminClinic,
+  Appointment,
+  AppointmentOutcome,
+  AppointmentReason,
+  AppointmentStatus,
+  CancelledBy,
+  Condition,
+  Observation,
+  Pet,
+  Role,
+  User,
+  Vaccination,
+  Vet,
+} from '../api/schema'
+import { addDays, isoWeekday, moscowDateTime, toMoscowString } from '../lib/dates'
+import { moscowIsoDate } from '../lib/format'
 
 /** Пароль всех seed-аккаунтов моков. */
 export const SEED_PASSWORD = 'pawchito1'
@@ -29,8 +45,26 @@ export interface MockClinic {
   closes_at: string
   work_days: number[]
   archived_at: string | null
-  /** Записей в моках нет до этапа 7: число будущих записей хранится в клинике. */
+  /**
+   * Число будущих записей для админки — счётчик seed, на нём держатся тесты этапа 3. Настоящие записи (этап 7) он не
+   * учитывает, но при скрытии клиники они тоже отменяются.
+   */
   futureAppointments: number
+}
+
+/** Запись в моках: ссылки по id, клички и имена подставляет toAppointment — после переименования не расходятся. */
+export interface MockAppointment {
+  id: number
+  pet_id: number
+  vet_id: number
+  /** Со смещением +03:00, как отдаёт сервер. */
+  slot_start: string
+  reason: AppointmentReason
+  reason_comment: string | null
+  status: AppointmentStatus
+  cancelled_by: CancelledBy | null
+  clinic_comment: string | null
+  outcome: AppointmentOutcome | null
 }
 
 export interface MockServerState {
@@ -51,6 +85,9 @@ export interface MockServerState {
   nextObservationId: number
   vaccinations: Vaccination[]
   nextVaccinationId: number
+  /** Записи к врачу всех владельцев; владелец видит только записи своих питомцев. */
+  appointments: MockAppointment[]
+  nextAppointmentId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
   /** Ключ — email в нижнем регистре. */
   attempts: Record<string, { failures: number; lockedUntil: number | null }>
@@ -144,6 +181,40 @@ export function newPet(fields: Pick<Pet, 'id' | 'owner_id' | 'name' | 'species'>
   }
 }
 
+/**
+ * День seed-записи — через days дней от сегодня по Москве: seed пересоздаётся при сбросе моков, и предстоящие записи
+ * не уходят в прошлое. Воскресенье — выходной «ВетДоктора»: такой день сдвигается дальше от сегодня.
+ */
+function seedDay(days: number): string {
+  let date = addDays(moscowIsoDate(new Date()), days)
+  while (isoWeekday(date) === 7) date = addDays(date, days < 0 ? -1 : 1)
+  return date
+}
+
+function seedAppointment(
+  id: number,
+  petId: number,
+  vetId: number,
+  date: string,
+  time: string,
+  reason: AppointmentReason,
+  extra: Partial<MockAppointment> = {},
+): MockAppointment {
+  return {
+    id,
+    pet_id: petId,
+    vet_id: vetId,
+    slot_start: moscowDateTime(date, time),
+    reason,
+    reason_comment: null,
+    status: 'requested',
+    cancelled_by: null,
+    clinic_comment: null,
+    outcome: null,
+    ...extra,
+  }
+}
+
 export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refreshDelayMs?: number } = {}): MockServerState {
   return {
     accounts: [
@@ -227,6 +298,35 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
       { id: 4, pet_id: 13, name: 'Нобивак Rabies', date: '2026-03-01', next_date: null, source: 'owner', appointment_id: null },
     ],
     nextVaccinationId: 100,
+    // Записи к врачам «ВетДоктора» (клиника 2): Петров (4), Соколова (5, в отпуске), Ким (6).
+    appointments: [
+      seedAppointment(20, 10, 4, seedDay(2), '10:00', 'vaccination', {
+        status: 'confirmed',
+        reason_comment: 'Плановая от бешенства',
+      }),
+      seedAppointment(21, 10, 6, seedDay(5), '15:30', 'follow_up'),
+      seedAppointment(22, 10, 4, seedDay(-16), '11:00', 'illness', {
+        status: 'completed',
+        reason_comment: 'Хромает на заднюю лапу',
+        outcome: {
+          conclusion: 'Растяжение связок задней лапы',
+          recommendations: 'Покой две недели, повторный приём через месяц',
+          care_status: 'treatment',
+          completed_at: moscowDateTime(seedDay(-16), '11:40'),
+          prescriptions: [],
+          vaccinations: [],
+        },
+      }),
+      seedAppointment(23, 10, 5, seedDay(-5), '12:00', 'checkup', {
+        status: 'cancelled',
+        cancelled_by: 'clinic',
+        clinic_comment: 'Врач заболела, перезапишитесь, пожалуйста',
+      }),
+      seedAppointment(24, 11, 6, seedDay(1), '09:00', 'checkup'),
+      // Запись чужого питомца: этот слот Петрова занят и для owner@example.com.
+      seedAppointment(25, 13, 4, seedDay(2), '10:30', 'checkup', { status: 'confirmed' }),
+    ],
+    nextAppointmentId: 100,
     refreshTokens: {},
     attempts: {},
     accessEpoch: 1,
@@ -307,6 +407,49 @@ export function toAdminClinic(state: MockServerState, clinic: MockClinic): Admin
 }
 
 /** Ответ User: имя клиники берётся из клиники при каждом ответе, поэтому после переименования не расходится (Р-35). */
+/**
+ * Отмена системой (БП §5): записи «Заявка» и «Подтверждена», которые ещё не начались, — при архиве питомца и скрытии
+ * клиники (Р-51). Возвращает число отменённых.
+ */
+export function cancelFutureAppointments(
+  state: MockServerState,
+  matches: (appointment: MockAppointment) => boolean,
+  now = new Date(),
+): number {
+  const future = state.appointments.filter(
+    (item) =>
+      (item.status === 'requested' || item.status === 'confirmed') &&
+      new Date(item.slot_start).getTime() > now.getTime() &&
+      matches(item),
+  )
+  for (const appointment of future) {
+    appointment.status = 'cancelled'
+    appointment.cancelled_by = 'system'
+  }
+  return future.length
+}
+
+/** Ответ Appointment: клиника — по врачу, клички и имена — текущие (Р-50). */
+export function toAppointment(state: MockServerState, appointment: MockAppointment): Appointment {
+  const { pet_id, vet_id, ...fields } = appointment
+  const pet = state.pets.find((item) => item.id === pet_id)
+  const vet = state.vets.find((item) => item.id === vet_id)
+  const clinic = state.clinics.find((item) => item.id === vet?.clinic_id)
+  const start = new Date(appointment.slot_start)
+  return {
+    ...fields,
+    pet: { id: pet_id, name: pet?.name ?? '' },
+    clinic: { id: clinic?.id ?? 0, name: clinic?.name ?? '' },
+    vet: { id: vet_id, full_name: vet?.full_name ?? '' },
+    slot_end: moscowSlotEnd(start),
+  }
+}
+
+/** Конец слота — через 30 минут, в том же виде со смещением +03:00. */
+function moscowSlotEnd(start: Date): string {
+  return toMoscowString(new Date(start.getTime() + 30 * 60 * 1000))
+}
+
 export function toUser(state: MockServerState, account: MockAccount): User {
   const { id, email, role, full_name, must_change_password } = account
   const clinic = role === 'clinic' ? state.clinics.find((item) => item.id === account.clinic_id) : undefined

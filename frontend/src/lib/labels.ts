@@ -1,5 +1,7 @@
 import type {
+  AppointmentReason,
   AppointmentStatus,
+  CancelledBy,
   CareStatus,
   ConditionKind,
   DataSource,
@@ -90,4 +92,20 @@ export const appointmentStatusTone: Record<AppointmentStatus, Tone> = {
   confirmed: 'mint',
   completed: 'sky',
   cancelled: 'neutral',
+}
+
+/** Причина обращения (БП §5). */
+export const appointmentReasonLabel: Record<AppointmentReason, string> = {
+  checkup: 'Плановый осмотр',
+  vaccination: 'Вакцинация',
+  illness: 'Заболевание',
+  follow_up: 'Повторный приём',
+  other: 'Другое',
+}
+
+/** Кто отменил запись — так это видит владелец. */
+export const cancelledByLabel: Record<CancelledBy, string> = {
+  owner: 'Вы отменили запись',
+  clinic: 'Клиника отменила запись',
+  system: 'Запись отменена автоматически',
 }

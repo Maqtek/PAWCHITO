@@ -12,6 +12,7 @@ import {
 import { authorizeAccount } from '../http-utils'
 import {
   attemptsKey,
+  cancelFutureAppointments,
   findAccount,
   newTemporaryPassword,
   readServer,
@@ -135,6 +136,9 @@ export const adminHandlers = [
       const cancelled = clinic.futureAppointments
       clinic.archived_at = new Date().toISOString()
       clinic.futureAppointments = 0
+      // Настоящие записи владельцев (этап 7) тоже отменяются; число в ответе — по счётчику seed (MockClinic).
+      const vetIds = new Set(state.vets.filter((vet) => vet.clinic_id === clinic.id).map((vet) => vet.id))
+      cancelFutureAppointments(state, (item) => vetIds.has(item.vet_id))
       const clinicAccount = accountOf(state, clinic)
       if (clinicAccount) {
         clinicAccount.is_active = false
