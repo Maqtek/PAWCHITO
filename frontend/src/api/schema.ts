@@ -1,10 +1,16 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.11).
- * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
- * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
- * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
+ * Типы API. Эндпоинты, которые бэкенд уже отдаёт в openapi.json, — из generated/schema.ts
+ * (`pnpm gen:api`), остальные написаны вручную по docs/Контракты_Pawchito.md (v1.11)
+ * в формате openapi-typescript. `paths` клиента — сгенерированные пути, поверх них ручные:
+ * ручной путь перекрывает сгенерированный с тем же адресом. Когда бэкенд реализует эндпоинт,
+ * его ручной путь удаляется, а псевдонимы внизу файла переводятся на сгенерированные схемы.
  * Здесь только эндпоинты, которые уже использует фронт.
  */
+
+import type { components as GeneratedComponents, paths as GeneratedPaths } from './generated/schema'
+
+/** Схемы из openapi.json. */
+type Generated = GeneratedComponents['schemas']
 
 type Json<T> = { headers: { [name: string]: unknown }; content: { 'application/json': T } }
 type NoContent = { headers: { [name: string]: unknown }; content?: never }
@@ -21,7 +27,6 @@ type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
   schemas: {
-    Role: 'owner' | 'clinic' | 'admin'
     Species: 'dog' | 'cat' | 'other'
     Sex: 'male' | 'female' | 'unknown'
     ConditionKind: 'allergy' | 'chronic'
@@ -48,26 +53,12 @@ export interface components {
       | 'outcome_added'
       | 'pet_updated_by_clinic'
       | 'appointment_rescheduled'
-    User: {
-      id: number
-      email: string
-      role: components['schemas']['Role']
-      full_name: string
-      must_change_password: boolean
-    }
-    Token: { access_token: string; token_type: 'bearer'; expires_in: number }
-    LoginRequest: { email: string; password: string }
-    RegisterRequest: { email: string; password: string; full_name: string }
-    RegisterResponse: components['schemas']['Token'] & {
-      user: components['schemas']['User']
-      /** Показывается один раз, формат XXXX-XXXX-XXXX-XXXX. */
-      recovery_code: string
-    }
-    RecoverRequest: { email: string; recovery_code: string; new_password: string }
-    RecoveryCode: { recovery_code: string }
-    ChangePasswordRequest: { current_password: string; new_password: string }
-    UserUpdate: { full_name: string }
-    RecoveryCodeRequest: { current_password: string }
+    /**
+     * UserOut из openapi.json, но full_name — строка: по контракту у клиники это название клиники.
+     * Бэкенд пока отдаёт string | null (у аккаунта клиники имени нет), поэтому пути с User — ручные.
+     */
+    User: Omit<Generated['UserOut'], 'full_name'> & { full_name: string }
+    RegisterResponse: Omit<Generated['RegisterOut'], 'user'> & { user: components['schemas']['User'] }
     ClinicRef: { id: number; name: string }
     Pet: {
       id: number
@@ -363,21 +354,23 @@ export interface components {
       tomorrow: components['schemas']['CalendarEvent'][]
       later: components['schemas']['CalendarEvent'][]
     }
+    /** Ответы 4xx, кроме 422: в openapi.json их нет — FastAPI описывает только 422. */
     Error: { detail: string }
-    /** Ошибка поля в ответе 422 (формат FastAPI). */
-    ValidationError: { loc: (string | number)[]; msg: string; type: string }
-    HTTPValidationError: { detail: components['schemas']['ValidationError'][] }
+    /** Ответ 422 — формат FastAPI, общий для всех эндпоинтов. */
+    HTTPValidationError: Generated['HTTPValidationError']
   }
 }
 
 type Schemas = components['schemas']
 
-export interface paths {
+/** Ручные пути: эндпоинты, которых ещё нет в openapi.json, и те, где ответ расходится с контрактом. */
+interface ManualPaths {
+  /** Ручной из-за User: в openapi.json user.full_name — string | null. */
   '/auth/register': {
     parameters: NoParams
     post: {
       parameters: NoParams
-      requestBody: Body<Schemas['RegisterRequest']>
+      requestBody: Body<Generated['RegisterIn']>
       responses: {
         201: Json<Schemas['RegisterResponse']>
         409: Json<Schemas['Error']>
@@ -385,62 +378,7 @@ export interface paths {
       }
     }
   }
-  '/auth/login': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody: Body<Schemas['LoginRequest']>
-      responses: {
-        200: Json<Schemas['Token']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-        429: Json<Schemas['Error']>
-      }
-    }
-  }
-  '/auth/refresh': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody?: never
-      responses: { 200: Json<Schemas['Token']>; 401: Json<Schemas['Error']> }
-    }
-  }
-  '/auth/logout': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody?: never
-      responses: { 204: NoContent }
-    }
-  }
-  '/auth/recover': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody: Body<Schemas['RecoverRequest']>
-      responses: {
-        200: Json<Schemas['RecoveryCode']>
-        400: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-        429: Json<Schemas['Error']>
-      }
-    }
-  }
-  '/auth/change-password': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody: Body<Schemas['ChangePasswordRequest']>
-      responses: {
-        200: Json<Schemas['Token']>
-        400: Json<Schemas['Error']>
-        401: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
+  /** Ручной из-за User: в openapi.json full_name — string | null. */
   '/users/me': {
     parameters: NoParams
     get: {
@@ -450,23 +388,9 @@ export interface paths {
     }
     patch: {
       parameters: NoParams
-      requestBody: Body<Schemas['UserUpdate']>
+      requestBody: Body<Generated['UserUpdate']>
       responses: {
         200: Json<Schemas['User']>
-        401: Json<Schemas['Error']>
-        403: Json<Schemas['Error']>
-        422: Json<Schemas['HTTPValidationError']>
-      }
-    }
-  }
-  '/users/me/recovery-code': {
-    parameters: NoParams
-    post: {
-      parameters: NoParams
-      requestBody: Body<Schemas['RecoveryCodeRequest']>
-      responses: {
-        200: Json<Schemas['RecoveryCode']>
-        400: Json<Schemas['Error']>
         401: Json<Schemas['Error']>
         403: Json<Schemas['Error']>
         422: Json<Schemas['HTTPValidationError']>
@@ -1251,14 +1175,16 @@ export interface paths {
   }
 }
 
-export type Role = Schemas['Role']
+export type paths = Omit<GeneratedPaths, keyof ManualPaths> & ManualPaths
+
+export type Role = Generated['UserRole']
 export type Species = Schemas['Species']
 export type Sex = Schemas['Sex']
 export type CareStatus = Schemas['CareStatus']
 export type EventCategory = Schemas['EventCategory']
 export type AppointmentStatus = Schemas['AppointmentStatus']
 export type User = Schemas['User']
-export type Token = Schemas['Token']
+export type Token = Generated['TokenOut']
 export type ClinicRef = Schemas['ClinicRef']
 export type Pet = Schemas['Pet']
 export type PetCreate = Schemas['PetCreate']
@@ -1312,16 +1238,16 @@ export type CalendarVaccinationEvent = Schemas['CalendarVaccinationEvent']
 export type CalendarEvent = Schemas['CalendarEvent']
 export type Calendar = Schemas['Calendar']
 export type ApiErrorBody = Schemas['Error']
-export type LoginRequest = Schemas['LoginRequest']
-export type RegisterRequest = Schemas['RegisterRequest']
+export type LoginRequest = Generated['LoginIn']
+export type RegisterRequest = Generated['RegisterIn']
 export type RegisterResponse = Schemas['RegisterResponse']
-export type RecoverRequest = Schemas['RecoverRequest']
-export type RecoveryCode = Schemas['RecoveryCode']
-export type ChangePasswordRequest = Schemas['ChangePasswordRequest']
-export type UserUpdate = Schemas['UserUpdate']
-export type RecoveryCodeRequest = Schemas['RecoveryCodeRequest']
-export type ValidationError = Schemas['ValidationError']
-export type HTTPValidationError = Schemas['HTTPValidationError']
+export type RecoverRequest = Generated['RecoverIn']
+export type RecoveryCode = Generated['RecoveryCodeOut']
+export type ChangePasswordRequest = Generated['ChangePasswordIn']
+export type UserUpdate = Generated['UserUpdate']
+export type RecoveryCodeRequest = Generated['RecoveryCodeIn']
+export type ValidationError = Generated['ValidationError']
+export type HTTPValidationError = Generated['HTTPValidationError']
 export type Clinic = Schemas['Clinic']
 export type ClinicAccount = Schemas['ClinicAccount']
 export type AdminClinic = Schemas['AdminClinic']
