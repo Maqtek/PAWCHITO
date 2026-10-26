@@ -2,9 +2,9 @@ import { http, HttpResponse } from 'msw'
 import type { AppointmentReason, AppointmentStatus, Calendar, CalendarEvent, EventCategory } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal } from '../../lib/dates'
 import { appointmentReasonLabel } from '../../lib/labels'
-import { authorizeAccount, notFound, queryError } from '../http-utils'
+import { authorizeOwner, findPet, petNotFound } from '../access'
+import { queryError } from '../http-utils'
 import { readServer, toAppointment, toReminder } from '../server-state'
-import { findPet } from './pets'
 
 /** Сколько дней вперёд от сегодня показывает календарь (Р-65). */
 const DAYS_AHEAD = 30
@@ -37,14 +37,14 @@ const dayOf = (at: string) => moscowLocal(new Date(at)).date
 export const calendarHandlers = [
   http.get('*/api/calendar', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const rawPet = new URL(request.url).searchParams.get('pet_id')
     if (rawPet === null) return queryError('pet_id', 'Укажите питомца', 'missing')
     if (!/^\d+$/.test(rawPet)) return queryError('pet_id', 'Номер питомца — целое число', 'int_parsing')
     // Календарь — о питомце, а не фильтр списка: чужой — 404, как несуществующий; архивный — как обычно (Р-64, Р-65).
     const pet = findPet(state, account.id, rawPet)
-    if (!pet) return notFound('Питомец не найден')
+    if (!pet) return petNotFound()
 
     const now = new Date()
     const today = moscowLocal(now).date

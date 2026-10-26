@@ -1,24 +1,17 @@
 import { http, HttpResponse } from 'msw'
-import type { Pet, PetCreate, PetUpdate } from '../../api/schema'
-import { authorizeAccount, notFound, readBody, validateBody } from '../http-utils'
-import { birthDateError, breedError, petNameError, sexError, speciesError } from '../pet-validation'
+import type { PetCreate, PetUpdate } from '../../api/schema'
+import { authorizeOwner, findPet, petNotFound } from '../access'
+import { readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
-import { cancelFutureAppointments, newPet, readServer, updateServer, type MockServerState } from '../server-state'
+import { birthDateError, breedError, petNameError, sexError, speciesError } from '../pet-validation'
+import { cancelFutureAppointments, newPet, readServer, updateServer } from '../server-state'
 import { normalizeText } from '../text-validation'
-
-const petNotFound = () => notFound('Питомец не найден')
-
-/** Питомец владельца; питомец другого владельца — как несуществующий, 404 (Р-42). Архивный находится как обычно. */
-export function findPet(state: MockServerState, ownerId: number, rawId: unknown): Pet | undefined {
-  const id = Number(rawId)
-  return state.pets.find((pet) => pet.id === id && pet.owner_id === ownerId)
-}
 
 // Как у бэкенда: сначала доступ, потом тело (422), потом поиск питомца (404).
 export const petHandlers = [
   http.get('*/api/pets', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     // archived=true — расширенная версия (Р-40); фронт MVP его не запрашивает.
     const archived = new URL(request.url).searchParams.get('archived') === 'true'
@@ -33,7 +26,7 @@ export const petHandlers = [
   http.post('*/api/pets', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const sent = (field: string) => field in raw
       const invalid = validateBody({
@@ -63,7 +56,7 @@ export const petHandlers = [
 
   http.get('*/api/pets/:petId', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
     return pet ? HttpResponse.json(pet) : petNotFound()
@@ -72,7 +65,7 @@ export const petHandlers = [
   http.patch('*/api/pets/:petId', async ({ request, params }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       // Проверяются только присланные поля; null проходит только у породы и даты рождения — он их убирает.
       const sent = (field: string) => field in raw
@@ -99,7 +92,7 @@ export const petHandlers = [
 
   http.post('*/api/pets/:petId/archive', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const pet = findPet(state, account.id, params.petId)
       if (!pet) return petNotFound()

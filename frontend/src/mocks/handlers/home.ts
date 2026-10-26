@@ -1,9 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import type { HomeCourse, Pet, Prescription, Reminder } from '../../api/schema'
 import { addDays, moscowLocal } from '../../lib/dates'
-import { authorizeAccount, notFound, queryError } from '../http-utils'
+import { authorizeOwner, findPet, petNotFound } from '../access'
+import { queryError } from '../http-utils'
 import { readServer, toAppointment, toReminder, type MockServerState } from '../server-state'
-import { findPet } from './pets'
 
 /** Курсы питомца, последний день которых не прошёл (Р-63), от новых к старым по дате начала. */
 function activeCourses(state: MockServerState, pet: Pet, today: string): HomeCourse[] {
@@ -24,14 +24,14 @@ function activeCourses(state: MockServerState, pet: Pet, today: string): HomeCou
 export const homeHandlers = [
   http.get('*/api/home/summary', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const raw = new URL(request.url).searchParams.get('pet_id')
     if (raw === null) return queryError('pet_id', 'Укажите питомца')
     if (!/^-?\d+$/.test(raw)) return queryError('pet_id', 'Номер питомца — целое число')
     // Питомец — то, о чём запрос, а не фильтр списка: чужой и несуществующий — 404 (Р-64). Архивный — как обычно (Р-42).
     const pet = findPet(state, account.id, raw)
-    if (!pet) return notFound('Питомец не найден')
+    if (!pet) return petNotFound()
 
     const now = new Date()
     const today = moscowLocal(now).date

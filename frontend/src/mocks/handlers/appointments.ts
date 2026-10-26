@@ -3,8 +3,9 @@ import { appointmentLimits } from '../../api/limits'
 import type { AppointmentCreate, AppointmentReason, AppointmentStatus, Slot, Vet } from '../../api/schema'
 import { addDays, isoWeekday, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
+import { authorizeOwner, findPet, petNotFound } from '../access'
 import { isoDateError } from '../date-validation'
-import { authorizeAccount, conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
+import { conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
   newAppointment,
@@ -16,7 +17,6 @@ import {
   type MockServerState,
 } from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
-import { findPet } from './pets'
 
 const REASONS: readonly AppointmentReason[] = ['checkup', 'vaccination', 'illness', 'follow_up', 'other']
 const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'completed', 'cancelled']
@@ -88,7 +88,7 @@ function slotStartError(value: unknown, clinic: MockClinic | undefined, now: Dat
 export const appointmentHandlers = [
   http.get('*/api/clinics', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     return HttpResponse.json(
       state.clinics
@@ -109,7 +109,7 @@ export const appointmentHandlers = [
 
   http.get('*/api/clinics/:clinicId/vets', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const clinic = activeClinic(state, params.clinicId)
     if (!clinic) return notFound('Клиника не найдена')
@@ -122,7 +122,7 @@ export const appointmentHandlers = [
 
   http.get('*/api/clinics/:clinicId/vets/:vetId/slots', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const now = new Date()
     // Без параметра — пустая строка: формат её не пропустит.
@@ -148,7 +148,7 @@ export const appointmentHandlers = [
   http.post('*/api/appointments', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const now = new Date()
       const found = typeof raw.pet_id === 'number' ? findPet(state, account.id, raw.pet_id) : undefined
@@ -188,7 +188,7 @@ export const appointmentHandlers = [
 
   http.get('*/api/appointments/:id', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const appointment = ownAppointment(state, account.id, params.id)
     return appointment ? HttpResponse.json(toAppointment(state, appointment)) : notFound('Запись не найдена')
@@ -196,7 +196,7 @@ export const appointmentHandlers = [
 
   http.post('*/api/appointments/:id/cancel', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const appointment = ownAppointment(state, account.id, params.id)
       if (!appointment) return notFound('Запись не найдена')
@@ -212,7 +212,7 @@ export const appointmentHandlers = [
 
   http.get('*/api/pets/:petId/appointments', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const status = new URL(request.url).searchParams.get('status')
     if (status !== null && !STATUSES.includes(status as AppointmentStatus)) {
@@ -220,7 +220,7 @@ export const appointmentHandlers = [
     }
     // Архивный питомец — как обычно (Р-51).
     const pet = findPet(state, account.id, params.petId)
-    if (!pet) return notFound('Питомец не найден')
+    if (!pet) return petNotFound()
     return HttpResponse.json(
       state.appointments
         .filter((item) => item.pet_id === pet.id && (status === null || item.status === status))

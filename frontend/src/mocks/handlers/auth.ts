@@ -8,6 +8,7 @@ import type {
   RegisterRequest,
   UserUpdate,
 } from '../../api/schema'
+import { authorizeOwner } from '../access'
 import {
   emailError,
   fullNameError,
@@ -235,7 +236,7 @@ export const authHandlers = [
   http.post('*/api/users/me/recovery-code', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const invalid = validateBody({
         current_password: maxLengthError(raw.current_password, authLimits.passwordMax, 'Пароль'),

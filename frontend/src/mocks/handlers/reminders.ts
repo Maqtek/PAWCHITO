@@ -1,8 +1,9 @@
 import { http, HttpResponse } from 'msw'
 import type { Prescription, ReminderCreate, ReminderStatus } from '../../api/schema'
 import { addDays, moscowDateTime, moscowLocal, toMoscowString } from '../../lib/dates'
+import { authorizeOwner, findPet } from '../access'
 import { isoDateError } from '../date-validation'
-import { authorizeAccount, conflict, forbidden, notFound, queryError, readBody, validateBody } from '../http-utils'
+import { conflict, forbidden, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { categoryError, dueAtError, reminderTitleError, repeatError } from '../reminder-validation'
 import {
   newCustomReminder,
@@ -12,7 +13,6 @@ import {
   type MockReminder,
   type MockServerState,
 } from '../server-state'
-import { findPet } from './pets'
 
 const STATUSES: readonly ReminderStatus[] = ['pending', 'done', 'skipped']
 
@@ -42,7 +42,7 @@ const byDueAt = (a: MockReminder, b: MockReminder) => Date.parse(a.due_at) - Dat
 function mark(status: Exclude<ReminderStatus, 'pending'>) {
   return ({ request, params }: { request: Request; params: Record<string, unknown> }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const reminder = ownReminder(state, account.id, params.id)
       if (!reminder) return notFound('Дело не найдено')
@@ -73,7 +73,7 @@ function mark(status: Exclude<ReminderStatus, 'pending'>) {
 export const reminderHandlers = [
   http.get('*/api/reminders', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const query = new URL(request.url).searchParams
     const rawPet = query.get('pet_id')
@@ -110,7 +110,7 @@ export const reminderHandlers = [
   http.post('*/api/reminders', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const now = new Date()
       const found = typeof raw.pet_id === 'number' ? findPet(state, account.id, raw.pet_id) : undefined
@@ -145,7 +145,7 @@ export const reminderHandlers = [
 
   http.delete('*/api/reminders/:id', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['owner'] })
+      const account = authorizeOwner(state, request)
       if (account instanceof Response) return account
       const reminder = ownReminder(state, account.id, params.id)
       if (!reminder) return notFound('Дело не найдено')
@@ -169,7 +169,7 @@ export const reminderHandlers = [
 
   http.get('*/api/prescriptions/:id/progress', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['owner'] })
+    const account = authorizeOwner(state, request)
     if (account instanceof Response) return account
     const prescription = ownPrescription(state, account.id, params.id)
     if (!prescription) return notFound('Рецепт не найден')

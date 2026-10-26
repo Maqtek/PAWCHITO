@@ -2,26 +2,24 @@ import { http, HttpResponse } from 'msw'
 import { appointmentLimits } from '../../api/limits'
 import type { AppointmentStatus, ClinicAppointmentCancel, ClinicPetCard } from '../../api/schema'
 import { moscowLocal } from '../../lib/dates'
+import {
+  activeConditions,
+  authorizeClinic,
+  canReadCard,
+  clinicOf,
+  findClinicAppointment,
+  observationsInPeriod,
+  petNotFound,
+  petVaccinations,
+  readPeriod,
+} from '../access'
 import { isoDateError } from '../date-validation'
 import { conflict, notFound, queryError, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
-import { readServer, toAppointment, updateServer, type MockAppointment, type MockServerState } from '../server-state'
+import { readServer, toAppointment, updateServer, type MockAppointment } from '../server-state'
 import { normalizeText, textError } from '../text-validation'
-import { newestFirst, observationsInPeriod, readPeriod } from './health'
-import { authorizeClinic } from './vets'
 
 const STATUSES: readonly AppointmentStatus[] = ['requested', 'confirmed', 'completed', 'cancelled']
-
-/** Клиника записи — по врачу. */
-export const clinicOf = (state: MockServerState, appointment: MockAppointment) =>
-  state.vets.find((vet) => vet.id === appointment.vet_id)?.clinic_id
-
-/** Запись своей клиники; запись другой клиники — как несуществующая, 404. */
-export function findOwnAppointment(state: MockServerState, clinicId: number, rawId: unknown): MockAppointment | undefined {
-  const id = Number(rawId)
-  const appointment = state.appointments.find((item) => item.id === id)
-  return appointment && clinicOf(state, appointment) === clinicId ? appointment : undefined
-}
 
 const started = (appointment: MockAppointment, now: Date) => new Date(appointment.slot_start).getTime() <= now.getTime()
 const isActive = (appointment: MockAppointment) => appointment.status === 'requested' || appointment.status === 'confirmed'
@@ -37,13 +35,6 @@ function readFlag(query: URLSearchParams, name: string): boolean | Response {
 function commentError(value: unknown): string | null {
   if (typeof value === 'string' && value.trim() === '') return 'Напишите владельцу, почему запись отменена'
   return textError(value, 'Комментарий', appointmentLimits.reasonCommentMax, { multiline: true })
-}
-
-/** Карточка доступна, если у питомца есть неотменённая запись в эту клинику (Р-54). */
-export function canReadCard(state: MockServerState, clinicId: number, petId: number): boolean {
-  return state.appointments.some(
-    (item) => item.pet_id === petId && item.status !== 'cancelled' && clinicOf(state, item) === clinicId,
-  )
 }
 
 // Как у бэкенда: доступ (401/403), тело или параметры (422), поиск (404), статус (409).
@@ -101,7 +92,7 @@ export const clinicAppointmentHandlers = [
     updateServer((state) => {
       const clinicId = authorizeClinic(state, request)
       if (clinicId instanceof Response) return clinicId
-      const appointment = findOwnAppointment(state, clinicId, params.id)
+      const appointment = findClinicAppointment(state, clinicId, params.id)
       if (!appointment) return notFound('Запись не найдена')
       if (appointment.status !== 'requested') return conflict('Подтвердить можно только заявку')
       // Прошедшую заявку клиника отменяет, а не подтверждает (Р-53).
@@ -119,7 +110,7 @@ export const clinicAppointmentHandlers = [
       if (clinicId instanceof Response) return clinicId
       const invalid = validateBody({ comment: commentError(raw.comment) })
       if (invalid) return invalid
-      const appointment = findOwnAppointment(state, clinicId, params.id)
+      const appointment = findClinicAppointment(state, clinicId, params.id)
       if (!appointment) return notFound('Запись не найдена')
       // В том числе прошедшую: так клиника закрывает неявку (Р-53).
       if (!isActive(appointment)) return conflict('Запись уже завершена или отменена')
@@ -136,11 +127,11 @@ export const clinicAppointmentHandlers = [
     const clinicId = authorizeClinic(state, request)
     if (clinicId instanceof Response) return clinicId
     const pet = state.pets.find((item) => item.id === Number(params.petId))
-    if (!pet || !canReadCard(state, clinicId, pet.id)) return notFound('Питомец не найден')
+    if (!pet || !canReadCard(state, clinicId, pet.id)) return petNotFound()
     const card: ClinicPetCard = {
       pet,
-      conditions: state.conditions.filter((item) => item.pet_id === pet.id && item.archived_at === null).sort((a, b) => a.id - b.id),
-      vaccinations: state.vaccinations.filter((item) => item.pet_id === pet.id).sort(newestFirst),
+      conditions: activeConditions(state, pet.id),
+      vaccinations: petVaccinations(state, pet.id),
       appointments: state.appointments
         .filter((item) => item.pet_id === pet.id && clinicOf(state, item) === clinicId)
         .sort((a, b) => new Date(b.slot_start).getTime() - new Date(a.slot_start).getTime())
@@ -156,7 +147,7 @@ export const clinicAppointmentHandlers = [
     const period = readPeriod(request)
     if (period instanceof Response) return period
     const petId = Number(params.petId)
-    if (!canReadCard(state, clinicId, petId)) return notFound('Питомец не найден')
+    if (!canReadCard(state, clinicId, petId)) return petNotFound()
     return HttpResponse.json(observationsInPeriod(state, petId, period))
   }),
 ]

@@ -9,31 +9,22 @@ import type {
   VaccinationCreate,
   VaccinationUpdate,
 } from '../../api/schema'
+import {
+  activeConditions,
+  authorizeOwner,
+  findPet,
+  observationsInPeriod,
+  petNotFound,
+  petVaccinations,
+  readPeriod,
+} from '../access'
 import { isoDateError, pastDateError } from '../date-validation'
 import { conditionKindError, conditionTitleError, levelError, vaccineNameError, weightError } from '../health-validation'
-import {
-  authorizeAccount,
-  fieldError,
-  fieldErrors,
-  forbidden,
-  notFound,
-  readBody,
-  unprocessable,
-  validateBody,
-} from '../http-utils'
-import {
-  addCondition,
-  addObservation,
-  addVaccination,
-  readServer,
-  updateServer,
-  type MockServerState,
-} from '../server-state'
+import { fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
+import { addCondition, addObservation, addVaccination, readServer, updateServer } from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
-import { findPet } from './pets'
 
 const recordNotFound = () => notFound('Запись не найдена')
-const petNotFound = () => notFound('Питомец не найден')
 const fromClinic = () => forbidden('Запись внесена клиникой — изменить её может только клиника')
 
 /** 422 без поля: правило про всё тело, как model_validator у Pydantic (Р-45). */
@@ -49,11 +40,6 @@ function hasObservationData(values: Partial<Record<(typeof OBSERVATION_FIELDS)[n
   })
 }
 
-/** Владелец из access-токена или готовый ответ 401/403. */
-function authorizeOwner(state: MockServerState, request: Request) {
-  return authorizeAccount(state, request, { allowed: ['owner'] })
-}
-
 /** Запись этого питомца; запись другого питомца — как несуществующая, 404 (Р-47). */
 function findRecord<T extends { id: number; pet_id: number }>(list: T[], petId: number, rawId: unknown): T | undefined {
   const id = Number(rawId)
@@ -61,10 +47,6 @@ function findRecord<T extends { id: number; pet_id: number }>(list: T[], petId: 
 }
 
 const sent = (raw: Record<string, unknown>, field: string) => field in raw
-
-/** Новые даты сверху; в один день — последняя добавленная (Р-45, Р-46). */
-export const newestFirst = <T extends { id: number; date: string }>(a: T, b: T) =>
-  a.date === b.date ? b.id - a.id : a.date < b.date ? 1 : -1
 
 // Как у бэкенда: доступ (401/403), тело (422), поиск питомца и записи (404), источник записи (403).
 export const healthHandlers = [
@@ -75,10 +57,7 @@ export const healthHandlers = [
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
-    // Архивные не отдаются: возврата из архива в MVP нет (Р-44).
-    return HttpResponse.json(
-      state.conditions.filter((item) => item.pet_id === pet.id && item.archived_at === null).sort((a, b) => a.id - b.id),
-    )
+    return HttpResponse.json(activeConditions(state, pet.id))
   }),
 
   http.post('*/api/pets/:petId/conditions', async ({ request, params }) => {
@@ -215,7 +194,7 @@ export const healthHandlers = [
     if (account instanceof Response) return account
     const pet = findPet(state, account.id, params.petId)
     if (!pet) return petNotFound()
-    return HttpResponse.json(state.vaccinations.filter((item) => item.pet_id === pet.id).sort(newestFirst))
+    return HttpResponse.json(petVaccinations(state, pet.id))
   }),
 
   http.post('*/api/pets/:petId/vaccinations', async ({ request, params }) => {
@@ -286,34 +265,6 @@ export const healthHandlers = [
     }),
   ),
 ]
-
-interface Period {
-  from: string | null
-  to: string | null
-}
-
-/** Период дневника из параметров date_from / date_to или готовый ответ 422 (Р-45); его же читает карточка клиники (Р-54). */
-export function readPeriod(request: Request): Period | Response {
-  const query = new URL(request.url).searchParams
-  const from = query.get('date_from')
-  const to = query.get('date_to')
-  const fromError = from === null ? null : isoDateError(from, 'Начало периода')
-  const toError = to === null ? null : isoDateError(to, 'Конец периода')
-  // Порядок — только у двух верных дат.
-  const outOfOrder = !fromError && !toError && from !== null && to !== null && from > to
-  const invalid = fieldErrors('query', {
-    date_from: fromError,
-    date_to: toError ?? (outOfOrder ? 'Конец периода — не раньше начала' : null),
-  })
-  return invalid ?? { from, to }
-}
-
-/** Наблюдения питомца за период, границы включительно: новые даты сверху. */
-export function observationsInPeriod(state: MockServerState, petId: number, { from, to }: Period): Observation[] {
-  return state.observations
-    .filter((item) => item.pet_id === petId && (from === null || item.date >= from) && (to === null || item.date <= to))
-    .sort(newestFirst)
-}
 
 /** Проверки полей наблюдения: в POST дата обязательна, в PATCH — только присланные поля, null в дате — 422. */
 function observationChecks(raw: Record<string, unknown>, { creating }: { creating: boolean }) {

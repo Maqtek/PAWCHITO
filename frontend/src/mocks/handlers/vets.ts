@@ -1,19 +1,12 @@
 import { http, HttpResponse } from 'msw'
 import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
-import { authorizeAccount, forbidden, notFound, readBody, validateBody } from '../http-utils'
+import { authorizeClinic } from '../access'
+import { notFound, readBody, validateBody } from '../http-utils'
 import { newVet, readServer, updateServer, type MockServerState } from '../server-state'
 import { normalizeText } from '../text-validation'
 import { specializationError, vacationError, vetNameError } from '../vet-validation'
 
 const vetNotFound = () => notFound('Врач не найден')
-
-/** Клиника аккаунта из access-токена или готовый ответ 401/403. */
-export function authorizeClinic(state: MockServerState, request: Request): number | Response {
-  const account = authorizeAccount(state, request, { allowed: ['clinic'] })
-  if (account instanceof Response) return account
-  // У аккаунта клиники clinic_id есть всегда; без него — как без прав.
-  return account.clinic_id ?? forbidden()
-}
 
 /** Врач своей клиники; врач другой клиники — как несуществующий, 404 (Р-39). */
 function findVet(state: MockServerState, clinicId: number, rawId: unknown): Vet | undefined {

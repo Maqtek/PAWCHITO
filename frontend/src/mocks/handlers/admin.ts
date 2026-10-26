@@ -1,5 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import type { ClinicAccountCreate, ClinicCreate, ClinicUpdate } from '../../api/schema'
+import { authorizeAdmin } from '../access'
 import { emailError } from '../auth-validation'
 import {
   clinicAddressError,
@@ -9,7 +10,7 @@ import {
   timeError,
   workDaysError,
 } from '../clinic-validation'
-import { authorizeAccount, conflict, notFound, readBody, validateBody } from '../http-utils'
+import { conflict, notFound, readBody, validateBody } from '../http-utils'
 import { notifyAppointment } from '../notify'
 import {
   attemptsKey,
@@ -43,7 +44,7 @@ const sortedDays = (days: number[]) => [...days].sort((a, b) => a - b)
 export const adminHandlers = [
   http.get('*/api/admin/clinics', ({ request }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['admin'] })
+    const account = authorizeAdmin(state, request)
     if (account instanceof Response) return account
     return HttpResponse.json(state.clinics.map((clinic) => toAdminClinic(state, clinic)))
   }),
@@ -51,7 +52,7 @@ export const adminHandlers = [
   http.post('*/api/admin/clinics', async ({ request }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       const opens = timeError(raw.opens_at, 'Открытие')
       const closes = timeError(raw.closes_at, 'Закрытие')
@@ -83,7 +84,7 @@ export const adminHandlers = [
 
   http.get('*/api/admin/clinics/:id', ({ request, params }) => {
     const state = readServer()
-    const account = authorizeAccount(state, request, { allowed: ['admin'] })
+    const account = authorizeAdmin(state, request)
     if (account instanceof Response) return account
     const clinic = findClinic(state, params.id)
     return clinic ? HttpResponse.json(toAdminClinic(state, clinic)) : clinicNotFound()
@@ -92,7 +93,7 @@ export const adminHandlers = [
   http.patch('*/api/admin/clinics/:id', async ({ request, params }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       // Проверяются только присланные поля.
       const sent = (field: string) => field in raw
@@ -125,7 +126,7 @@ export const adminHandlers = [
 
   http.post('*/api/admin/clinics/:id/archive', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
       if (!clinic) return clinicNotFound()
@@ -152,7 +153,7 @@ export const adminHandlers = [
 
   http.post('*/api/admin/clinics/:id/restore', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
       if (!clinic) return clinicNotFound()
@@ -166,7 +167,7 @@ export const adminHandlers = [
   http.post('*/api/admin/clinics/:id/account', async ({ request, params }) => {
     const raw = await readBody(request)
     return updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       const invalid = validateBody({ email: emailError(raw.email) })
       if (invalid) return invalid
@@ -194,7 +195,7 @@ export const adminHandlers = [
 
   http.post('*/api/admin/clinics/:id/account/reset-password', ({ request, params }) =>
     updateServer((state) => {
-      const account = authorizeAccount(state, request, { allowed: ['admin'] })
+      const account = authorizeAdmin(state, request)
       if (account instanceof Response) return account
       const clinic = findClinic(state, params.id)
       if (!clinic) return clinicNotFound()

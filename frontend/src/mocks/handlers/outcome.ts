@@ -1,8 +1,17 @@
 import { http, HttpResponse } from 'msw'
 import { healthLimits, outcomeLimits } from '../../api/limits'
-import type { CareStatus, ClinicPetUpdate, ConditionCreate, OutcomeCreate, Prescription, WeightCreate } from '../../api/schema'
+import type {
+  CareStatus,
+  ClinicPetUpdate,
+  ConditionCreate,
+  OutcomeCreate,
+  Pet,
+  Prescription,
+  WeightCreate,
+} from '../../api/schema'
 import { moscowLocal, toMoscowString } from '../../lib/dates'
 import { careStatusLabel } from '../../lib/labels'
+import { authorizeClinic, canReadCard, clinicOf, findClinicAppointment, petNotFound } from '../access'
 import { pastDateError } from '../date-validation'
 import { conditionKindError, conditionTitleError, weightError } from '../health-validation'
 import { conflict, fieldError, forbidden, notFound, readBody, unprocessable, validateBody } from '../http-utils'
@@ -19,8 +28,6 @@ import {
   type MockServerState,
 } from '../server-state'
 import { multilineTextError, normalizeText } from '../text-validation'
-import { canReadCard, clinicOf, findOwnAppointment } from './clinic-appointments'
-import { authorizeClinic } from './vets'
 
 /** Первые байты файла: тип фото определяется по содержимому, а не по имени (Р-58). */
 function photoType(bytes: Uint8Array): 'jpeg' | 'png' | 'webp' | null {
@@ -56,15 +63,17 @@ async function multipartFile(request: Request, field: string): Promise<Uint8Arra
 }
 
 /**
- * Может ли клиника менять карточку (Р-57): нет связи с питомцем — 404, как у чтения карточки;
- * связь есть, но нет завершённого приёма — 403.
+ * Питомец, карточку которого клиника может менять (Р-57), или готовый ответ: нет связи с питомцем — 404, как у чтения
+ * карточки; связь есть, но нет завершённого приёма — 403.
  */
-function editAccess(state: MockServerState, clinicId: number, petId: number): Response | null {
-  if (!canReadCard(state, clinicId, petId)) return notFound('Питомец не найден')
+function editablePet(state: MockServerState, clinicId: number, rawId: unknown): Pet | Response {
+  const petId = Number(rawId)
+  if (!canReadCard(state, clinicId, petId)) return petNotFound()
   const completed = state.appointments.some(
     (item) => item.pet_id === petId && item.status === 'completed' && clinicOf(state, item) === clinicId,
   )
-  return completed ? null : forbidden('Нет завершённого приёма')
+  if (!completed) return forbidden('Нет завершённого приёма')
+  return state.pets.find((item) => item.id === petId) ?? petNotFound()
 }
 
 const sorted = (times: string[]) => [...times].sort()
@@ -79,7 +88,7 @@ export const outcomeHandlers = [
       const now = new Date()
       const errors = outcomeErrors(raw, null, now)
       if (errors.length > 0) return unprocessable(errors)
-      const appointment = findOwnAppointment(state, clinicId, params.id)
+      const appointment = findClinicAppointment(state, clinicId, params.id)
       if (!appointment) return notFound('Запись не найдена')
       if (appointment.status === 'completed') return conflict('Итог уже внесён')
       if (appointment.status !== 'confirmed') return conflict('Итог вносится только у подтверждённой записи')
@@ -92,7 +101,7 @@ export const outcomeHandlers = [
       const body = raw as OutcomeCreate
       const pet = state.pets.find((item) => item.id === appointment.pet_id)
       const clinic = state.clinics.find((item) => item.id === clinicId)
-      if (!pet || !clinic) return notFound('Питомец не найден')
+      if (!pet || !clinic) return petNotFound()
       const completedAt = toMoscowString(now)
 
       const prescriptions: Prescription[] = (body.prescriptions ?? []).map((item) => {
@@ -168,11 +177,8 @@ export const outcomeHandlers = [
         sex: sent('sex') ? sexError(raw.sex) : null,
       })
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const pet = state.pets.find((item) => item.id === petId)
-      if (!pet) return notFound('Питомец не найден')
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
       const body = raw as ClinicPetUpdate
       const changes: string[] = []
       if (body.breed !== undefined && normalizeText(body.breed) !== pet.breed) {
@@ -202,12 +208,11 @@ export const outcomeHandlers = [
         weight: raw.weight === null || raw.weight === undefined ? 'Укажите вес' : weightError(raw.weight),
       })
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
       const body = raw as WeightCreate
-      const observation = addObservation(state, { pet_id: petId, date: body.date, weight: body.weight, source: 'clinic' })
-      notifyPetUpdated(state, petId, clinicId, ['вес'])
+      const observation = addObservation(state, { pet_id: pet.id, date: body.date, weight: body.weight, source: 'clinic' })
+      notifyPetUpdated(state, pet.id, clinicId, ['вес'])
       return HttpResponse.json(observation, { status: 201 })
     })
   }),
@@ -224,11 +229,10 @@ export const outcomeHandlers = [
           'description' in raw ? multilineTextError(raw.description, 'Комментарий', healthLimits.conditionDescriptionMax) : null,
       })
       if (bad) return bad
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: petId, source: 'clinic' })
-      notifyPetUpdated(state, petId, clinicId, ['особенности здоровья'])
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
+      const condition = addCondition(state, { ...(raw as ConditionCreate), pet_id: pet.id, source: 'clinic' })
+      notifyPetUpdated(state, pet.id, clinicId, ['особенности здоровья'])
       return HttpResponse.json(condition, { status: 201 })
     })
   }),
@@ -244,11 +248,8 @@ export const outcomeHandlers = [
       }
       const type = photoType(bytes)
       if (!type) return HttpResponse.json({ detail: 'Фото — JPEG, PNG или WebP' }, { status: 415 })
-      const petId = Number(params.petId)
-      const denied = editAccess(state, clinicId, petId)
-      if (denied) return denied
-      const pet = state.pets.find((item) => item.id === petId)
-      if (!pet) return notFound('Питомец не найден')
+      const pet = editablePet(state, clinicId, params.petId)
+      if (pet instanceof Response) return pet
       // Бэкенд пережимает фото в WebP и отдаёт /media/<uuid>.webp; моки хранят файл как есть, в data:-адресе (Р-58).
       let binary = ''
       for (const byte of bytes) binary += String.fromCharCode(byte)
