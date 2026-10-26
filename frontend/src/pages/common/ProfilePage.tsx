@@ -37,7 +37,7 @@ export function ProfilePage() {
           <h2 className="text-lg font-extrabold">Данные аккаунта</h2>
           <div className="mt-4 flex flex-col gap-3">
             <NameField user={user} />
-            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-[8rem_1fr]">
+            <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
               <dt className="text-sm text-ink-muted">Email</dt>
               <dd className="font-bold break-words">{user.email}</dd>
               <dt className="text-sm text-ink-muted">Роль</dt>

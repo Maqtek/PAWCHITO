@@ -61,8 +61,9 @@ describe('RequireRole', () => {
   it('нет поля must_change_password — пускает, без петли через смену пароля', async () => {
     server.use(
       http.get('*/api/users/me', () => {
-        const owner = readServer().accounts.find((item) => item.email === 'owner@example.com')!
-        return HttpResponse.json({ ...toUser(owner), must_change_password: undefined })
+        const state = readServer()
+        const owner = state.accounts.find((item) => item.email === 'owner@example.com')!
+        return HttpResponse.json({ ...toUser(state, owner), must_change_password: undefined })
       }),
     )
     renderGuarded()

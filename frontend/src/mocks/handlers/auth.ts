@@ -20,6 +20,7 @@ import {
 } from '../auth-validation'
 import { authorizeAccount, forbidden, tooManyRequests, unauthorized } from '../http-utils'
 import {
+  attemptsKey,
   findAccount,
   issueRefreshToken,
   newRecoveryCode,
@@ -36,8 +37,6 @@ import {
 
 const MAX_FAILURES = 5
 const LOCK_MS = 15 * 60_000
-
-const attemptsKey = (email: string) => email.trim().toLowerCase()
 
 /**
  * Секунды до конца паузы после пяти неудач или null. Счётчик один на аккаунт: неверный пароль при входе,
@@ -88,11 +87,12 @@ export const authHandlers = [
         must_change_password: false,
         is_active: true,
         recovery_code: newRecoveryCode(),
+        clinic_id: null,
       }
       state.nextUserId += 1
       state.accounts.push(account)
       return HttpResponse.json(
-        { user: toUser(account), recovery_code: account.recovery_code, ...startSession(state, account) },
+        { user: toUser(state, account), recovery_code: account.recovery_code, ...startSession(state, account) },
         { status: 201 },
       )
     })
@@ -211,8 +211,9 @@ export const authHandlers = [
   }),
 
   http.get('*/api/users/me', ({ request }) => {
-    const account = authorizeAccount(readServer(), request, { allowPasswordChange: true })
-    return account instanceof Response ? account : HttpResponse.json(toUser(account))
+    const state = readServer()
+    const account = authorizeAccount(state, request, { allowPasswordChange: true })
+    return account instanceof Response ? account : HttpResponse.json(toUser(state, account))
   }),
 
   http.patch('*/api/users/me', async ({ request }) => {
@@ -220,10 +221,12 @@ export const authHandlers = [
     return updateServer((state) => {
       const account = authorizeAccount(state, request)
       if (account instanceof Response) return account
+      // Имя клиники — её название, его меняет администратор (Р-35); тело не проверяется.
+      if (account.role === 'clinic') return forbidden('Название клиники меняет администратор')
       const invalid = validateBody({ full_name: fullNameError(raw.full_name) })
       if (invalid) return invalid
       account.full_name = (raw as UserUpdate).full_name.trim()
-      return HttpResponse.json(toUser(account))
+      return HttpResponse.json(toUser(state, account))
     })
   }),
 

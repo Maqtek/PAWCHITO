@@ -1,5 +1,5 @@
 /**
- * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.1).
+ * Типы API, написанные вручную по docs/Контракты_Pawchito.md (v1.2).
  * `paths` и `components` повторяют формат openapi-typescript: когда бэкенд отдаст
  * openapi.json, эти два интерфейса заменяются сгенерированными, а псевдонимы
  * типов внизу файла переезжают в отдельный модуль поверх сгенерированного.
@@ -9,6 +9,7 @@
 type Json<T> = { headers: { [name: string]: unknown }; content: { 'application/json': T } }
 type NoContent = { headers: { [name: string]: unknown }; content?: never }
 type NoParams = { query?: never; header?: never; path?: never; cookie?: never }
+type ClinicPath = { query?: never; header?: never; path: { id: number }; cookie?: never }
 type Body<T> = { content: { 'application/json': T } }
 
 export interface components {
@@ -55,6 +56,29 @@ export interface components {
       care_status_clinic: components['schemas']['ClinicRef'] | null
       archived_at: string | null
     }
+    /** Клиника: часы ЧЧ:ММ одинаковы для всех рабочих дней; work_days — 1 (понедельник) … 7 (воскресенье). */
+    Clinic: {
+      id: number
+      name: string
+      address: string
+      phone: string
+      opens_at: string
+      closes_at: string
+      work_days: number[]
+    }
+    ClinicAccount: { id: number; email: string; is_active: boolean }
+    AdminClinic: components['schemas']['Clinic'] & {
+      archived_at: string | null
+      account: components['schemas']['ClinicAccount'] | null
+      /** Показывается перед скрытием: столько записей будет отменено. */
+      future_appointments_count: number
+    }
+    ClinicCreate: Omit<components['schemas']['Clinic'], 'id'>
+    ClinicUpdate: Partial<components['schemas']['ClinicCreate']>
+    ClinicAccountCreate: { email: string }
+    ClinicAccountCreated: { user: components['schemas']['User']; temporary_password: string }
+    TemporaryPassword: { temporary_password: string }
+    ClinicArchived: { clinic: components['schemas']['AdminClinic']; cancelled_appointments: number }
     UnreadCount: { unread_count: number }
     Error: { detail: string }
     /** Ошибка поля в ответе 422 (формат FastAPI). */
@@ -182,6 +206,102 @@ export interface paths {
       responses: { 200: Json<Schemas['UnreadCount']>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
     }
   }
+  '/admin/clinics': {
+    parameters: NoParams
+    get: {
+      parameters: NoParams
+      requestBody?: never
+      responses: { 200: Json<Schemas['AdminClinic'][]>; 401: Json<Schemas['Error']>; 403: Json<Schemas['Error']> }
+    }
+    post: {
+      parameters: NoParams
+      requestBody: Body<Schemas['ClinicCreate']>
+      responses: {
+        201: Json<Schemas['AdminClinic']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/admin/clinics/{id}': {
+    parameters: ClinicPath
+    get: {
+      parameters: ClinicPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['AdminClinic']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+    patch: {
+      parameters: ClinicPath
+      requestBody: Body<Schemas['ClinicUpdate']>
+      responses: {
+        200: Json<Schemas['AdminClinic']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/admin/clinics/{id}/archive': {
+    parameters: ClinicPath
+    post: {
+      parameters: ClinicPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['ClinicArchived']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/admin/clinics/{id}/restore': {
+    parameters: ClinicPath
+    post: {
+      parameters: ClinicPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['AdminClinic']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
+  '/admin/clinics/{id}/account': {
+    parameters: ClinicPath
+    post: {
+      parameters: ClinicPath
+      requestBody: Body<Schemas['ClinicAccountCreate']>
+      responses: {
+        201: Json<Schemas['ClinicAccountCreated']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+        409: Json<Schemas['Error']>
+        422: Json<Schemas['HTTPValidationError']>
+      }
+    }
+  }
+  '/admin/clinics/{id}/account/reset-password': {
+    parameters: ClinicPath
+    post: {
+      parameters: ClinicPath
+      requestBody?: never
+      responses: {
+        200: Json<Schemas['TemporaryPassword']>
+        401: Json<Schemas['Error']>
+        403: Json<Schemas['Error']>
+        404: Json<Schemas['Error']>
+      }
+    }
+  }
 }
 
 export type Role = Schemas['Role']
@@ -206,3 +326,12 @@ export type UserUpdate = Schemas['UserUpdate']
 export type RecoveryCodeRequest = Schemas['RecoveryCodeRequest']
 export type ValidationError = Schemas['ValidationError']
 export type HTTPValidationError = Schemas['HTTPValidationError']
+export type Clinic = Schemas['Clinic']
+export type ClinicAccount = Schemas['ClinicAccount']
+export type AdminClinic = Schemas['AdminClinic']
+export type ClinicCreate = Schemas['ClinicCreate']
+export type ClinicUpdate = Schemas['ClinicUpdate']
+export type ClinicAccountCreate = Schemas['ClinicAccountCreate']
+export type ClinicAccountCreated = Schemas['ClinicAccountCreated']
+export type TemporaryPassword = Schemas['TemporaryPassword']
+export type ClinicArchived = Schemas['ClinicArchived']

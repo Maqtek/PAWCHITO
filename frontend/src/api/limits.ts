@@ -8,3 +8,12 @@ export const authLimits = {
   passwordMin: 8,
   passwordMax: 128,
 } as const
+
+/**
+ * Лимиты полей клиники (контракты, раздел 9 «Лимиты полей клиники»).
+ * Длина — в символах Unicode (code points), как у authLimits. Часы — в пределах суток, 00:00–23:30 (Р-33).
+ */
+export const clinicLimits = {
+  nameMax: 100,
+  addressMax: 200,
+} as const

@@ -5,10 +5,10 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const RECOVERY_CODE = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/
 
 /** Длина в символах Unicode, как len() в Python. */
-const charCount = (value: string) => [...value].length
+export const charCount = (value: string) => [...value].length
 
 /** Управляющие символы U+0000–U+001F и U+007F. */
-function hasControlChars(value: string): boolean {
+export function hasControlChars(value: string): boolean {
   return [...value].some((char) => {
     const code = char.codePointAt(0) ?? 0
     return code < 0x20 || code === 0x7f

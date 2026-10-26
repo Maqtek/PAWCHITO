@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Spinner } from '../components/ui'
 import { RequireRole } from '../features/session/RequireRole'
 import { AppShell } from '../layouts/AppShell'
+import { AdminClinicPage } from '../pages/admin/AdminClinicPage'
 import { AdminClinicsPage } from '../pages/admin/AdminClinicsPage'
 import { ChangePasswordPage } from '../pages/auth/ChangePasswordPage'
 import { LoginPage } from '../pages/auth/LoginPage'
@@ -83,6 +84,7 @@ export function AppRoutes() {
         >
           <Route index element={<Navigate to="clinics" replace />} />
           <Route path="clinics" element={<AdminClinicsPage />} />
+          <Route path="clinics/:clinicId" element={<AdminClinicPage />} />
         </Route>
         <Route path="profile" element={<ProfilePage />} />
         {UiKitPage && (

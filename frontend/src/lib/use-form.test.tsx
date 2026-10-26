@@ -1,7 +1,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../api/errors'
-import { TextField } from '../components/ui'
+import { SelectField, TextField } from '../components/ui'
 import { renderWithProviders } from '../test/render'
 import { useForm, type FormFailure } from './use-form'
 
@@ -153,5 +153,27 @@ describe('useForm', () => {
     await user.click(screen.getByRole('button', { name: 'Отправить' }))
     expect(await screen.findByText('Занят: a@b.c')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('поле-список: onChange обновляет значение', async () => {
+    function TimeForm() {
+      const form = useForm({ initial: { time: '09:00' }, validate: () => ({}), onSubmit: async () => {} })
+      return (
+        <form>
+          <SelectField
+            label="Время"
+            options={[
+              { value: '09:00', label: '09:00' },
+              { value: '10:00', label: '10:00' },
+            ]}
+            {...form.field('time')}
+          />
+          <output>{form.values.time}</output>
+        </form>
+      )
+    }
+    const { user } = renderWithProviders(<TimeForm />)
+    await user.selectOptions(screen.getByLabelText('Время'), '10:00')
+    expect(screen.getByRole('status')).toHaveTextContent('10:00')
   })
 })

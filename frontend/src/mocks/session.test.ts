@@ -62,3 +62,14 @@ describe('помощники моков', () => {
     expect(readServer().network).toBe(true)
   })
 })
+
+describe('состояние моков до этапа 3', () => {
+  it('сохранённое состояние без клиник заменяется seed — у аккаунтов клиник есть clinic_id', () => {
+    const old = { ...readServer() } as Record<string, unknown>
+    delete old.clinics
+    localStorage.setItem('pawchito:mock-server', JSON.stringify(old))
+    const state = readServer()
+    expect(state.clinics.map((clinic) => clinic.id)).toEqual([2, 3, 4, 5])
+    expect(state.accounts.find((account) => account.email === 'clinic@example.com')?.clinic_id).toBe(2)
+  })
+})
