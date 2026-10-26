@@ -1,0 +1,12 @@
+# Ежедневный бэкап (deploy/backup.sh) ночью по Москве, когда нагрузка минимальна.
+[Unit]
+Description=PAWCHITO: ежедневный бэкап
+
+[Timer]
+# Часовой пояс явно: не зависит от настроек сервера
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+# Сервер был выключен в 03:30 — бэкап сразу после включения
+Persistent=true
+
+[Install]
+WantedBy=timers.target

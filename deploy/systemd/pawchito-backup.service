@@ -1,0 +1,12 @@
+# Бэкап базы и тома media (deploy/backup.sh). Запускается таймером pawchito-backup.timer.
+# Установка — deploy/README.md, «Бэкапы».
+[Unit]
+Description=PAWCHITO: бэкап базы и тома media
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+# Пользователь деплоя: в группе docker, владелец /opt/pawchito и /opt/pawchito-backups
+User=deploy
+ExecStart=/opt/pawchito/deploy/backup.sh
