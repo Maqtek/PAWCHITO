@@ -1,3 +1,5 @@
+import { moscowLocal } from './dates'
+
 const TIME_ZONE = 'Europe/Moscow'
 const LOCALE = 'ru-RU'
 
@@ -27,8 +29,7 @@ function moscowParts(date: Date) {
 
 /** Дата «YYYY-MM-DD» по московскому времени: сервер сверяет даты без времени с сегодняшним днём в Москве. */
 export function moscowIsoDate(date: Date): string {
-  const { year, month, day } = moscowParts(date)
-  return [String(year).padStart(4, '0'), String(month).padStart(2, '0'), String(day).padStart(2, '0')].join('-')
+  return moscowLocal(date).date
 }
 
 /** «среда, 17 июня» по московскому времени: момент или дата «YYYY-MM-DD». */
