@@ -102,6 +102,8 @@ export interface MockServerState {
   /** Записи к врачу всех владельцев; владелец видит только записи своих питомцев. */
   appointments: MockAppointment[]
   nextAppointmentId: number
+  /** Рецепты хранятся в итоге записи; номер — общий на все итоги. */
+  nextPrescriptionId: number
   notifications: MockNotification[]
   nextNotificationId: number
   refreshTokens: Record<string, { userId: number; revoked: boolean }>
@@ -376,6 +378,7 @@ export function seedState({ refreshDelayMs = DEFAULT_REFRESH_DELAY_MS }: { refre
     nextVaccinationId: 100,
     appointments,
     nextAppointmentId: 100,
+    nextPrescriptionId: 100,
     notifications: seedNotifications(appointments),
     nextNotificationId: 100,
     refreshTokens: {},

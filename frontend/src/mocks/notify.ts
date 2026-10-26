@@ -34,6 +34,21 @@ function notify(state: MockServerState, userId: number, type: NotificationType, 
   state.nextNotificationId += 1
 }
 
+/** Итог приёма — владельцу: статус ухода и число дел курса (БП §9). */
+export function notifyOutcome(state: MockServerState, appointment: MockAppointment, careStatus: string, reminders: number): void {
+  const pet = state.pets.find((item) => item.id === appointment.pet_id)
+  if (!pet) return
+  notify(state, pet.owner_id, 'outcome_added', noticeText.outcomeAdded(pet.name, careStatus, reminders), `/appointments/${appointment.id}`)
+}
+
+/** Клиника изменила данные или фото питомца — владельцу, с тем, что изменено (Р-57, Р-58). */
+export function notifyPetUpdated(state: MockServerState, petId: number, clinicId: number, changes: string[]): void {
+  const pet = state.pets.find((item) => item.id === petId)
+  const clinic = state.clinics.find((item) => item.id === clinicId)
+  if (!pet || !clinic || changes.length === 0) return
+  notify(state, pet.owner_id, 'pet_updated_by_clinic', noticeText.petUpdated(clinic.name, pet.name, changes), '/pets')
+}
+
 /** Уведомление о записи: клинике — о заявке и отменах владельцем или системой, владельцу — о действиях клиники. */
 export function notifyAppointment(state: MockServerState, appointment: MockAppointment, event: AppointmentEvent): void {
   const pet = state.pets.find((item) => item.id === appointment.pet_id)
