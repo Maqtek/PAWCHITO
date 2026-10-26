@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { NETWORK, SERVER_UNAVAILABLE } from '../test/texts'
 import { errorMessage, sessionReasonMessage, validationMessages } from './error-messages'
 import { ApiError, NetworkError } from './errors'
 
@@ -19,10 +20,9 @@ describe('errorMessage', () => {
   })
 
   it('сеть и сбой сервера — общие тексты в любом контексте', () => {
-    const network = 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.'
-    expect(errorMessage(new NetworkError(), 'login')).toBe(network)
-    expect(errorMessage(new TypeError('Failed to fetch'))).toBe(network)
-    expect(errorMessage(failed(503), 'login')).toBe('Сервис временно недоступен. Попробуйте через несколько минут.')
+    expect(errorMessage(new NetworkError(), 'login')).toBe(NETWORK)
+    expect(errorMessage(new TypeError('Failed to fetch'))).toBe(NETWORK)
+    expect(errorMessage(failed(503), 'login')).toBe(SERVER_UNAVAILABLE)
   })
 
   it.each([

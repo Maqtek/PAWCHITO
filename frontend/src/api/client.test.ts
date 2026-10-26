@@ -1,11 +1,12 @@
 import { http, HttpResponse } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '../mocks/node'
+import { recordRequests } from '../test/requests'
+import { collectEvents, tokenResponse } from '../test/session'
 import { getAccessToken, setAccessToken } from './auth-token'
 import { api } from './client'
 import { NetworkError } from './errors'
 import type { User } from './schema'
-import { onSessionChange, type SessionEvent } from './session'
 
 const user: User = {
   id: 1,
@@ -15,8 +16,8 @@ const user: User = {
   must_change_password: false,
 }
 
-const tokenResponse = (accessToken: string) =>
-  HttpResponse.json({ access_token: accessToken, token_type: 'bearer', expires_in: 900 })
+/** Запросы обмена токена; ответ — у обработчика, добавленного раньше. */
+const recordRefreshes = () => recordRequests('post', '*/api/auth/refresh')
 
 const meOnlyWith = (accessToken: string) =>
   http.get('*/api/users/me', ({ request }) =>
@@ -53,19 +54,13 @@ describe('api', () => {
   })
 
   it('параллельные запросы с 401 обновляют токен один раз', async () => {
-    let refreshCalls = 0
-    server.use(
-      http.post('*/api/auth/refresh', () => {
-        refreshCalls += 1
-        return tokenResponse('fresh')
-      }),
-      meOnlyWith('fresh'),
-    )
+    server.use(http.post('*/api/auth/refresh', () => tokenResponse('fresh')), meOnlyWith('fresh'))
+    const refreshes = recordRefreshes()
 
     const results = await Promise.all([api.GET('/users/me'), api.GET('/users/me')])
 
     expect(results.map(({ response }) => response.status)).toEqual([200, 200])
-    expect(refreshCalls).toBe(1)
+    expect(refreshes.count).toBe(1)
   })
 
   it('если обновить токен не удалось — отдаёт 401 и забывает токен', async () => {
@@ -83,18 +78,13 @@ describe('api', () => {
   })
 
   it('не обновляет токен в ответ на 401 от самого /auth/refresh', async () => {
-    let refreshCalls = 0
-    server.use(
-      http.post('*/api/auth/refresh', () => {
-        refreshCalls += 1
-        return HttpResponse.json({ detail: 'Сессия истекла' }, { status: 401 })
-      }),
-    )
+    server.use(http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: 'Сессия истекла' }, { status: 401 })))
+    const refreshes = recordRefreshes()
 
     const { response } = await api.POST('/auth/refresh')
 
     expect(response.status).toBe(401)
-    expect(refreshCalls).toBe(1)
+    expect(refreshes.count).toBe(1)
   })
 
   it('при загрузке сначала обновляет токен: первый запрос уходит уже с ним (БП §1)', async () => {
@@ -141,8 +131,7 @@ describe('api', () => {
   })
 
   it('сессия закончилась на сервере — событие expired', async () => {
-    const events: SessionEvent[] = []
-    onSessionChange((event) => events.push(event))
+    const events = collectEvents()
     server.use(
       http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: 'Сессия истекла' }, { status: 401 })),
       meOnlyWith('never'),
@@ -155,21 +144,17 @@ describe('api', () => {
   })
 
   it('гость: 401 без второго обновления и без события', async () => {
-    let refreshCalls = 0
-    const events: SessionEvent[] = []
-    onSessionChange((event) => events.push(event))
+    const events = collectEvents()
     server.use(
-      http.post('*/api/auth/refresh', () => {
-        refreshCalls += 1
-        return HttpResponse.json({ detail: 'Нет сессии' }, { status: 401 })
-      }),
+      http.post('*/api/auth/refresh', () => HttpResponse.json({ detail: 'Нет сессии' }, { status: 401 })),
       meOnlyWith('never'),
     )
+    const refreshes = recordRefreshes()
 
     const { response } = await api.GET('/users/me')
 
     expect(response.status).toBe(401)
-    expect(refreshCalls).toBe(1)
+    expect(refreshes.count).toBe(1)
     expect(events).toEqual([])
   })
 
@@ -179,8 +164,7 @@ describe('api', () => {
         HttpResponse.json({ detail: 'password_change_required' }, { status: 403 }),
       ),
     )
-    const events: SessionEvent[] = []
-    onSessionChange((event) => events.push(event))
+    const events = collectEvents()
     setAccessToken('t1')
 
     const { response } = await api.GET('/notifications/unread-count')
@@ -196,8 +180,7 @@ describe('api', () => {
       ),
       http.post('*/api/auth/login', () => HttpResponse.json({ detail: 'password_change_required' }, { status: 403 })),
     )
-    const events: SessionEvent[] = []
-    onSessionChange((event) => events.push(event))
+    const events = collectEvents()
     setAccessToken('t1')
 
     await api.GET('/notifications/unread-count')
@@ -208,17 +191,14 @@ describe('api', () => {
 
   it('/auth/change-password: middleware не ставит токен и не обменивает его на 401', async () => {
     let authorization: string | null = 'не было запроса'
-    let refreshCalls = 0
     server.use(
-      http.post('*/api/auth/refresh', () => {
-        refreshCalls += 1
-        return tokenResponse('fresh')
-      }),
+      http.post('*/api/auth/refresh', () => tokenResponse('fresh')),
       http.post('*/api/auth/change-password', ({ request }) => {
         authorization = request.headers.get('Authorization')
         return HttpResponse.json({ detail: 'Требуется вход' }, { status: 401 })
       }),
     )
+    const refreshes = recordRefreshes()
     setAccessToken('t1')
 
     const { response } = await api.POST('/auth/change-password', {
@@ -227,7 +207,7 @@ describe('api', () => {
 
     expect(response.status).toBe(401)
     expect(authorization).toBeNull()
-    expect(refreshCalls).toBe(0)
+    expect(refreshes.count).toBe(0)
   })
 
   it('параллельные 401 с отказом обмена — одно событие expired', async () => {
@@ -237,8 +217,7 @@ describe('api', () => {
       http.get('*/api/users/me', unauthorized),
       http.get('*/api/pets', unauthorized),
     )
-    const events: SessionEvent[] = []
-    onSessionChange((event) => events.push(event))
+    const events = collectEvents()
     setAccessToken('stale')
 
     await Promise.all([api.GET('/users/me'), api.GET('/pets')])
