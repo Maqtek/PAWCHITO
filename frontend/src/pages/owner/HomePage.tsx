@@ -1,20 +1,46 @@
 import { useQuery } from '@tanstack/react-query'
-import { CloudOff, Inbox, PawPrint, Plus } from 'lucide-react'
+import { CloudOff, PawPrint, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { meQuery } from '../../api/queries'
-import { PetCard } from '../../components/pet/PetCard'
-import { Button, buttonClass, EmptyState, Eyebrow, Spinner } from '../../components/ui'
+import { Button, buttonClass, EmptyState, Spinner } from '../../components/ui'
+import { PetSummary } from '../../features/home/PetSummary'
 import { useSelectedPet } from '../../features/pets/useSelectedPet'
 import { PageHeader } from '../../layouts/PageHeader'
 import { formatDayDate, greeting } from '../../lib/format'
-import { StagePlaceholder } from '../StagePlaceholder'
 
 export function HomePage() {
   const { data: user } = useQuery(meQuery)
   const { pet, isPending, isError, refetch } = useSelectedPet()
   // Время фиксируется при открытии страницы: рендер должен быть чистым.
   const [now] = useState(() => new Date())
+  // Сообщение относится к питомцу, при котором его показали: после переключения оно не висит над чужими делами.
+  const [status, setStatus] = useState<{ petId: number; text: string } | null>(null)
+
+  function content() {
+    if (isPending) return <Spinner label="Загружаем питомцев" />
+    if (!pet && isError) {
+      return (
+        <EmptyState
+          icon={CloudOff}
+          title="Не удалось загрузить питомцев"
+          description="Проверьте соединение и попробуйте ещё раз."
+          action={<Button onClick={() => void refetch()}>Повторить</Button>}
+        />
+      )
+    }
+    if (!pet) {
+      return (
+        <EmptyState
+          icon={PawPrint}
+          title="Добавьте первого питомца"
+          description="Здесь появятся его карточка, статус ухода, дела на сегодня и ближайшая запись к врачу."
+        />
+      )
+    }
+    // key: при смене питомца сводка начинает с чистого листа — без чужих открытых окон.
+    return <PetSummary key={pet.id} pet={pet} now={now} onStatus={(text) => setStatus({ petId: pet.id, text })} />
+  }
 
   return (
     <>
@@ -29,39 +55,11 @@ export function HomePage() {
           </Link>
         }
       />
-      {isPending ? (
-        <Spinner label="Загружаем питомцев" />
-      ) : pet ? (
-        <PetCard pet={pet} today={now} />
-      ) : isError ? (
-        <EmptyState
-          icon={CloudOff}
-          title="Не удалось загрузить питомцев"
-          description="Проверьте соединение и попробуйте ещё раз."
-          action={<Button onClick={() => void refetch()}>Повторить</Button>}
-        />
-      ) : (
-        <EmptyState
-          icon={PawPrint}
-          title="Добавьте первого питомца"
-          description="Здесь появятся его карточка, статус ухода и дела на сегодня."
-        />
-      )}
-      {pet && (
-        <section aria-labelledby="today-title" className="mt-10">
-          <Eyebrow>Дела · {pet.name}</Eyebrow>
-          <h2 id="today-title" className="mt-1 text-2xl font-extrabold tracking-tight">
-            Сегодня
-          </h2>
-          <StagePlaceholder
-            className="mt-4"
-            stage={11}
-            icon={Inbox}
-            title="План на сегодня"
-            description="Ближайшее дело, прогресс курса, следующая запись и последние уведомления."
-          />
-        </section>
-      )}
+      {/* Регион статуса смонтирован в любом состоянии страницы: сообщение в уже существующем регионе скринридер озвучит. */}
+      <p role="status" className="mb-4 text-sm font-semibold text-primary empty:mb-0">
+        {status && status.petId === pet?.id ? status.text : ''}
+      </p>
+      {content()}
     </>
   )
 }

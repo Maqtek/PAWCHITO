@@ -45,6 +45,10 @@ export const queryKeys = {
   reminders: ['reminders'] as const,
   remindersFiltered: (filters: ReminderFilters) => ['reminders', filters] as const,
   prescriptionProgress: (prescriptionId: number) => ['reminders', 'progress', prescriptionId] as const,
+  // Под общим ['reminders']: отметка дела на главной перечитывает сводку тем же refetchReminders.
+  homeSummary: (petId: number) => ['reminders', 'home', petId] as const,
+  // Под ['notifications', 'list']: отметка прочитанным в колокольчике перечитывает и уведомления главной.
+  latestNotifications: (limit: number) => ['notifications', 'list', limit] as const,
 }
 
 /** Фильтры записей клиники (Р-52): пустые не передаются. */
@@ -198,4 +202,22 @@ export const prescriptionProgressQuery = (prescriptionId: number) =>
   queryOptions({
     queryKey: queryKeys.prescriptionProgress(prescriptionId),
     queryFn: () => unwrap(api.GET('/prescriptions/{id}/progress', { params: { path: { id: prescriptionId } } })),
+  })
+
+/**
+ * Сводка главной (Р-64). Всегда свежая при открытии: её меняют не только дела, но и записи и итог приёма, а ключ —
+ * под ['reminders'].
+ */
+export const homeSummaryQuery = (petId: number) =>
+  queryOptions({
+    queryKey: queryKeys.homeSummary(petId),
+    queryFn: () => unwrap(api.GET('/home/summary', { params: { query: { pet_id: petId } } })),
+    staleTime: 0,
+  })
+
+/** Последние уведомления на главной, от новых к старым (Р-55). */
+export const latestNotificationsQuery = (limit: number) =>
+  queryOptions({
+    queryKey: queryKeys.latestNotifications(limit),
+    queryFn: () => unwrap(api.GET('/notifications', { params: { query: { limit } } })),
   })
