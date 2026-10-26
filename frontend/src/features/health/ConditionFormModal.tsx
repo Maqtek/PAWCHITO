@@ -9,7 +9,7 @@ import { FormActions, Modal, SelectField, TextareaField, TextField } from '../..
 import { changedFields } from '../../lib/changed-fields'
 import { conditionKindOptions } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 import { saveRecord } from './health-cache'
 
 interface ConditionFormModalProps {

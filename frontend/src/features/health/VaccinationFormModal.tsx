@@ -9,7 +9,7 @@ import { FormActions, Modal, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 import { dateError } from './date-error'
 import { saveRecord } from './health-cache'
 

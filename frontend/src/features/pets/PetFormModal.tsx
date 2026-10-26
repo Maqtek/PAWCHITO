@@ -4,20 +4,15 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { petLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import type { Pet, PetCreate, PetUpdate, Sex, Species } from '../../api/schema'
-import { Button, FormAlert, Modal, SelectField, TextField, type SelectOption } from '../../components/ui'
+import type { Pet, PetCreate, Sex, Species } from '../../api/schema'
+import { FormActions, Modal, SelectField, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
-import { sexLabel, speciesLabel } from '../../lib/labels'
+import { labelOptions, sexOptions, speciesLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
 import { refetchPetsAfterFailure, storePet } from './pet-cache'
 
-const speciesOptions: SelectOption[] = (['dog', 'cat', 'other'] as const).map((value) => ({
-  value,
-  label: speciesLabel[value],
-}))
-
-// «Не указан» первым: это значение по умолчанию (Р-41).
-const sexOptions: SelectOption[] = (['unknown', 'male', 'female'] as const).map((value) => ({ value, label: sexLabel[value] }))
+const speciesOptions = labelOptions(speciesLabel, ['dog', 'cat', 'other'])
 
 interface PetFormModalProps {
   open: boolean
@@ -62,17 +57,6 @@ function toPayload(values: PetValues): PetCreate {
   }
 }
 
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: PetCreate, pet: Pet): PetUpdate {
-  const update: PetUpdate = {}
-  if (next.name !== pet.name) update.name = next.name
-  if (next.species !== pet.species) update.species = next.species
-  if (next.breed !== pet.breed) update.breed = next.breed
-  if (next.birth_date !== pet.birth_date) update.birth_date = next.birth_date
-  if (next.sex !== pet.sex) update.sex = next.sex
-  return update
-}
-
 /** Те же границы, что у сервера: не раньше 1900-01-01 и не позже сегодняшнего дня по Москве. */
 function birthDateError(value: string, today: string): string | undefined {
   if (value === '') return undefined
@@ -102,6 +86,7 @@ function PetForm({ pet, onSaved, onCancel, onBusyChange }: PetFormProps) {
       birth_date: birthDateError(values.birth_date, today),
     }),
     context: 'pet',
+    onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
       const update = baseline && changedFields(payload, baseline)
@@ -109,28 +94,18 @@ function PetForm({ pet, onSaved, onCancel, onBusyChange }: PetFormProps) {
         onCancel()
         return
       }
-      onBusyChange(true)
-      try {
-        const request =
-          baseline && update
-            ? unwrap(api.PATCH('/pets/{pet_id}', { params: { path: { pet_id: baseline.id } }, body: update }))
-            : unwrap(api.POST('/pets', { body: payload }))
-        const saved = await request.catch((error: unknown) => {
-          refetchPetsAfterFailure(queryClient)
-          throw error
-        })
-        storePet(queryClient, saved)
-        onSaved(saved)
-      } finally {
-        onBusyChange(false)
-      }
+      const request =
+        baseline && update
+          ? unwrap(api.PATCH('/pets/{pet_id}', { params: { path: { pet_id: baseline.id } }, body: update }))
+          : unwrap(api.POST('/pets', { body: payload }))
+      const saved = await request.catch((error: unknown) => {
+        refetchPetsAfterFailure(queryClient)
+        throw error
+      })
+      storePet(queryClient, saved)
+      onSaved(saved)
     },
   })
-
-  // Не disabled и без действия на время запроса: отправленное не отменить, а окно должно дождаться ответа.
-  function cancel() {
-    if (!form.submitting) onCancel()
-  }
 
   return (
     <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
@@ -154,16 +129,13 @@ function PetForm({ pet, onSaved, onCancel, onBusyChange }: PetFormProps) {
         />
         <SelectField label="Пол" options={sexOptions} {...form.field('sex')} />
       </div>
-      <FormAlert message={form.formError} />
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button variant="secondary" aria-disabled={form.submitting} onClick={cancel}>
-          Отмена
-        </Button>
-        {/* Не disabled: с выключенной кнопки фокус уходит на body. Повторную отправку отсекает useForm. */}
-        <Button type="submit" aria-disabled={form.submitting}>
-          {form.submitting ? 'Сохраняем…' : baseline ? 'Сохранить' : 'Добавить питомца'}
-        </Button>
-      </div>
+      <FormActions
+        error={form.formError}
+        submitting={form.submitting}
+        submitLabel={baseline ? 'Сохранить' : 'Добавить питомца'}
+        submittingLabel="Сохраняем…"
+        onCancel={onCancel}
+      />
     </form>
   )
 }

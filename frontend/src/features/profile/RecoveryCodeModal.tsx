@@ -6,7 +6,7 @@ import { authLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
 import { FormActions, Modal, PasswordField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 import { RecoveryCodeScreen } from '../auth/RecoveryCodeScreen'
 
 interface RecoveryCodeModalProps {

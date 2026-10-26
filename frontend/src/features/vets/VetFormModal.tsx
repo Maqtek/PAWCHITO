@@ -7,7 +7,7 @@ import type { Vet, VetCreate } from '../../api/schema'
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 import { saveVet } from './vet-cache'
 
 interface VetFormModalProps {

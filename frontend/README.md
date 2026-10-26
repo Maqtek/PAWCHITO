@@ -251,15 +251,20 @@ CI перегенерирует файл и падает, если он отли
 - `src/mocks/` — мок-сервер по контрактам (`server-state.ts`, `handlers/`); новый эндпоинт → тип в `schema.ts` + обработчик в `mocks/handlers`.
 - `src/components/ui/` — UI-кит; цвета и радиусы — только токены из `src/styles/index.css`. Повторяющиеся блоки — тоже здесь: `LoadError` (не загрузилось, «Повторить»), `PageStatus` (строка статуса страницы), `SectionCard` (раздел в карточке с заголовком), `FormActions` (ошибка, «Отмена» и отправка в подвале формы).
 - `src/components/ConfirmActionModal.tsx` — окно подтверждения действия: архив, удаление, пропуск.
-- `src/lib/labels.ts` — подписи значений по глоссарию; в интерфейсе не пишем значения enum напрямую.
+- `src/lib/labels.ts` — подписи значений по глоссарию; в интерфейсе не пишем значения enum напрямую. Варианты выпадающих
+  списков — `labelOptions(labels, order)` и готовые `careStatusOptions`, `sexOptions`, `conditionKindOptions`.
 - `src/app/navigation.ts` — разделы по ролям (бизнес-правила, §11).
 - `src/lib/use-form.ts` — хук форм: ошибки полей при отправке и дальше живьём, фокус на первое неверное поле, 422 по полям; `onBusyChange` не даёт закрыть окно, пока идёт запрос.
 - `src/lib/use-focus-after-render.ts` — фокус на список или заголовок после рендера, когда кнопка, открывшая окно, пропала вместе с записью.
+- `src/lib/` ещё: `checks.ts` (`requiredError`), `changed-fields.ts` (только изменённые поля для PATCH), `group-by.ts`.
+- Модули кэша (`health-cache.ts`, `vet-cache.ts`, `clinic-cache.ts`) — `saveRecord`, `saveVet`, `saveClinic`: при успехе ответ
+  сервера в кэш, при сбое — перечитать список.
 - `src/features/auth/` — проверки полей авторизации, экран кода восстановления, форма смены пароля; `src/pages/auth/` — вход, регистрация, восстановление, смена временного пароля.
 - `src/features/profile/` — имя на месте и модалки профиля (смена пароля, новый код восстановления).
 - `src/features/admin/` — форма клиники, секции страницы клиники, временный пароль; `src/pages/admin/` — список и страница клиники.
 - `src/features/vets/` — карточка врача с отпуском, форма врача, подтверждение архива и возврата; `src/pages/clinic/ClinicVetsPage.tsx` — врачи клиники.
-- `src/features/pets/` — выбранный питомец, карточка в списке, форма питомца, подтверждение архива; `src/pages/owner/PetsPage.tsx` — питомцы владельца.
+- `src/features/pets/` — выбранный питомец, карточка в списке, форма питомца, подтверждение архива; `PetRequired`
+  и `usePetStatus` — общая ветка «загрузка / ошибка / нет питомца» и статус страниц владельца; `src/pages/owner/PetsPage.tsx` — питомцы владельца.
 - `src/features/health/` — разделы «Истории» (особенности, дневник, прививки) и их формы; `src/pages/owner/HistoryPage.tsx` — история выбранного питомца.
 - `src/features/appointments/` — мастер записи, карточка записи, подтверждение отмены; `src/pages/owner/` — `AppointmentsPage` (мои записи), `NewAppointmentPage`, `AppointmentPage`. Даты по Москве — `src/lib/dates.ts`.
 - `src/features/clinic-appointments/` — запись в кабинете клиники, отмена с комментарием; `src/pages/clinic/` — `ClinicAppointmentsPage` и карточка `ClinicPetPage`.

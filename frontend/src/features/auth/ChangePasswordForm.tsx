@@ -7,7 +7,8 @@ import { reauthenticateWith } from '../../api/session'
 import { Button, FormAlert, PasswordField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { NewPasswordFields } from './AuthFields'
-import { newPasswordErrors, requiredError } from './checks'
+import { requiredError } from '../../lib/checks'
+import { newPasswordErrors } from './checks'
 
 export interface ChangePasswordFormProps {
   /** «Текущий пароль» в профиле, «Временный пароль» при обязательной смене. */

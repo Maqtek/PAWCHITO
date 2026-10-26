@@ -8,7 +8,7 @@ import type { AdminClinic, ClinicCreate } from '../../api/schema'
 import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
 import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 import { saveClinic } from './clinic-cache'
 import {
   halfHourOptions,

@@ -4,14 +4,6 @@ import { isRecoveryCode, normalizeRecoveryCode } from '../../lib/recovery-code'
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/**
- * Пусто — «Заполните поле». Одни пробелы — тоже пусто: текст перед отправкой обрезается.
- * В пароле пробел — символ, поэтому для паролей trim: false.
- */
-export function requiredError(value: string, { trim = true } = {}): string | undefined {
-  return (trim ? value.trim() : value) === '' ? validationMessages.required : undefined
-}
-
 /** Пусто — «Заполните поле», иначе формат name@example.com. */
 export function emailError(email: string): string | undefined {
   const value = email.trim()

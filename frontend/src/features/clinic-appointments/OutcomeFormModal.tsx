@@ -7,26 +7,15 @@ import { ApiError } from '../../api/errors'
 import { healthLimits, outcomeLimits, petLimits } from '../../api/limits'
 import { clinicPetQuery, unwrap } from '../../api/queries'
 import type { Appointment, CareStatus, ConditionKind, OutcomeCreate, OutcomeResult, Pet, Sex } from '../../api/schema'
-import {
-  Button,
-  FormActions,
-  Modal,
-  SelectField,
-  TextareaField,
-  TextField,
-  type SelectOption,
-} from '../../components/ui'
+import { Button, FormActions, Modal, SelectField, TextareaField, TextField } from '../../components/ui'
 import { addDays, moscowLocal } from '../../lib/dates'
 import { moscowIsoDate } from '../../lib/format'
-import { careStatusLabel, careStatusOrder, conditionKindLabel, sexLabel } from '../../lib/labels'
+import { careStatusOptions, conditionKindOptions, sexOptions } from '../../lib/labels'
 import { focusField } from '../../lib/use-form'
 import { formatSlot } from '../appointments/format'
 import { parseWeight } from '../health/weight'
 import { refetchClinicAppointments } from './clinic-appointment-cache'
 
-const careOptions: SelectOption[] = careStatusOrder.map((value) => ({ value, label: careStatusLabel[value] }))
-const kindOptions: SelectOption[] = (['allergy', 'chronic'] as const).map((value) => ({ value, label: conditionKindLabel[value] }))
-const sexOptions: SelectOption[] = (['unknown', 'male', 'female'] as const).map((value) => ({ value, label: sexLabel[value] }))
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
 interface OutcomeFormModalProps {
@@ -299,7 +288,7 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
         <SelectField
           label="Статус ухода"
           hint="Владелец увидит его на главной (БП §6.3)"
-          options={careOptions}
+          options={careStatusOptions}
           placeholder="Выберите статус"
           {...bind('care_status')}
         />
@@ -363,7 +352,7 @@ function OutcomeForm({ appointment, onBusyChange, onCancel, onDone }: OutcomeFor
       >
         {(at) => (
           <>
-            <SelectField label="Тип" options={kindOptions} placeholder="Выберите тип" {...bind(at('kind'))} />
+            <SelectField label="Тип" options={conditionKindOptions} placeholder="Выберите тип" {...bind(at('kind'))} />
             <TextField label="Название особенности" maxLength={healthLimits.conditionTitleMax} {...bind(at('title'))} />
             <TextareaField
               label="Комментарий"

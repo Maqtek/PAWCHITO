@@ -51,6 +51,8 @@ export const conditionKindLabel: Record<ConditionKind, string> = {
 }
 
 export const conditionKindOptions = labelOptions(conditionKindLabel, ['allergy', 'chronic'])
+/** «Не указан» первым: это значение по умолчанию (Р-41). */
+export const sexOptions = labelOptions(sexLabel, ['unknown', 'male', 'female'])
 
 export const conditionKindTone: Record<ConditionKind, Tone> = {
   allergy: 'coral',
@@ -78,6 +80,8 @@ export const careStatusLabel: Record<CareStatus, string> = {
   recovery: 'Восстанавливается',
   prevention: 'На профилактике',
 }
+
+export const careStatusOptions = labelOptions(careStatusLabel, careStatusOrder)
 
 export const careStatusTone: Record<CareStatus, Tone> = {
   routine: 'mint',

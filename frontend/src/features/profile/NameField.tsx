@@ -8,7 +8,7 @@ import type { User } from '../../api/schema'
 import { Button, FormAlert, IconButton, TextField } from '../../components/ui'
 import { displayName } from '../../lib/format'
 import { useForm } from '../../lib/use-form'
-import { requiredError } from '../auth/checks'
+import { requiredError } from '../../lib/checks'
 
 /**
  * Имя в профиле: текст с карандашом, по нажатию — поле с «Сохранить» и «Отмена».
