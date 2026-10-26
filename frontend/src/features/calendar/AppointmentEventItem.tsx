@@ -1,7 +1,7 @@
-import { Link } from 'react-router-dom'
 import type { CalendarAppointmentEvent } from '../../api/schema'
-import { Badge, buttonClass } from '../../components/ui'
+import { Badge } from '../../components/ui'
 import { appointmentStatusLabel, appointmentStatusTone, eventCategoryLabel, eventCategoryTone } from '../../lib/labels'
+import { AppointmentDetailsLink } from '../appointments/AppointmentLinks'
 import { formatDue } from './due'
 import { EventCard } from './EventCard'
 
@@ -30,11 +30,7 @@ export function AppointmentEventItem({ event, today }: AppointmentEventItemProps
         {event.clinic.name} · {event.vet.full_name}
       </p>
       <div className="mt-3">
-        <Link to={`/appointments/${event.id}`} className={buttonClass({ variant: 'secondary', size: 'sm' })}>
-          Подробнее
-          {/* В календаре бывает несколько записей — у каждой ссылки своя подпись. */}
-          <span className="sr-only">, запись на {when}</span>
-        </Link>
+        <AppointmentDetailsLink id={event.id} when={when} />
       </div>
     </EventCard>
   )
