@@ -22,14 +22,36 @@ describe('маршруты', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /Анна Смирнова/ })).toBeInTheDocument()
   })
 
+
   it('гость попадает на вход и входит клиникой через моки', async () => {
     logoutMock()
-    const { user } = renderWithProviders(<AppRoutes />, { route: '/tasks' })
-    expect(await screen.findByRole('heading', { level: 1, name: 'Вход' })).toBeInTheDocument()
-
-    await user.click(await screen.findByRole('button', { name: 'Клиника' }))
-
-    expect(await screen.findByRole('heading', { level: 1, name: 'Записи' })).toBeInTheDocument()
+    const { user } = renderWithProviders(
+      <AppRoutes />,
+      { route: '/tasks' }
+    )
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Вход',
+      })
+    ).toBeInTheDocument()
+    await user.type(
+      screen.getByLabelText('Email'),
+      'clinic@example.com'
+    )
+    await user.type(
+      screen.getByLabelText('Пароль'),
+      'pawchito1'
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Войти' })
+    )
+    expect(
+      await screen.findByRole('heading', {
+        level: 1,
+        name: 'Записи',
+      })
+    ).toBeInTheDocument()
   })
 
   it('сервер завершил сессию во время работы: экран входа с «Сессия истекла»', async () => {

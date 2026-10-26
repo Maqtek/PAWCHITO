@@ -1,8 +1,9 @@
+
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** 'false' — моки MSW выключены, запросы уходят на бэкенд через прокси Vite. */
-  readonly VITE_API_MOCKS?: string
+  /** true — включить моки MSW при разработке. */
+  readonly VITE_MOCKS?: string
 }
 
 interface ImportMeta {
