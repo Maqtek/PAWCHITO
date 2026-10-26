@@ -4,9 +4,10 @@ import { Link } from 'react-router-dom'
 import type { Appointment, Observation, Prescription, TimelineItem, Vaccination } from '../../api/schema'
 import { Badge, linkClass, toneSoftClass } from '../../components/ui'
 import { cn } from '../../lib/cn'
-import { formatDays, formatLongDate, formatTime, formatWeight } from '../../lib/format'
-import { dataSourceLabel, levelLabel, type Tone } from '../../lib/labels'
+import { formatDays, formatLongDate, formatTime } from '../../lib/format'
+import { dataSourceLabel, type Tone } from '../../lib/labels'
 import { courseLastDay } from '../reminders/course'
+import { observationFacts } from './timeline'
 
 interface TimelineEntryProps {
   item: TimelineItem
@@ -58,13 +59,12 @@ function Entry({ dayId, icon: Icon, tone, title, fromClinic = false, children }:
   )
 }
 
-/** Короткие пары «подпись: значение»; пустые значения не показываются. */
-function Facts({ facts }: { facts: [label: string, value: string | null][] }) {
-  const filled = facts.filter((fact): fact is [string, string] => fact[1] !== null)
-  if (filled.length === 0) return null
+/** Короткие пары «подпись: значение». */
+function Facts({ facts }: { facts: [label: string, value: string][] }) {
+  if (facts.length === 0) return null
   return (
     <dl className="flex flex-wrap gap-x-6 gap-y-1">
-      {filled.map(([label, value]) => (
+      {facts.map(([label, value]) => (
         <div key={label} className="flex min-w-0 gap-1.5">
           <dt className="text-ink-muted">{label}:</dt>
           <dd className="font-bold break-words">{value}</dd>
@@ -77,13 +77,7 @@ function Facts({ facts }: { facts: [label: string, value: string | null][] }) {
 function ObservationEntry({ observation, dayId }: { observation: Observation; dayId: string }) {
   return (
     <Entry dayId={dayId} icon={NotebookPen} tone="butter" title="Наблюдение" fromClinic={observation.source === 'clinic'}>
-      <Facts
-        facts={[
-          ['Вес', observation.weight === null ? null : formatWeight(observation.weight)],
-          ['Аппетит', observation.appetite && levelLabel[observation.appetite]],
-          ['Энергия', observation.energy && levelLabel[observation.energy]],
-        ]}
-      />
+      <Facts facts={observationFacts(observation)} />
       {observation.symptoms && (
         <p className="break-words whitespace-pre-line">
           <span className="text-ink-muted">Симптомы: </span>
