@@ -380,10 +380,356 @@
           }
         ]
       }
+    },
+    "/admin/clinics": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Clinics",
+        "operationId": "list_clinics_api_admin_clinics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AdminClinicOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Clinics Api Admin Clinics Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Clinic",
+        "operationId": "create_clinic_api_admin_clinics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClinicIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminClinicOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/admin/clinics/{clinic_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Get Clinic",
+        "operationId": "get_clinic_api_admin_clinics__clinic_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clinic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Clinic Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminClinicOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update Clinic",
+        "operationId": "update_clinic_api_admin_clinics__clinic_id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clinic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Clinic Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClinicUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminClinicOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/clinics/{clinic_id}/archive": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Archive Clinic",
+        "operationId": "archive_clinic_api_admin_clinics__clinic_id__archive_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clinic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Clinic Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClinicArchivedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/clinics/{clinic_id}/restore": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Restore Clinic",
+        "operationId": "restore_clinic_api_admin_clinics__clinic_id__restore_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "clinic_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Clinic Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminClinicOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AdminClinicOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "opens_at": {
+            "type": "string",
+            "title": "Opens At"
+          },
+          "closes_at": {
+            "type": "string",
+            "title": "Closes At"
+          },
+          "work_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Work Days"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClinicAccountOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "future_appointments_count": {
+            "type": "integer",
+            "title": "Future Appointments Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "phone",
+          "opens_at",
+          "closes_at",
+          "work_days",
+          "archived_at",
+          "account"
+        ],
+        "title": "AdminClinicOut",
+        "description": "AdminClinic из контрактов: Clinic и поля администратора."
+      },
       "ChangePasswordIn": {
         "properties": {
           "current_password": {
@@ -404,6 +750,172 @@
           "new_password"
         ],
         "title": "ChangePasswordIn"
+      },
+      "ClinicAccountOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "is_active"
+        ],
+        "title": "ClinicAccountOut"
+      },
+      "ClinicArchivedOut": {
+        "properties": {
+          "clinic": {
+            "$ref": "#/components/schemas/AdminClinicOut"
+          },
+          "cancelled_appointments": {
+            "type": "integer",
+            "title": "Cancelled Appointments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "clinic",
+          "cancelled_appointments"
+        ],
+        "title": "ClinicArchivedOut"
+      },
+      "ClinicIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Address"
+          },
+          "phone": {
+            "type": "string",
+            "title": "Phone"
+          },
+          "opens_at": {
+            "type": "string",
+            "title": "Opens At"
+          },
+          "closes_at": {
+            "type": "string",
+            "title": "Closes At"
+          },
+          "work_days": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Work Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "address",
+          "phone",
+          "opens_at",
+          "closes_at",
+          "work_days"
+        ],
+        "title": "ClinicIn",
+        "description": "POST /admin/clinics."
+      },
+      "ClinicUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "opens_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opens At"
+          },
+          "closes_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes At"
+          },
+          "work_days": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Days"
+          }
+        },
+        "type": "object",
+        "title": "ClinicUpdate",
+        "description": "PATCH /admin/clinics/{id}: только присланные поля; порядок часов проверяет сервис —\nпо итоговым значениям, новое плюс сохранённое (Р-34)."
       },
       "HTTPValidationError": {
         "properties": {

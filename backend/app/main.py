@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from app.core.logging import setup_logging
 from app.core.middleware import RequestLogMiddleware
 from app.core.validation import validation_exception_handler
+from app.routers.admin import router as admin_router
 from app.routers.auth import router as auth_router
 from app.routers.errors import too_many_attempts_handler
 from app.routers.health import router as health_router
@@ -33,3 +34,4 @@ app.add_exception_handler(TooManyAttemptsError, too_many_attempts_handler)
 app.include_router(health_router)
 app.include_router(auth_router, prefix=API_PREFIX)
 app.include_router(users_router, prefix=API_PREFIX)
+app.include_router(admin_router, prefix=API_PREFIX)

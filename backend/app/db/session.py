@@ -12,7 +12,12 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+# Часовой пояс сессии PostgreSQL: timestamptz из базы приходит со смещением Europe/Moscow,
+# как требуют контракты («Общие правила»), а не в UTC. Тесты создают движок с теми же
+# параметрами.
+ENGINE_CONNECT_ARGS = {"options": f"-c timezone={settings.timezone}"}
+
+engine = create_engine(settings.database_url, pool_pre_ping=True, connect_args=ENGINE_CONNECT_ARGS)
 
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 

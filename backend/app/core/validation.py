@@ -19,6 +19,13 @@ FIELD_NAMES = {
     "current_password": "Пароль",
     "full_name": "Имя",
     "recovery_code": "Код",
+    # клиника (раздел 9)
+    "name": "Название",
+    "address": "Адрес",
+    "phone": "Телефон",
+    "opens_at": "Открытие",
+    "closes_at": "Закрытие",
+    "work_days": "Рабочие дни",
 }
 
 
@@ -31,6 +38,8 @@ def _message(error: dict[str, Any]) -> str:
             return "Заполните поле"
         case "string_type":
             return f"{field}: ожидается строка"
+        case "null_not_allowed":
+            return f"{field}: null не допускается — не передавайте поле, чтобы не менять его"
         case "string_too_short" if ctx.get("min_length") == 1:
             return f"{field} не может быть пустым"
         case "string_too_short":

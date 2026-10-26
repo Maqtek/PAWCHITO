@@ -141,16 +141,166 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/clinics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Clinics */
+        get: operations["list_clinics_api_admin_clinics_get"];
+        put?: never;
+        /** Create Clinic */
+        post: operations["create_clinic_api_admin_clinics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/clinics/{clinic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Clinic */
+        get: operations["get_clinic_api_admin_clinics__clinic_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Clinic */
+        patch: operations["update_clinic_api_admin_clinics__clinic_id__patch"];
+        trace?: never;
+    };
+    "/admin/clinics/{clinic_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Clinic */
+        post: operations["archive_clinic_api_admin_clinics__clinic_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/clinics/{clinic_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Clinic */
+        post: operations["restore_clinic_api_admin_clinics__clinic_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdminClinicOut
+         * @description AdminClinic из контрактов: Clinic и поля администратора.
+         */
+        AdminClinicOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Address */
+            address: string;
+            /** Phone */
+            phone: string;
+            /** Opens At */
+            opens_at: string;
+            /** Closes At */
+            closes_at: string;
+            /** Work Days */
+            work_days: number[];
+            /** Archived At */
+            archived_at: string | null;
+            account: components["schemas"]["ClinicAccountOut"] | null;
+            /**
+             * Future Appointments Count
+             * @default 0
+             */
+            future_appointments_count: number;
+        };
         /** ChangePasswordIn */
         ChangePasswordIn: {
             /** Current Password */
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** ClinicAccountOut */
+        ClinicAccountOut: {
+            /** Id */
+            id: number;
+            /** Email */
+            email: string;
+            /** Is Active */
+            is_active: boolean;
+        };
+        /** ClinicArchivedOut */
+        ClinicArchivedOut: {
+            clinic: components["schemas"]["AdminClinicOut"];
+            /** Cancelled Appointments */
+            cancelled_appointments: number;
+        };
+        /**
+         * ClinicIn
+         * @description POST /admin/clinics.
+         */
+        ClinicIn: {
+            /** Name */
+            name: string;
+            /** Address */
+            address: string;
+            /** Phone */
+            phone: string;
+            /** Opens At */
+            opens_at: string;
+            /** Closes At */
+            closes_at: string;
+            /** Work Days */
+            work_days: number[];
+        };
+        /**
+         * ClinicUpdate
+         * @description PATCH /admin/clinics/{id}: только присланные поля; порядок часов проверяет сервис —
+         *     по итоговым значениям, новое плюс сохранённое (Р-34).
+         */
+        ClinicUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Address */
+            address?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Opens At */
+            opens_at?: string | null;
+            /** Closes At */
+            closes_at?: string | null;
+            /** Work Days */
+            work_days?: number[] | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -542,6 +692,187 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecoveryCodeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_clinics_api_admin_clinics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminClinicOut"][];
+                };
+            };
+        };
+    };
+    create_clinic_api_admin_clinics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminClinicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_clinic_api_admin_clinics__clinic_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminClinicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_clinic_api_admin_clinics__clinic_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClinicUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminClinicOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_clinic_api_admin_clinics__clinic_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicArchivedOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_clinic_api_admin_clinics__clinic_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                clinic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminClinicOut"];
                 };
             };
             /** @description Validation Error */
