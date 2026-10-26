@@ -24,6 +24,7 @@
 ```
 backend/    FastAPI: routers → services → repositories → models
 frontend/   React + TypeScript
+deploy/     прод: Caddy, деплой и бэкапы
 docs/       требования, бизнес-правила, глоссарий, роадмап, стек, контракты API, журнал решений
 ```
 
@@ -45,7 +46,7 @@ docker compose up --build
 
 По умолчанию реальный API, для включения моков — VITE_MOCKS=true.
 
-Миграции применяются при старте бэкенда.
+Миграции применяются при старте бэкенда. Фото питомцев лежат в томе `media`.
 
 ## Команды
 
@@ -56,13 +57,30 @@ docker compose up --build
 | Тесты бэкенда | `docker compose exec backend pytest` |
 | Логи | `docker compose exec redis redis-cli XREVRANGE logs + - COUNT 50` |
 
+## Прод
+
+Сервер — VPS с Docker; проект лежит в `/opt/pawchito` (клон `main`), `.env` — рядом с `docker-compose.prod.yml`.
+
+```bash
+cp .env.example .env
+# заполнить DOMAIN, ACME_EMAIL, POSTGRES_PASSWORD, JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+- Наружу открыт только Caddy (80, 443 TCP и UDP): отдаёт фронт, проксирует `/api` на бэкенд, раздаёт фото из тома `media`. PostgreSQL, Redis и бэкенд доступны только внутри сети compose.
+- Сертификат Let's Encrypt Caddy получает и продлевает сам. Нужно, чтобы DNS-запись домена указывала на сервер, а порты 80 и 443 были открыты.
+- Миграции применяются при старте бэкенда.
+- Тома: `pawchito_pgdata`, `pawchito_redisdata`, `pawchito_media`, `pawchito_caddy_data` (сертификаты), `pawchito_caddy_config`.
+
+Деплой из GitHub Actions и бэкапы — [deploy/README.md](deploy/README.md).
+
 ## CI
 
 GitHub Actions (`.github/workflows/ci.yml`) на каждый PR и на push в `main`:
 
 - бэкенд — `ruff check`, `ruff format --check`, `mypy app`, `pytest`; миграции с нуля и `alembic check` — как только в бэкенде появится Alembic (#10);
 - фронтенд — `pnpm lint`, `pnpm test`, `pnpm build`;
-- сборка образов `backend` и `frontend`.
+- сборка образов `backend` и `frontend`, прод-образа Caddy и проверка `Caddyfile`.
 
 Чтобы PR с красным CI нельзя было слить, проверки нужно отметить обязательными в защите `main` (Settings → Branches; делает администратор репозитория).
 
