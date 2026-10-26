@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../app/routes'
 import { server } from '../../mocks/node'
-import { readServer } from '../../mocks/server-state'
+import { readServer, updateServer } from '../../mocks/server-state'
 import { loginMockAs, resetMockServer } from '../../mocks/session'
 import { renderWithProviders } from '../../test/render'
 
@@ -109,5 +109,24 @@ describe('AppointmentPage', () => {
     view.unmount()
     renderWithProviders(<AppRoutes />, { route: '/appointments/25' })
     expect(await screen.findByText('Запись не найдена')).toBeInTheDocument()
+  })
+
+  it('итог с рецептами и прививками: время приёма, срок, начало курса', async () => {
+    updateServer((state) => {
+      const outcome = state.appointments.find((item) => item.id === 22)?.outcome
+      if (!outcome) return
+      outcome.prescriptions = [
+        { id: 1, drug: 'Мелоксикам', dosage: '1,5 мл', times: ['09:00', '21:00'], duration_days: 5, start_date: '2026-10-12' },
+      ]
+      outcome.vaccinations = [
+        { id: 9, pet_id: 10, name: 'Рабис', date: '2026-10-12', next_date: '2027-10-12', source: 'clinic', appointment_id: 22 },
+      ]
+    })
+    renderWithProviders(<AppRoutes />, { route: '/appointments/22' })
+    const outcome = await screen.findByRole('region', { name: 'Итог приёма' })
+    expect(within(outcome).getByText('Мелоксикам, 1,5 мл')).toBeInTheDocument()
+    expect(within(outcome).getByText('09:00, 21:00 · 5 дней с 12 октября 2026')).toBeInTheDocument()
+    expect(within(outcome).getByText('Дела курса по рецептам появятся в разделе «Дела».')).toBeInTheDocument()
+    expect(within(outcome).getByText('— 12 октября 2026, следующая 12 октября 2027')).toBeInTheDocument()
   })
 })

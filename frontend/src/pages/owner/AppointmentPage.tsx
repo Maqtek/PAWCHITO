@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import { appointmentQuery } from '../../api/queries'
 import { ApiError } from '../../api/errors'
+import type { AppointmentOutcome } from '../../api/schema'
 import { Badge, Button, Card, EmptyState, Spinner, linkClass } from '../../components/ui'
 import { isCancellable } from '../../features/appointments/appointment-cache'
 import { CancelAppointmentModal } from '../../features/appointments/CancelAppointmentModal'
 import { formatSlot } from '../../features/appointments/format'
 import { PageHeader } from '../../layouts/PageHeader'
-import { formatTime } from '../../lib/format'
+import { formatLongDate, formatTime, NBSP, pluralize } from '../../lib/format'
 import {
   appointmentReasonLabel,
   appointmentStatusLabel,
@@ -89,19 +90,7 @@ export function AppointmentPage() {
             {appointment.clinic_comment && <>: «{appointment.clinic_comment}»</>}
           </p>
         )}
-        {/* Подробный итог — рецепты, прививки, фото — появится с формой итога на этапе 9. */}
-        {appointment.outcome && (
-          <section aria-labelledby="outcome-heading" className="mt-5 border-t border-line pt-4">
-            <h2 id="outcome-heading" className="font-extrabold">
-              Итог приёма
-            </h2>
-            <p className="mt-2 text-sm break-words">{appointment.outcome.conclusion}</p>
-            {appointment.outcome.recommendations && (
-              <p className="mt-1 text-sm break-words text-ink-muted">{appointment.outcome.recommendations}</p>
-            )}
-            <p className="mt-2 text-sm">Статус ухода: {careStatusLabel[appointment.outcome.care_status]}</p>
-          </section>
-        )}
+        {appointment.outcome && <OutcomeDetails outcome={appointment.outcome} />}
         {isCancellable(appointment, now) && (
           <div className="mt-5">
             <Button
@@ -143,5 +132,54 @@ export function AppointmentPage() {
         }}
       />
     </>
+  )
+}
+
+/** Итог приёма у владельца (BR-04.8): заключение, рекомендации, статус ухода, рецепты и прививки. */
+function OutcomeDetails({ outcome }: { outcome: AppointmentOutcome }) {
+  return (
+    <section aria-labelledby="outcome-heading" className="mt-5 border-t border-line pt-4">
+      <h2 id="outcome-heading" className="font-extrabold">
+        Итог приёма
+      </h2>
+      <p className="mt-2 text-sm break-words whitespace-pre-line">{outcome.conclusion}</p>
+      {outcome.recommendations && (
+        <p className="mt-1 text-sm break-words whitespace-pre-line text-ink-muted">{outcome.recommendations}</p>
+      )}
+      <p className="mt-2 text-sm">Статус ухода: {careStatusLabel[outcome.care_status]}</p>
+      {outcome.prescriptions.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-extrabold">Рецепты</h3>
+          <ul className="mt-2 flex flex-col gap-2">
+            {outcome.prescriptions.map((prescription) => (
+              <li key={prescription.id} className="rounded-xl border border-line p-3 text-sm">
+                <p className="font-bold break-words">
+                  {prescription.drug}, {prescription.dosage}
+                </p>
+                <p className="text-ink-muted">
+                  {prescription.times.join(', ')} · {prescription.duration_days}
+                  {NBSP}
+                  {pluralize(prescription.duration_days, ['день', 'дня', 'дней'])} с {formatLongDate(prescription.start_date)}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-ink-muted">Дела курса по рецептам появятся в разделе «Дела».</p>
+        </>
+      )}
+      {outcome.vaccinations.length > 0 && (
+        <>
+          <h3 className="mt-4 text-sm font-extrabold">Прививки</h3>
+          <ul className="mt-2 flex flex-col gap-2">
+            {outcome.vaccinations.map((vaccination) => (
+              <li key={vaccination.id} className="text-sm">
+                <span className="font-bold">{vaccination.name}</span> — {formatLongDate(vaccination.date)}
+                {vaccination.next_date && `, следующая ${formatLongDate(vaccination.next_date)}`}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
   )
 }
