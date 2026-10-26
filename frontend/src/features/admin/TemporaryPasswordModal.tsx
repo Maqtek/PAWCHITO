@@ -5,6 +5,7 @@ import { errorMessage } from '../../api/error-messages'
 import { ApiError } from '../../api/errors'
 import { authLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
+import { ConfirmActionForm } from '../../components/ConfirmActionModal'
 import { FormActions, Modal, TextField } from '../../components/ui'
 import { useForm } from '../../lib/use-form'
 import { emailError } from '../auth/checks'
@@ -118,32 +119,28 @@ function CreateAccountForm({ clinicId, onIssued, onBusyChange, onCancel }: Passw
 
 function ResetPasswordForm({ clinicId, onIssued, onBusyChange, onCancel }: PasswordRequestProps) {
   const queryClient = useQueryClient()
-  const form = useForm({
-    initial: {},
-    validate: () => ({}),
-    context: 'clinic-account',
-    onBusyChange,
-    onSubmit: async () => {
-      // Перечитываем и после ошибки: карточка покажет, что с аккаунтом на самом деле (например, 404 — его нет).
-      const result = await unwrap(
-        api.POST('/admin/clinics/{id}/account/reset-password', {
-          params: { path: { id: clinicId } },
-        }),
-      ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
-      onIssued(result.temporary_password)
-    },
-  })
+
+  async function reset() {
+    // Перечитываем и после ошибки: карточка покажет, что с аккаунтом на самом деле (например, 404 — его нет).
+    const result = await unwrap(
+      api.POST('/admin/clinics/{id}/account/reset-password', {
+        params: { path: { id: clinicId } },
+      }),
+    ).finally(() => void queryClient.invalidateQueries({ queryKey: queryKeys.adminClinics }))
+    onIssued(result.temporary_password)
+  }
 
   return (
-    <form noValidate onSubmit={form.handleSubmit} className="flex flex-col gap-4">
+    <ConfirmActionForm
+      submitLabel="Сбросить пароль"
+      submittingLabel="Сбрасываем…"
+      variant="primary"
+      context="clinic-account"
+      onConfirm={reset}
+      onCancel={onCancel}
+      onBusyChange={onBusyChange}
+    >
       <p className="text-sm text-ink-muted">Клиника выйдет на всех устройствах и при входе задаст новый пароль.</p>
-      <FormActions
-        error={form.formError}
-        submitting={form.submitting}
-        submitLabel="Сбросить пароль"
-        submittingLabel="Сбрасываем…"
-        onCancel={onCancel}
-      />
-    </form>
+    </ConfirmActionForm>
   )
 }

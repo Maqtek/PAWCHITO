@@ -40,7 +40,7 @@ export function ConfirmActionModal({
   return (
     <Modal open={open} onClose={onClose} title={title} dismissible={!busy}>
       {open && (
-        <ConfirmForm
+        <ConfirmActionForm
           submitLabel={submitLabel}
           submittingLabel={submittingLabel}
           variant={variant}
@@ -51,16 +51,16 @@ export function ConfirmActionModal({
           context={context}
         >
           {children}
-        </ConfirmForm>
+        </ConfirmActionForm>
       )}
     </Modal>
   )
 }
 
-interface ConfirmFormProps {
+interface ConfirmActionFormProps {
   submitLabel: string
   submittingLabel: string
-  variant: 'primary' | 'danger'
+  variant?: 'primary' | 'danger'
   cancelLabel?: string
   onConfirm: () => Promise<void>
   onCancel: () => void
@@ -70,17 +70,18 @@ interface ConfirmFormProps {
   children: ReactNode
 }
 
-function ConfirmForm({
+/** Подтверждение без своего окна: для окна, которое после подтверждения показывает результат, — временного пароля клиники. */
+export function ConfirmActionForm({
   submitLabel,
   submittingLabel,
-  variant,
+  variant = 'danger',
   cancelLabel,
   onConfirm,
   onCancel,
   onBusyChange,
   context,
   children,
-}: ConfirmFormProps) {
+}: ConfirmActionFormProps) {
   const form = useForm({ initial: {}, validate: () => ({}), context, onBusyChange, onSubmit: onConfirm })
 
   return (
