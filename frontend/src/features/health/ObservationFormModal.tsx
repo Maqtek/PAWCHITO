@@ -4,11 +4,13 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import type { Level, Observation, ObservationCreate, ObservationUpdate } from '../../api/schema'
+import type { Level, Observation, ObservationCreate } from '../../api/schema'
 import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { moscowIsoDate } from '../../lib/format'
 import { levelLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
+import { dateError } from './date-error'
 import { saveRecord } from './health-cache'
 import { parseWeight, weightText } from './weight'
 
@@ -71,21 +73,6 @@ function toPayload(values: ObservationValues): Required<ObservationCreate> {
     symptoms: textOrNull(values.symptoms),
     note: textOrNull(values.note),
   }
-}
-
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: Required<ObservationCreate>, observation: Observation): ObservationUpdate {
-  const update: ObservationUpdate = {}
-  for (const field of ['date', 'weight', 'appetite', 'energy', 'symptoms', 'note'] as const) {
-    if (next[field] !== observation[field]) Object.assign(update, { [field]: next[field] })
-  }
-  return update
-}
-
-function dateError(value: string, today: string): string | undefined {
-  if (value === '') return validationMessages.required
-  if (value > today) return validationMessages.dateFuture
-  return value < healthLimits.dateMin ? validationMessages.dateTooEarly : undefined
 }
 
 interface ObservationFormProps {

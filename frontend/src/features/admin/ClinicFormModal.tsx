@@ -4,8 +4,9 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { clinicLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import type { AdminClinic, ClinicCreate, ClinicUpdate } from '../../api/schema'
+import type { AdminClinic, ClinicCreate } from '../../api/schema'
 import { CheckboxField, FormActions, Modal, SelectField, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
 import { saveClinic } from './clinic-cache'
 import {
@@ -52,6 +53,9 @@ function initialValues(clinic?: AdminClinic) {
 
 type ClinicValues = ReturnType<typeof initialValues>
 
+// Рабочие дни — набор: порядок и повторы в массиве не важны.
+const sameWorkDays = (a: number[], b: number[]) => serializeWorkDays(a) === serializeWorkDays(b)
+
 function toPayload(values: ClinicValues): ClinicCreate {
   return {
     name: values.name.trim(),
@@ -61,18 +65,6 @@ function toPayload(values: ClinicValues): ClinicCreate {
     closes_at: values.closes_at,
     work_days: parseWorkDays(values.work_days),
   }
-}
-
-/** Только изменённые поля: PATCH не перезаписывает то, что администратор не трогал. */
-function changedFields(next: ClinicCreate, clinic: AdminClinic): ClinicUpdate {
-  const update: ClinicUpdate = {}
-  if (next.name !== clinic.name) update.name = next.name
-  if (next.address !== clinic.address) update.address = next.address
-  if (next.phone !== clinic.phone) update.phone = next.phone
-  if (next.opens_at !== clinic.opens_at) update.opens_at = next.opens_at
-  if (next.closes_at !== clinic.closes_at) update.closes_at = next.closes_at
-  if (serializeWorkDays(next.work_days) !== serializeWorkDays(clinic.work_days)) update.work_days = next.work_days
-  return update
 }
 
 interface ClinicFormProps {
@@ -107,7 +99,7 @@ function ClinicForm({ clinic, onSaved, onCancel, onBusyChange }: ClinicFormProps
     onBusyChange,
     onSubmit: async (values) => {
       const payload = toPayload(values)
-      const update = baseline && changedFields(payload, baseline)
+      const update = baseline && changedFields(payload, baseline, { work_days: sameWorkDays })
       if (update && Object.keys(update).length === 0) {
         onCancel()
         return

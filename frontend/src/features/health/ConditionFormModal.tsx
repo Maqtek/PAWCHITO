@@ -4,8 +4,9 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { healthLimits } from '../../api/limits'
 import { queryKeys, unwrap } from '../../api/queries'
-import type { Condition, ConditionCreate, ConditionKind, ConditionUpdate } from '../../api/schema'
+import type { Condition, ConditionCreate, ConditionKind } from '../../api/schema'
 import { FormActions, Modal, SelectField, TextareaField, TextField, type SelectOption } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { conditionKindLabel } from '../../lib/labels'
 import { useForm } from '../../lib/use-form'
 import { saveRecord } from './health-cache'
@@ -51,15 +52,6 @@ type ConditionValues = ReturnType<typeof initialValues>
 function toPayload(values: ConditionValues): ConditionCreate {
   const description = values.description.trim()
   return { kind: values.kind as ConditionKind, title: values.title.trim(), description: description === '' ? null : description }
-}
-
-/** Только изменённые поля: PATCH не перезаписывает то, что владелец не трогал. */
-function changedFields(next: ConditionCreate, condition: Condition): ConditionUpdate {
-  const update: ConditionUpdate = {}
-  if (next.kind !== condition.kind) update.kind = next.kind
-  if (next.title !== condition.title) update.title = next.title
-  if (next.description !== condition.description) update.description = next.description
-  return update
 }
 
 interface ConditionFormProps {

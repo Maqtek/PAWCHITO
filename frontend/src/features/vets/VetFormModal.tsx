@@ -4,8 +4,9 @@ import { api } from '../../api/client'
 import { validationMessages } from '../../api/error-messages'
 import { vetLimits } from '../../api/limits'
 import { unwrap } from '../../api/queries'
-import type { Vet, VetCreate, VetUpdate } from '../../api/schema'
+import type { Vet, VetCreate } from '../../api/schema'
 import { FormActions, Modal, TextField } from '../../components/ui'
+import { changedFields } from '../../lib/changed-fields'
 import { useForm } from '../../lib/use-form'
 import { saveVet } from './vet-cache'
 
@@ -37,14 +38,6 @@ type VetValues = ReturnType<typeof initialValues>
 function toPayload(values: VetValues): VetCreate {
   const specialization = values.specialization.trim()
   return { full_name: values.full_name.trim(), specialization: specialization === '' ? null : specialization }
-}
-
-/** Только изменённые поля: PATCH не перезаписывает то, что клиника не трогала. */
-function changedFields(next: VetCreate, vet: Vet): VetUpdate {
-  const update: VetUpdate = {}
-  if (next.full_name !== vet.full_name) update.full_name = next.full_name
-  if (next.specialization !== vet.specialization) update.specialization = next.specialization
-  return update
 }
 
 interface VetFormProps {
