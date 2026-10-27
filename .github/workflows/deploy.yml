@@ -1,0 +1,75 @@
+# Деплой на VPS (роадмап, этап 12): после зелёного CI на main и вручную.
+# На сервере deploy/deploy.sh: pg_dump → сборка → alembic upgrade head → перезапуск.
+# Сервер, секреты и окружение production — deploy/README.md.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Токен GitHub не нужен: код на сервер забирает сам deploy.sh
+permissions: {}
+
+concurrency:
+  group: deploy-production
+  # Прерванный деплой может оставить стек наполовину перезапущенным
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Деплой на VPS
+    # Пока сервера нет, деплой выключен: без переменной репозитория DEPLOY_ENABLED=true джоба пропускается,
+    # а не падает на каждом push в main. Переменная — уровня репозитория: переменные окружения в if джобы не видны.
+    # workflow_run срабатывает и на CI из PR, если ветка в форке называется main, —
+    # поэтому только push в main этого репозитория. Вручную — только из main.
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' && (
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - name: Ключ SSH и known_hosts
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            echo "::error::Нет секретов DEPLOY_SSH_KEY / DEPLOY_KNOWN_HOSTS в окружении production"
+            exit 1
+          fi
+          umask 077
+          mkdir -p "$RUNNER_TEMP/ssh"
+          # OpenSSH не читает ключ без перевода строки в конце
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$RUNNER_TEMP/ssh/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+
+      - name: deploy.sh на сервере
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          # Коммит, прошедший CI; при ручном запуске — текущий main
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ]; then
+            echo "::error::Нет секретов DEPLOY_HOST / DEPLOY_USER в окружении production"
+            exit 1
+          fi
+          # Хеш уходит в командную строку на сервере — пропускаем только hex
+          if [[ ! "$SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Неожиданный SHA: $SHA"
+            exit 1
+          fi
+          # StrictHostKeyChecking=yes: подключаемся только к серверу из DEPLOY_KNOWN_HOSTS
+          ssh -i "$RUNNER_TEMP/ssh/key" -p "${DEPLOY_PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/ssh/known_hosts" \
+            -o ConnectTimeout=20 -o ServerAliveInterval=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST" /opt/pawchito/deploy/deploy.sh "$SHA"
