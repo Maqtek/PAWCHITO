@@ -1,0 +1,96 @@
+# Прод: docker compose -f docker-compose.prod.yml up -d --build
+# На сервере проект лежит в /opt/pawchito (клон main), .env — рядом с этим файлом.
+# Наружу открыт только Caddy (80, 443): он отдаёт фронт, проксирует /api и раздаёт фото из тома media.
+# Деплой и бэкапы — deploy/README.md.
+
+# Имя проекта задано явно: тома pawchito_pgdata, pawchito_media и т. д. не зависят от имени папки
+name: pawchito
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?заполните POSTGRES_USER в .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?заполните POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:?заполните POSTGRES_DB в .env}
+    volumes:
+      # с PostgreSQL 18 том монтируется в /var/lib/postgresql, а не в .../data
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    # AOF — логи переживают перезапуск; 256 МБ под VPS на 2 ГБ.
+    # noeviction: при нехватке памяти запись отклоняется, и бэкенд пишет логи в stdout.
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    # Без --reload и без тома с кодом: код — из образа. Миграции и сид — в start.sh перед запуском.
+    # Бэкенд доступен только из сети compose, поэтому X-Forwarded-* от Caddy можно доверять:
+    # в запросе видны https и IP клиента.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:?заполните JWT_SECRET в .env, команда есть в .env.example}
+      MEDIA_DIR: /srv/media
+    volumes:
+      - media:/srv/media
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  caddy:
+    # Образ со статикой фронта и Caddyfile; собирается из корня, т. к. нужны frontend/ и deploy/caddy/
+    build:
+      context: .
+      dockerfile: deploy/caddy/Dockerfile
+    # Только то, что нужно Caddyfile: секреты бэкенда в этот контейнер не передаём
+    environment:
+      DOMAIN: ${DOMAIN:?заполните DOMAIN в .env}
+      ACME_EMAIL: ${ACME_EMAIL:?заполните ACME_EMAIL в .env}
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3
+      - "443:443/udp"
+    volumes:
+      # сертификаты и ключ ACME-аккаунта: без тома Caddy запрашивал бы их заново при каждом пересоздании
+      - caddy_data:/data
+      - caddy_config:/config
+      # фото раздаёт Caddy, писать в том может только бэкенд
+      - media:/srv/media:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:
+  media:
+  caddy_data:
+  caddy_config:

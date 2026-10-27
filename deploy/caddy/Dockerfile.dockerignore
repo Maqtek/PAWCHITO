@@ -1,0 +1,8 @@
+# Контекст сборки — весь репозиторий; в образ нужны только фронт и Caddyfile
+*
+!frontend/
+!deploy/caddy/Caddyfile
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/.env.local

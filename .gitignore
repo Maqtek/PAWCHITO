@@ -5,6 +5,9 @@ __pycache__/
 venv/
 *.egg-info/
 
+### Фото питомцев (MEDIA_DIR по умолчанию, бэкенд без Docker) ###
+/backend/media/
+
 ### Secrets ###
 .env
 .env.*
